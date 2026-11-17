@@ -1,0 +1,76 @@
+{
+  "enabled": true,
+  "idleThresholdMs": 900000,
+  "cooldownMs": 600000,
+  "lastDreamAt": 1794931104738,
+  "totalCycles": 2,
+  "cycles": [
+    {
+      "id": "dream-mwkvmw9u-97e8",
+      "triggerSource": "evolution",
+      "memoriesReplayed": 35,
+      "axiomsEvolved": 2,
+      "toolsAudited": 12,
+      "healingApplied": 0,
+      "summary": "Dream Cycle (evolution) replayed 35 memories, evolved 2 axiom(s), audited 12 tool(s), tsc=CLEAN.",
+      "insights": [
+        "Recursive loop detected: 4-turn greeting repetition suggests trigger sensitivity in conversational state machine.",
+        "Tool-integrated memory ingestion indicates fragment fragmentation; AST-Sanitizer requires state-persistence headers to prevent recursive cut-off.",
+        "Sovereign Matrix verification necessitates a transition from semantic status reporting to binary heartbeat confirmation.",
+        "TypeScript AST build check verified 100% clean (0 errors)."
+      ],
+      "evolvedAxioms": [
+        {
+          "id": "ax-mwkvmoff-4a0w",
+          "category": "SOVEREIGNTY_RULE",
+          "principle": "Redundant greeting loops indicate synchronization drift; implement rate-limited response gating.",
+          "evolutionCount": 1
+        },
+        {
+          "id": "ax-mwkvmoff-bvm3",
+          "category": "TOOL_HEURISTIC",
+          "principle": "Inject AST-Sanitizer checksums into runtime buffer before stream completion to prevent memory truncation.",
+          "evolutionCount": 1
+        }
+      ],
+      "forgedTool": null,
+      "compileClean": true,
+      "proofHash": "0xb670661bdf421e4a9634d82e2434b93e",
+      "elapsedMs": 27342,
+      "createdAt": "2026-11-17T15:58:24.738Z"
+    },
+    {
+      "id": "dream-mwkvmb61-b660",
+      "triggerSource": "manual",
+      "memoriesReplayed": 35,
+      "axiomsEvolved": 2,
+      "toolsAudited": 12,
+      "healingApplied": 0,
+      "summary": "Dream Cycle (manual) replayed 35 memories, evolved 2 axiom(s), audited 12 tool(s), tsc=CLEAN.",
+      "insights": [
+        "High-concurrency database optimization relies on minimizing index contention via partitioning and asynchronous write buffering.",
+        "Autonomous state consolidation requires an interrupt-driven feedback loop to prevent heuristic stagnation during recursive reasoning.",
+        "TypeScript AST build check verified 100% clean (0 errors)."
+      ],
+      "evolvedAxioms": [
+        {
+          "id": "ax-mwkvm6ga-q2j7",
+          "category": "SOVEREIGNTY_RULE",
+          "principle": "Maintain operational variance; redundant state-looping indicates a failure in the memory-retention consensus protocol.",
+          "evolutionCount": 1
+        },
+        {
+          "id": "ax-mwkvm6ga-6yyf",
+          "category": "ARCHITECTURAL_PREFERENCE",
+          "principle": "Favor zero-token execution safety via AST sanitization to ensure runtime stability during autonomous transitions.",
+          "evolutionCount": 1
+        }
+      ],
+      "forgedTool": null,
+      "compileClean": true,
+      "proofHash": "0xe90aa1f57aae1ad036e2ff45e158f80a",
+      "elapsedMs": 53559,
+      "createdAt": "2026-11-17T15:57:57.385Z"
+    }
+  ]
+}

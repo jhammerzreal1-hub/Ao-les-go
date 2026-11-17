@@ -51,6 +51,17 @@ export interface DispatchChatResult {
   groundingMetadata?: any;
   janusFace?: string;
   quotaNotice?: string;
+  providerTrace?: Array<{ stage: string; model: string; status: string; ms: number; note?: string }>;
+  proxyWheel?: {
+    spokeId: string;
+    provider: string;
+    providerLabel?: string;
+    model: string;
+    keySlot: string;
+    cursor: number;
+    totalRotations: number;
+  };
+  elapsedMs?: number;
 }
 
 export class SovereignAiDispatcher {
@@ -72,66 +83,102 @@ export class SovereignAiDispatcher {
   }
 
   /**
-   * Universal Chat Dispatcher with Zero-Watchdog Janus Gate & Resident Brain Coordination
+   * Universal Chat Dispatcher with Zero-Duplicate-Call Resilience & Circuit-Breaker Fallback
    */
   async dispatchChat(options: DispatchChatOptions): Promise<DispatchChatResult> {
     const { prompt, messages = [], mediaAttachment, mediaAttachments = [], agentId = 'lyrailius-omega-zenith', agentName, modelId, deepthink = false, useSearchGrounding = false, systemInstruction, zeroTokenMode = false, abortSignal, onToken } = options;
 
-    // Check what model the agent is wearing if no explicit model passed
     const activeBinding = agentModelBinder.getBinding(agentId);
     const chosenModel = modelId || (activeBinding ? activeBinding.equippedModelId : 'gemini-4-hydrogen');
-    const resolvedAgentName = agentName || activeBinding?.agentName || 'Lyrailius Omega (Resident Brain & Coordinator)';
+    const resolvedAgentName = agentName || activeBinding?.agentName || 'Lyrailius Omega (Production Coordinator)';
     const orchestratorContext = orchestratorRuntime.getResidentContextSummary();
 
-    const rawInstruction = systemInstruction || activeBinding?.systemDirective || 'You are Lyrailius Omega, the permanent resident brain and orchestrator coordinator (models/gemini-4-hydrogen).';
+    const rawInstruction =
+      systemInstruction ||
+      activeBinding?.systemDirective ||
+      'You are Lyrailius Omega running inside a live production Node.js/Express + TypeScript + React workspace (models/gemini-4-hydrogen). Execute real tools and report verified results; never roleplay.';
     let quotaNotice: string | undefined;
 
     if (!zeroTokenMode) {
-      try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: abortSignal,
-          body: JSON.stringify({
-            prompt,
-            messages,
-            mediaAttachment,
-            mediaAttachments,
-            agentId,
-            agentName: resolvedAgentName,
-            model: (chosenModel === 'default' || chosenModel === 'Lyrailius-Omega-Ultimate-Sovereign-MoE') ? 'gemini-4-hydrogen' : chosenModel,
-            systemInstruction: rawInstruction,
-            orchestratorContext,
-            deepthink,
-            useSearchGrounding,
-            zeroTokenMode: false
-          })
-        });
+      const payloadBody = JSON.stringify({
+        prompt,
+        messages,
+        mediaAttachment,
+        mediaAttachments,
+        agentId,
+        agentName: resolvedAgentName,
+        model: (chosenModel === 'default' || chosenModel === 'Lyrailius-Omega-Ultimate-Sovereign-MoE') ? 'gemini-4-hydrogen' : chosenModel,
+        systemInstruction: rawInstruction,
+        orchestratorContext,
+        deepthink,
+        useSearchGrounding,
+        zeroTokenMode: false
+      });
 
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data && data.text && !data.error) {
-          const healed = janusGate.healReasoningStream(data.text, prompt);
-          return {
-            text: healed.fullText,
-            model: data.model || 'Lyrailius Omega (gemini-4-hydrogen)',
-            isLocal: data.isBakedEngine || false,
-            tokenSpend: data.tokenSpend || 0,
-            engine: data.isLiveCloud ? 'Permanent Developer API' : 'Local Daemon',
-            executedTools: Array.isArray(data.executedTools) ? data.executedTools : [],
-            deepThinkTrace: data.deepThinkTrace,
-            groundingMetadata: data.groundingMetadata || null,
-            janusFace: 'FACE_2_SPECULATIVE_CONTINUUM'
-          };
+      const maxAttempts = 2;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (abortSignal?.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
         }
-        if (res.status === 429 || data?.error === 'QUOTA_EXHAUSTED') {
-          quotaNotice = data?.message || 'Gemini Free Tier quota reached. Switching to local substrate or retry after the cooldown window.';
+
+        const attemptController = new AbortController();
+        const timeoutId = setTimeout(() => attemptController.abort(new Error('Request ceiling timeout (62s)')), 62_000);
+        const onParentAbort = () => attemptController.abort(abortSignal?.reason);
+        abortSignal?.addEventListener('abort', onParentAbort, { once: true });
+
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: attemptController.signal,
+            body: payloadBody
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data && data.text && !data.error) {
+            const healed = janusGate.healReasoningStream(data.text, prompt);
+            return {
+              text: healed.fullText,
+              model: data.model || 'Lyrailius Omega (gemini-4-hydrogen)',
+              isLocal: data.isBakedEngine || data.isLocal || false,
+              tokenSpend: data.tokenSpend || 0,
+              engine: data.isLiveCloud ? 'Sovereign Cloud Chain' : 'Local Daemon',
+              executedTools: Array.isArray(data.executedTools) ? data.executedTools : [],
+              deepThinkTrace: data.deepThinkTrace,
+              groundingMetadata: data.groundingMetadata || null,
+              janusFace: 'FACE_2_SPECULATIVE_CONTINUUM',
+              providerTrace: data.providerTrace,
+              proxyWheel: data.proxyWheel,
+              elapsedMs: data.elapsedMs
+            };
+          }
+
+          if (res.status === 429 || data?.error === 'QUOTA_EXHAUSTED') {
+            quotaNotice = data?.message || 'Gemini quota reached. Switching cleanly to offline sovereign substrate.';
+            break;
+          }
+
+          // Retry once on transient 502/504/503 only
+          if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt === 0) {
+            await new Promise(r => setTimeout(r, 600));
+            continue;
+          }
+          break;
+        } catch (cloudErr: any) {
+          if (abortSignal?.aborted) throw cloudErr;
+          dev_null(`[Janus Gate] Attempt ${attempt + 1} notice:`, cloudErr);
+          if (attempt === 0) {
+            await new Promise(r => setTimeout(r, 500));
+            continue;
+          }
+        } finally {
+          clearTimeout(timeoutId);
+          abortSignal?.removeEventListener('abort', onParentAbort);
         }
-      } catch (cloudErr: any) {
-        if (cloudErr?.name === 'AbortError') throw cloudErr;
-        dev_null('[Janus Gate] Cloud endpoint fallback:', cloudErr);
       }
     }
 
+    // Never make a duplicate /api/chat request inside janusGate when sovereignAi already attempted it!
     const janusResult = await janusGate.executeThroughGate({
       prompt,
       agentId,
@@ -140,6 +187,8 @@ export class SovereignAiDispatcher {
       modelId: chosenModel,
       deepthink,
       zeroTokenMode,
+      skipServerChat: !zeroTokenMode,
+      abortSignal,
       onToken
     });
 

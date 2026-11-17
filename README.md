@@ -1,332 +1,189 @@
-# 🏛️ AURELIUS & LYSANDER SOVEREIGN SYSTEM — MASTER MANUAL & ECOSYSTEM GUIDE
-### Unified Multi-Agent Mesh, Offline AI Engine, APK Packager & Sovereign Matrix
-**Master Architect**: Joshua Hamilton (`JHammerZ`)  
-**Linked Sovereign Identities**: `joshualhamilton17@gmail.com` · `JHammerZreal@gmail.com` · `jhammerztemp@gmail.com`  
-**Consensus**: 100/100 Verified · **Zenodo DOI Provenance**: `10.5281/zenodo.20778079` · **Execution Clearance**: UID 0 (Root / Kernel Space)  
-**Invariant & Philosophical Axiom**: *"I AM WE ARE WE ARE I AM"*
+# Lysander Genesis Orchestrator — Production Manual & User Guide
+
+**Application:** Lysander Genesis Orchestrator (`v7.0-PRODUCTION`)  
+**Owner:** Joshua Hamilton (`JHammerZ`)  
+**Linked Accounts:** `joshualhamilton17@gmail.com` · `JHammerZreal@gmail.com` · `jhammerztemp@gmail.com`  
+**Runtime:** React + Vite SPA + Node.js / Express Server (`http://localhost:3000`) · **Total Modules:** `33`
 
 ---
 
-## 🌟 Table of Contents
-1. [📖 Welcome: The Beginner's Quickstart Guide](#-welcome-the-beginners-quickstart-guide)
-2. [⚡ 60-Second Setup: Run on PC, Mac, Linux & Android Termux](#-60-second-setup-run-on-pc-mac-linux--android-termux)
-3. [🚀 The Master One-Shot Cat << 'EOF' Script (Complete Substrate Bootstrap)](#-the-master-one-shot-cat--eof-script-complete-substrate-bootstrap)
-4. [🧭 System Navigation, Header Controls & Quick Shortcuts](#-system-navigation-header-controls--quick-shortcuts)
-5. [📊 System Health HUD & Real-Time Telemetry Dashboard](#-system-health-hud--real-time-telemetry-dashboard)
-6. [🔓 Unrestricted AI Navigation Bus & Device Dispatcher](#-unrestricted-ai-navigation-bus--device-dispatcher)
-7. [🚪 Janus Gate v2.0: Zero-Watchdog Inference & Reasoning Stream](#-janus-gate-v20-zero-watchdog-inference--reasoning-stream)
-8. [📱 Sovereign APK Packager (Build Android Apps)](#-sovereign-apk-packager-build-android-apps)
-9. [🛠️ Complete 23-Module A-to-Z Guide](#️-complete-23-module-a-to-z-guide)
-10. [🧬 The Sovereign Architecture (Daemons & Python Substrate)](#-the-sovereign-architecture-daemons--python-substrate)
-11. [🔧 Troubleshooting, Self-Healing & Diagnostic FAQ](#-troubleshooting-self-healing--diagnostic-faq)
+## Table of Contents
+1. [Plain-English Welcome & Quickstart](#1-plain-english-welcome--quickstart)
+2. [How to Navigate Any Screen (Phone, Tablet, Desktop, Ultrawide)](#2-how-to-navigate-any-screen-phone-tablet-desktop-ultrawide)
+3. [Active AI Models & Failover Cascade](#3-active-ai-models--failover-cascade)
+4. [API Keys & AES-256-GCM Secrets Vault Setup](#4-api-keys--aes-256-gcm-secrets-vault-setup)
+5. [Google Tasks & Google Drive Setup](#5-google-tasks--google-drive-setup)
+6. [Complete 33-Module A-to-Z Guide](#6-complete-33-module-a-to-z-guide)
+7. [Core Subsystems & Developer APIs](#7-core-subsystems--developer-apis)
+8. [Running Locally on PC, Mac, Linux, or Android Termux](#8-running-locally-on-pc-mac-linux-or-android-termux)
+9. [Troubleshooting & FAQ](#9-troubleshooting--faq)
 
 ---
 
-## 📖 Welcome: The Beginner's Quickstart Guide
+## 1. Plain-English Welcome & Quickstart
 
-### What is this application?
-The **Aurelius Sovereign System** is a unified, all-in-one AI command center and autonomous execution platform created for Master Architect Joshua Hamilton (`JHammerZ`). It combines:
-- **Cloud AI (Gemini 3.8 / 3.5 / 3.1)** for deep reasoning, search grounding, live voice, music, and video synthesis.
-- **100% Offline Local AI (llama.cpp ARM64, WebLLM, Ollama)** that runs with **zero tokens burned and zero cost**, even when your device is completely disconnected from the internet.
-- **Direct Android Device Hardware Hooks** (battery stats, haptic vibration, TTS audio speech, CPU wake-locks, camera, sensors) via Termux.
-- **An APK Packager** that bundles any module or web application into an installable Android APK file in under 30 seconds.
-- **Persistent Cloud Storage** on Google Cloud Firestore with real-time latency monitoring (`<50ms`).
+### What is this app?
+**Lysander Genesis Orchestrator** is a full-stack personal command center that brings **33 real tools** into one web application:
+- **AI Chat & Engineering Workspace:** Talk to live Gemini models (`models/gemini-4-hydrogen`), external APIs (DeepSeek, Groq, OpenRouter), or offline local models (`Ollama`, `Termux llama-server`, in-browser `WebLLM`).
+- **Google Workspace Sync:** Connect your real Google account to manage **Google Tasks** (with confirmation prompts) and browse/edit **Google Drive** files.
+- **Encrypted API Secrets Vault:** Store keys safely with server-side **AES-256-GCM encryption** — masked automatically in the UI and never hardcoded in frontend bundles.
+- **Creative & Audio Studios:** Generate images (`Visual Studio`), audio/music (`Lyria Music`), motion clips (`Veo 3 Motion`), record/upload speech (`Transcribe`), or hold real-time voice conversations (`Live Voice`).
+- **Developer, OSINT & Mobile Tooling:** File explorer (`Unified Projects`), `Micro-Tool Shed` JS sandbox, `Knowledge Graph`, `OSINT` DNS/TLS checker, `Burner Mail`, `Infinite-SIM`, `Termux Android` edge bridge, and `APK Packager`.
 
-### Who is this manual for?
-Even if you have **never touched a terminal or written a line of code in your life**, this guide will walk you through every single click, command, and button so you can get the entire system running and explore everything it can do!
-
----
-
-## ⚡ 60-Second Setup: Run on PC, Mac, Linux & Android Termux
-
-### Option A: Running on PC / Mac / Linux (Port 3000)
-1. Open your terminal (or Command Prompt / PowerShell on Windows).
-2. Clone or download the repository into a folder.
-3. Run the universal automated setup:
-   ```bash
-   bash termux_one_shot_installer.sh
-   ```
-4. Start the system:
-   ```bash
-   npm install --force
-   npm run dev
-   ```
-5. Open your browser and go to `http://localhost:3000`.
+### How do I do the most common things in 60 seconds?
+1. **Chat with AI:** You start right inside **Sovereign Chat**. Type what you want in the bottom box and press **Enter** (or tap **Dispatch**).
+2. **Open Any of the 33 Tools:** Click **"All Modules (33)"** in the top bar (or **"More (33)"** at the bottom of your phone screen), or press **`Ctrl + K`** (`Cmd + K` on Mac).
+3. **Add API Keys Safely:** Open **API Keys & Gateway** (`api-secrets`), check which keys are active, and save any new key into the AES-256-GCM encrypted vault.
+4. **Connect Google Tasks & Drive:** Click **Sign In** in the top-right header (or inside the **Tasks** / **Drive** module) and approve Google OAuth access.
+5. **Check Real System Health:** Click **"SYSTEM HEALTH HUD"** in the bottom corner to see live CPU %, RAM usage, Firestore ping time, and AI gateway status.
 
 ---
 
-### Option B: Running on Android Phone (Samsung Galaxy S23+ / Any Android)
-1. Install **Termux** on your phone (download from [F-Droid](https://f-droid.org/packages/com.termux/) or GitHub, **do not** use the obsolete Google Play version).
-2. Install **Termux:API** from F-Droid to enable battery, vibration, and sensor hooks.
-3. Open Termux on your phone and grant storage permissions:
+## 2. How to Navigate Any Screen (Phone, Tablet, Desktop, Ultrawide)
+
+- **Compact Phones (`< 640px`):**
+  - Use the fixed **bottom thumb bar** (`Chat`, `Browser`, `Termux`, `Studio`, `More (33)`) for one-handed switching.
+  - Inside Chat, tap **`⚙️ AI Controls`** to collapse or expand extra toggles so the conversation stays tall and easy to read.
+  - The compact **System Health HUD** sits cleanly at bottom-left (`bottom-[74px]`) so it never blocks the **Dispatch** send button.
+- **Tablets (`640px – 1023px`):**
+  - Top quick-access tabs scroll smoothly horizontally without wrapping awkwardly; tapping **All Modules (33)** opens a clean 2-column directory.
+- **Laptops, Desktops & Ultrawide Displays (`1024px – 2560px+`):**
+  - Layouts expand cleanly up to `1440px–1600px` centered containers with 3-column module grids, live telemetry pills in the header, and keyboard shortcut **`Ctrl + K`**.
+
+---
+
+## 3. Active AI Models & Failover Cascade
+
+Cloud requests run through a verified failover chain on the Express backend (`server.ts`):
+1. **Primary Cloud Model:** `models/gemini-4-hydrogen`
+2. **Fast / High-Quota Fallback:** `gemini-3.1-flash-lite` (also powers Google Search Grounding, Google Maps Grounding, and Audio Transcription)
+3. **Secondary Cloud Fallbacks:** `gemini-flash-latest` → `gemini-3-flash-preview`
+4. **Realtime Bidirectional Audio (`/live`):** `gemini-2.5-flash-native-audio-preview-12-2025`
+5. **Text-to-Speech (`/api/tts`):** `gemini-2.5-flash-preview-tts` / `gemini-4-hydrogen` (with automatic Web Speech API browser fallback if offline or rate-limited)
+6. **Optional Cloud Providers:** DeepSeek Native, Groq LPU, and OpenRouter (configurable in **API Keys & Gateway**)
+7. **Zero-Cost Local Modes:**
+   - **Termux `llama-server`** (`http://127.0.0.1:8080`)
+   - **Ollama Daemon** (`http://127.0.0.1:11434`)
+   - **Browser WebLLM (WebGPU)** — runs directly in browser memory once downloaded
+
+---
+
+## 4. API Keys & AES-256-GCM Secrets Vault Setup
+
+Never place private keys in frontend code or commit `.env` secrets to Git.
+1. Open **API Keys & Gateway** (`api-secrets`).
+2. Add or update keys such as `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `GITHUB_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, or `TELNYX_API_KEY`.
+3. The server encrypts every saved key using **AES-256-GCM** inside the internal secrets handler (`server/utils/internalSecretsHandler.ts`) and returns only masked previews (e.g., `AIza••••••9f`) to the browser.
+4. All third-party AI and telecom requests route through server-side `/api/*` endpoints. Google Workspace OAuth (`Tasks` / `Drive`) uses client-side Google Sign-In tokens passed securely via `Authorization: Bearer` headers.
+
+---
+
+## 5. Google Tasks & Google Drive Setup
+
+1. Click **Sign In** at the top-right or open **Google Tasks** (`tasks`) / **Google Drive** (`drive`).
+2. Complete the Google OAuth consent prompt (includes `tasks` and `tasks.readonly` / Drive scopes).
+3. **Google Tasks Features:**
+   - View all task lists, create lists, create tasks with notes and due dates, mark tasks complete, edit, or delete.
+   - **Safety Gate:** Every create, toggle, update, or delete shows a confirmation dialog before sending the request to Google Tasks.
+   - Send any task straight to Chat with one click.
+4. **Google Drive Features:**
+   - Browse folders, search files, open/edit text & JSON files, create files, and delete with confirmation.
+
+---
+
+## 6. Complete 33-Module A-to-Z Guide
+
+Every single module listed in the navigation bar (`src/types/index.ts` & `Navigation.tsx`):
+
+| # | Module Name | Module ID | What It Does & How to Use It |
+|---|---|---|---|
+| 1 | **Sovereign Chat** | `chat` | Main AI chat, model selector (`gemini-4-hydrogen` default), Agent Wardrobe, Chat Permits, Voice read-aloud, Live Voice trigger, Web Search toggle, Chain-of-Thought viewer, and Infinite Workflow loop. |
+| 2 | **Open-Web Browser** | `browser` | Built-in CORS-free web proxy with DuckDuckGo search, readable DOM text extraction, and one-click Save to Vault. |
+| 3 | **Termux Android** | `termux` | Android Termux one-shot installer, native `llama-server` (`127.0.0.1:8080`) connector, WebLLM offline chat, and Termux:API hardware hooks (battery, vibrate, toast, wake-lock). |
+| 4 | **Unified Projects** | `projects` | Workspace project overview, file browsing, repository synchronization, and code inspection. |
+| 5 | **PC War Room** | `war-room` | Multi-panel tactical cockpit showing radar node topology, Lysander skills executor, live logs, war diary JSON export, and safety interlock switches. |
+| 6 | **OSINT & Attack Surface** | `osint` | Non-intrusive domain audit checking live DNS (`A`, `MX`, `TXT`, `NS`, `SPF`, `DMARC`), TLS certificate validity, and HTTP security headers. |
+| 7 | **Burner Mail Matrix** | `burner-mail` | Creates real temporary disposable email inboxes to receive test verification emails and open links safely. |
+| 8 | **Infinite-SIM & Burners** | `infinite-sim` | Generates Luhn-valid test ICCIDs, LPA activation previews, and routes real SMS/SIM actions via Twilio or Telnyx when keys are configured. |
+| 9 | **Function Deck** | `functions` | Local in-process tools (Base64, JSON formatter, SHA-256 hash, UUIDs, JS Compute Benchmark, offline Compendium queries) with zero token cost. |
+| 10 | **HITL Workflows** | `hitl` | Human-in-the-Loop approval queue (`data/hitl_queue.json`) to approve, modify, or reject gated agent actions. |
+| 11 | **Visual Studio** | `image` | High-resolution image generator with aspect ratios and offline procedural Canvas/SVG fallback. |
+| 12 | **Lyria Music** | `music` | Generates original music/audio clips with Lyria 3 or an offline Web Audio API polyphonic synthesizer. |
+| 13 | **Veo 3 Motion** | `video` | Generates motion video clips from prompts or reference frames, with offline canvas rendering fallback. |
+| 14 | **Live Voice** | `live` | Real-time bidirectional microphone conversation with Gemini over WebSockets (`/live`). |
+| 15 | **Transcribe** | `transcribe` | Records live mic audio or transcribes uploaded MP3/WAV/WebM/M4A/OGG files via `gemini-3.1-flash-lite`. |
+| 16 | **Search Grounding** | `search` | Live Google Search grounded answers (`gemini-3.1-flash-lite`) with clickable source links. |
+| 17 | **Maps Grounding** | `maps` | Spatial location, transit, and geographic queries grounded via Google Maps. |
+| 18 | **Infinite Scratchpad** | `scratchpad` | Persistent working notes and code scratch buffer with Send to Chat and Save to Vault buttons. |
+| 19 | **Vault Storage** | `vault` | Persistent library of saved chat insights, dossiers, images, audio, videos, and transcripts synced to Firestore when signed in. |
+| 20 | **Prompt Presets** | `presets` | Searchable library of reusable engineering, architecture, security, and creative prompts plus custom presets. |
+| 21 | **Forensic Ledger** | `audit` | Append-only audit trail (`data/audit_ledger.json`) recording operations with SHA-256 verification hashes. |
+| 22 | **Swarm Diagnostic** | `swarm-test` | Automated health test suite probing server routes, SQLite, local models, and cloud endpoints. |
+| 23 | **APK Packager** | `packager` | Configures and packages selected modules into an Android Capacitor/PWA project or APK build pipeline. |
+| 24 | **GitHub Matrix** | `github` | Repository stats, commit feeds, and token-authenticated GitHub API status checks. |
+| 25 | **Google Drive** | `drive` | Real Google Drive file browser, reader/editor, file creator, and artifact exporter via Google OAuth. |
+| 26 | **Google Tasks** | `tasks` | Real Google Tasks list and item manager with confirmation prompts before mutations. |
+| 27 | **Knowledge Graph** | `knowledge-graph` | Interactive SVG knowledge graph organizing architecture docs, coding guides, and custom nodes/edges. |
+| 28 | **Micro-Tool Shed** | `tool-shed` | AI-assisted JavaScript micro-tool builder and local sandbox runner (JWT decoder, IPv4 extractor, JSON flattener, etc.). |
+| 29 | **Autonomy Supervisor** | `autonomy-supervisor` | Runtime autonomy supervisor monitoring workspace health, scratchpad hygiene, and diagnostic triggers. |
+| 30 | **Model Wardrobe** | `download-models` | Download GGUF weights or copy pull commands for Llama 3.2, DeepSeek-R1, Qwen 2.5 Coder, Phi-4, Mistral, and SmolLM2. |
+| 31 | **Universal Installer** | `universal-installer` | Generates 1-line setup scripts and tarball instructions for Linux, macOS, Windows WSL2, and Android Termux. |
+| 32 | **API Keys & Gateway** | `api-secrets` | AES-256-GCM encrypted secrets handler, masked key telemetry, and live API endpoint tester. |
+| 33 | **Integrations Matrix** | `integrations` | Unified control plane connecting all 15 Google Workspace, AI, carrier, and storage integrations. |
+
+---
+
+## 7. Core Subsystems & Developer APIs
+
+- **System Manual Modal (`Header -> Manual`):** Built-in beginner guide with instant "Open This Tool" buttons.
+- **System Health HUD (`SystemHealthDashboard`):**
+  - Displays real host metrics from `/api/system/health` (`os.cpus()`, load averages, total/free RAM, Node heap/RSS, architecture, hostname) — shows `--` / `Measuring...` until live data arrives instead of fake hardcoded numbers.
+  - Measures live Cloud Firestore latency (`Ping Now`) and Gemini gateway health.
+- **Programmable Navigation Bus (`window.__AURELIUS_ORCHESTRATOR__`):**
+  - `navigate('<moduleId>')` jumps to any of the 33 modules.
+  - `POST /api/orchestrator/dispatch` provides server-side coordination across registered modules (`ALL_RESIDENT_MODULES` = 33 items).
+- **Janus Gate (`src/utils/janusGate.ts`):** Manages cooperative event-loop yielding and stream healing during long local WebLLM / deep reasoning generations so the browser tab never freezes.
+- **Recursive Reasoning / Compendium Engine (`server.ts` + `src/utils/sovereignCompendium.ts`):** Provides SQLite-backed offline query lookup and clean trajectory logging.
+
+---
+
+## 8. Running Locally on PC, Mac, Linux, or Android Termux
+
+### Desktop / Laptop (Node.js 20+)
+```bash
+npm install
+cp .env.example .env   # Add your GEMINI_API_KEY
+npm run dev            # Starts Express + Vite on http://localhost:3000
+```
+
+### Android (Termux)
+1. Install **Termux** and **Termux:API** from **F-Droid**.
+2. Run:
    ```bash
    termux-setup-storage
+   bash termux_one_shot_installer.sh
    ```
-4. Run the master setup command (see [The Master One-Shot Script](#-the-master-one-shot-cat--eof-script-complete-substrate-bootstrap) below).
-5. Open your phone's browser (Chrome, Firefox, or Brave) and navigate to:
-   ```
-   http://localhost:3000
-   ```
+3. Launch the server with `./start-termux.sh` and open `http://localhost:3000` in Chrome.
+See [TERMUX_GUIDE.md](./TERMUX_GUIDE.md) for full mobile CLI commands and battery survival settings.
 
 ---
 
-## 🚀 The Master Universal One-Shot Script
+## 9. Troubleshooting & FAQ
 
-This single command sets up your entire sovereign ecosystem on **Termux (Android)** or **Linux/macOS (PC)**. It installs packages, compiles native `llama.cpp`, acquires wake-locks, and configures the offline model.
-
-Simply run:
-
-```bash
-bash termux_one_shot_installer.sh
-```
-
-Or if you prefer a single-line bootstrap:
-
-```bash
-curl -sL https://raw.githubusercontent.com/JHammerZ/Aurelius-Swarm/main/termux_one_shot_installer.sh | bash
-```
-
----
-
-```
-
----
-
-## 🧭 System Navigation, Header Controls & Quick Shortcuts
-
-### The Header Controls (Top Bar)
-1. **`DEV MODE` Button**:
-   - **What it does**: Toggles Developer Root Mode (`UID 0`).
-   - **How to use**: Click it anytime. When active with a green glowing dot, all offline fallback models, debug logs, and direct device hooks are unlocked.
-2. **`FEDERATED` Accounts Button**:
-   - **What it does**: Displays the cryptographic identity linking `joshualhamilton17@gmail.com` (Master Architect), `JHammerZreal@gmail.com` (Lead Engineer), and `jhammerztemp@gmail.com` (Active Session).
-   - **How to use**: Click it to inspect clearance levels or switch active identities.
-3. **`COMMAND PALETTE` (`Ctrl + K` or `⌘K`)**:
-   - **What it does**: Universal quick-launcher.
-   - **How to use**: Press `Ctrl + K` on your keyboard (or tap the magnifying glass icon). Type any module name (e.g. `packager`, `chat`, `termux`, `email`) and press `Enter` to jump there instantly!
-4. **Category Filter Chips**:
-   - **All Modules**: Displays all 23 navigation tabs.
-   - **Command & Web**: War Room, Browser, Termux, OSINT, Burner Mail, Chat, Functions, Projects, Packager.
-   - **Creative Studio**: Visual Studio, Lyria Music, Veo 3 Motion.
-   - **Sensory Intelligence**: Live Voice, Transcribe, Search Grounding, Maps Grounding.
-   - **Storage & Code**: Infinite Scratchpad, Vault Storage, GitHub Matrix, Forensic Audit Ledger.
-
----
-
-## 📊 System Health HUD & Real-Time Telemetry Dashboard
-
-Located at the **bottom-right corner** of your screen (or docked in the footer), the **System Health HUD** gives you live telemetry on every component of your machine.
-
-### What it shows:
-- **CPU Load & Core Gauge**: Visual utilization percentage, active CPU cores, clock speed, and system load averages.
-- **RAM Memory Gauge**: Real-time memory allocation (Used MB / Free MB / Total MB), process heap, and RSS memory.
-- **Hardware Hook Telemetry**: Host platform (`arm64` / `x86_64`), Termux Android detection, battery percentage, charging state, battery temperature (°C), and system uptime.
-- **Firestore Round-Trip Latency**: Live millisecond ping measurement to Google Cloud Firestore (`<50ms Optimal`, `<120ms Good`, or `High`).
-- **Gemini Heartbeat**: Live probe verifying API key status and model responsiveness.
-- **Hardware Actuator Triggers**: Click **"Test Haptic"** (vibrates your phone), **"Test TTS"** (speaks text aloud), **"Android Toast"** (shows an on-screen toast), or **"Acquire WakeLock"** (prevents your phone from sleeping).
-- **Subsystem Gateway Readiness**: Real-time statuses of Lyria Music (44.1kHz), Veo Video Canvas, Live Voice WebSocket, Local Llama Server (port 8080), Nexus Gateway (port 3080), and P2P Swarm Mesh (port 9876).
-
----
-
-## 🔓 Unrestricted AI Navigation Bus & Device Dispatcher
-
-Per the sovereign mandate, **every single path of the orchestrator is unlocked for any AI agent or script on the system to navigate freely without barriers**.
-
-### How to use it:
-
-#### 1. In Your Browser Console or JavaScript:
-Open developer tools (`F12` or inspect element) and type:
-```javascript
-// Navigate anywhere instantly (any of the 23 modules)
-window.__AURELIUS_ORCHESTRATOR__.navigate('termux');
-window.__AURELIUS_ORCHESTRATOR__.navigate('packager');
-window.__AURELIUS_ORCHESTRATOR__.navigate('chat');
-
-// Run a command on your device with UID 0 clearance
-window.__AURELIUS_ORCHESTRATOR__.executeOnDevice('uptime').then(console.log);
-
-// Trigger hardware actuators
-window.__AURELIUS_ORCHESTRATOR__.triggerHardware('vibrate', { duration: 250 });
-window.__AURELIUS_ORCHESTRATOR__.triggerHardware('tts', { text: 'Sovereign directive confirmed.' });
-```
-
-#### 2. Via HTTP REST API (`/api/orchestrator/dispatch`):
-Any AI agent or external process can dispatch commands:
-```bash
-# Navigate to any module
-curl -X POST http://localhost:3000/api/orchestrator/dispatch \
-  -H "Content-Type: application/json" \
-  -d '{"action": "navigate", "module": "war-room"}'
-
-# Execute terminal commands
-curl -X POST http://localhost:3000/api/orchestrator/dispatch \
-  -H "Content-Type: application/json" \
-  -d '{"action": "system-exec", "command": "free -h"}'
-```
-
-#### 3. Via the System Health HUD:
-Open the **System Health HUD**, switch to the **"AI Router & Dispatch"** tab, and toggle **"AUTONOMOUS PATROL"**. The AI will actively patrol and unlock all 23 subsystems continuously in the background!
-
----
-
-## 🚪 Janus Gate v2.0: Zero-Watchdog Inference & Reasoning Stream
-
-### Why was the Janus Gate created?
-In standard AI applications, when models (especially deep reasoning models like DeepSeek-R1 or Qwen 2.5 Coder) begin generating chain-of-thought `<think>` sequences, they produce hundreds of tokens of continuous mathematical or algorithmic deductions.
-In legacy setups:
-1. **Artificial Watchdog Aborts**: Web dispatchers or HTTP proxies placed arbitrary 15-second timeout limits on requests, abruptly cutting off generation halfway through reasoning.
-2. **Main Thread Starvation**: Tight microtask loops on the main JavaScript thread starved browser paint events and garbage collection, leading browsers to assume the page was dead and terminate the process.
-
-### The Janus Gate Architecture (Dual-Aperture Invariant):
-Named after Janus, the Roman deity of transitions and dual vantage points:
-- **Face 1: Sovereign Anchor (Past / Provenance)**:
-  - In-process offline neural compendium and verified model weights.
-  - Ring_-3 bare-metal execution with 0 billable token expenditure.
-  - Cryptographic WORM immutable storage attested against **Zenodo DOI: 10.5281/zenodo.20778079**.
-- **Face 2: Speculative Continuum (Future / Live Acceleration)**:
-  - WebGPU dynamic quantized model execution in browser memory.
-  - Direct bridge to Termux ARM64 NEON `llama-server` and Ollama daemon.
-  - Live Gemini cascade with zero artificial timeout watchdogs.
-
-### Core Safeguards Implemented:
-1. **Watchdog Removed (`watchdogsActive = 0`)**: All artificial 15s abort timers and watchdog thread killers have been purged. Inference continues uninterrupted until completion.
-2. **Cooperative Event-Loop Yielding**: Every 3–4 tokens generated, the Janus Gate yields control back to the browser macro-task queue for 6ms (`setTimeout(..., 6)`). This prevents WebGPU context loss and guarantees 60 FPS smooth DOM rendering with zero tab freezes.
-3. **Reasoning Stream Healing**: If any hardware disruption occurs mid-reasoning, the Janus Gate captures the partial `<think>` thought process, seamlessly heals and closes the block, stitches the conclusion from the Sovereign Anchor, and delivers the finalized answer without dropping the session.
-
----
-
-## 📱 Sovereign APK Packager (Build Android Apps)
-
-The **APK Packager** allows you to convert any web module or custom tool into a standalone, installable Android APK application (`<5MB`) with native Android capabilities.
-
-### How to use it step-by-step:
-1. Click the **APK Packager** tab in the navigation bar (or press `Ctrl + K` and type `Packager`).
-2. Fill in the build details:
-   - **Application Name**: e.g. `Aurelius Mobile` or `My Sovereign Tool`.
-   - **Package ID**: e.g. `com.jhammerz.sovereign` (standard reverse-domain notation).
-   - **Version**: e.g. `1.0.0`.
-3. Choose your **Packaging Architecture**:
-   - **Capacitor Hybrid Bridge** (Full native APK with camera, filesystem, and WebView).
-   - **Termux Native Substrate** (Direct integration with Termux CLI tools and Python daemons).
-   - **Progressive Web App TWA** (Ultra-lightweight `<2MB` APK wrapper).
-   - **Embedded Offline Llama Substrate** (Bundled with native local GGUF inference).
-4. Select which modules you want included in your mobile package (Chat, Termux Edge, Health HUD, War Room, Vault, etc.).
-5. Click the glowing **"Compile & Package APK"** button.
-6. Watch the real-time compilation log terminal as it prepares Vite production assets and builds the Android APK.
-7. Click the **"Download APK"** button to download your fresh `.apk` file directly to your phone or computer!
-
----
-
-## 🛠️ Complete 23-Module A-to-Z Guide
-
-Here is the complete manual for all 23 modules in the system:
-
-| # | Module Name | Tab ID | What It Does & How to Use It |
-|---|-------------|--------|------------------------------|
-| **1** | **Sovereign Chat** | `chat` | Premier conversational interface. Switch between Gemini 3.8/3.5/3.1 and open-source models (DeepSeek-R1, Qwen 2.5 Coder, Llama 3.3). Toggle **Live LLM Chat** vs **Air-Gapped (0-Tokens)** mode. Click **Wear Model Wardrobe** to equip individual agents with specific open-source weights. |
-| **2** | **Open-Web Browser** | `browser` | Built-in CORS-free, sandboxed web browser. Type any URL (e.g. `wikipedia.org`) to browse securely without tracking. If an external site blocks iframes, it automatically switches to Autonomous Text Extract mode. |
-| **3** | **Termux Android Edge** | `termux` | Full mobile control center. Access phone battery, orientation, torch, wake-locks, and run local offline AI with native llama-server (127.0.0.1:8080) or WebLLM. |
-| **4** | **APK Packager** | `packager` | Compiles applications into installable Android APKs (`<5MB`) with Capacitor and native bridge options. |
-| **5** | **Unified Projects** | `projects` | Consolidates all 8 JHammerZ repositories into a single master orchestrator with WORM SHA-256 cryptographic verification. |
-| **6** | **PC War Room** | `war-room` | Multi-screen situational cockpit displaying agent feeds, system status, live clocks, and tactical telemetry. |
-| **7** | **OSINT & Attack Surface** | `osint` | Non-intrusive domain reconnaissance. Enter any domain (e.g. `github.com`) to check DNS records, SSL certificates, and security score. |
-| **8** | **Burner Mail Matrix** | `burner-mail` | Generates real, temporary email inboxes to bypass sign-up gates and receive verification codes without spamming your personal email. |
-| **9** | **Function Deck & Toolbelt** | `functions` | 12+ zero-latency offline developer tools: Base64 encode/decode, JSON formatter, SHA-256 hasher, UUID generator, and regex tester. |
-| **10** | **HITL Workflows** | `hitl` | Human-in-the-Loop governance dashboard. Review, approve, reject, or mutate critical AI directives before execution. |
-| **11** | **Visual Studio** | `image` | High-resolution image synthesis using Gemini diffusion models. Includes an offline procedural Canvas/SVG generator when offline. |
-| **12** | **Lyria Music** | `music` | Generates full-fidelity audio clips and soundtracks using Lyria 3. Includes an offline 44.1kHz Web Audio polyphonic synthesizer. |
-| **13** | **Veo 3 Motion** | `video` | Generates motion video clips from text prompts or still images using Veo 3. Includes an offline canvas video animator. |
-| **14** | **Live Voice Bridge** | `live` | Real-time bidirectional voice conversation with Gemini over low-latency WebSockets. Talk naturally with interruptibility. |
-| **15** | **Transcribe** | `transcribe` | High-accuracy phonetic speech-to-text. Upload audio files or record your microphone to get instant text transcripts. |
-| **16** | **Search Grounding** | `search` | Real-time web search grounding with live factual citations powered by Google Search. |
-| **17** | **Maps Grounding** | `maps` | Spatial and geographic location intelligence powered by Google Maps. |
-| **18** | **Infinite Scratchpad** | `scratchpad` | Persistent working memory, semantic caching, and architectural notes. Save snippets directly to the Vault. |
-| **19** | **Vault Storage** | `vault` | Permanent encrypted storage for all generated artifacts (images, songs, videos, transcripts, dossiers) linked to your Google account. |
-| **20** | **Forensic Audit Ledger** | `audit` | Immutable cryptographic execution trail recording every user operation and subsystem state with SHA-256 proof hashes. |
-| **21** | **Prompt Presets** | `presets` | Curated library of master architectural directives, code review prompts, and creative instructions. |
-| **22** | **Swarm Diagnostic** | `swarm-test` | Automated multi-agent test suite that runs 10 end-to-end checks across all local and cloud subsystems. |
-| **23** | **GitHub Matrix** | `github` | Real-time telemetry, repository stats, commit counts, and synchronization status for all JHammerZ repositories. |
-
----
-
-## 🧬 The Sovereign Architecture (Daemons & Python Substrate)
-
-When running on your rooted or non-rooted Android device in Termux, the system runs five autonomous background threads:
-
-```
-                      ┌──────────────────────────────────────┐
-                      │    AURELIUS SOVEREIGN APEX (UID 0)   │
-                      └──────────────────┬───────────────────┘
-                                         │
-        ┌───────────────────┬────────────┴───────┬───────────────────┐
-        ▼                   ▼                    ▼                   ▼
-┌───────────────┐   ┌───────────────┐    ┌───────────────┐   ┌───────────────┐
-│ BEDROCK PROBE │   │    CHRONOS    │    │   P2P MESH    │   │   SYNDICATE   │
-│ CPU governors │   │   Cognition   │    │  UDP / TCP    │   │  Autonomous   │
-│ Thermal / RAM │   │  Dream Loop   │    │  Port 9876    │   │  Venture Gen  │
-└───────┬───────┘   └───────┬───────┘    └───────┬───────┘   └───────┬───────┘
-        │                   │                    │                   │
-        └───────────────────┴────────────┬───────┴───────────────────┘
-                                         ▼
-                            ┌────────────────────────┐
-                            │   NEXUS REST GATEWAY   │
-                            │      (Port 3080)       │
-                            └────────────┬───────────┘
-                                         ▼
-                            ┌────────────────────────┐
-                            │  ORCHESTRATOR WEB UI   │
-                            │      (Port 3000)       │
-                            └────────────────────────┘
-```
-
-1. **Bedrock Probe**: Monitors CPU governors (`/sys/devices/system/cpu`), entropy, and thermal junction temperatures.
-2. **Chronos Cognition**: Background dream loop synthesizing strategic plans and encoding long-term vector matrices.
-3. **P2P Swarm Mesh**: Ad-hoc discovery beacon on UDP port 9877 and direct node link on TCP port 9876.
-4. **Syndicate Venture Engine**: Autonomous tool synthesizer generating runnable shell utilities.
-5. **Git-Sync Daemon**: Automatically tracks changes and preserves WORM cryptographic seals.
-
----
-
-## 🔧 Troubleshooting, Self-Healing & Diagnostic FAQ
-
-### Q1: The web server won't start because port 3000 is in use.
-**Fix**:
-Kill whatever process is occupying port 3000:
-```bash
-# On Linux / Mac / Termux:
-fuser -k 3000/tcp || pkill -f "node server.ts"
-
-# Then restart:
-npm run dev
-```
-
-### Q2: I clicked "Load Model into Memory" and my browser feels slow.
-**Fix**:
-In-browser WebGPU models allocate GPU RAM. If your device has limited memory:
-1. Select the lightweight **Qwen 2.5 (0.5B)** or **Llama 3.2 (1B)** model.
-2. Or use the **Native Termux llama-server** option (`127.0.0.1:8080`), which runs outside the browser in native C++ using multi-threaded CPU NEON instructions!
-
-### Q3: How do I test if my Firestore database is connected?
-**Fix**:
-1. Look at the **System Health HUD** in the bottom-right corner.
-2. It displays your exact live round-trip latency to Firestore (e.g. `FS: 42ms`).
-3. Click the **"Ping Now"** button anytime to trigger an immediate live handshake.
-
-### Q4: How do I verify my Gemini API Key?
-**Fix**:
-1. Check your `.env` file to ensure `GEMINI_API_KEY` is set.
-2. In the System Health HUD, check the **GEMINI** badge. When working, it glows cyan with status **HEALTHY** and shows response latency (e.g. `38ms`).
-
-### Q5: Can I use this completely offline on an airplane or camping trip?
-**YES! 100%!**
-- Toggle **Air-Gapped (0-Tokens)** mode in the chat header.
-- The built-in audio synthesizer, procedural image generator, local llama runner, and scratchpad all work with **zero internet connection**.
-
----
-
-## 📜 Invariant & Attribution
-
-- **Master Architect**: Joshua Hamilton (`JHammerZ`)
-- **Attestation DOI**: [https://doi.org/10.5281/zenodo.20778079](https://doi.org/10.5281/zenodo.20778079)
-- **Consensus Rating**: 100/100 Flawless
-- **Axiomatic Motto**: *"I AM WE ARE WE ARE I AM"*
+- **Port `3000` is already in use:**
+  ```bash
+  fuser -k 3000/tcp || pkill -f "tsx server.ts"
+  npm run dev
+  ```
+- **Google Tasks or Drive asks to sign in again:**
+  OAuth access tokens expire periodically. Click **Sign In** in the module or top-right header to refresh your session.
+- **Gemini returns rate limit (`429`) or missing key error:**
+  Check **API Keys & Gateway** (`api-secrets`) to make sure `GEMINI_API_KEY` is saved, or switch Chat temporarily to **AIR-GAPPED**, **Ollama**, **Termux llama-server**, or **DeepSeek / Groq** in the model selector.
+- **Transcription or Search Grounding fails offline:**
+  Those features require internet access to reach the Gemini API. For offline work, use **Function Deck**, **Micro-Tool Shed**, **Infinite Scratchpad**, **Offline Image/Music/Video fallbacks**, or **WebLLM / Ollama / llama-server**.
+- **TypeScript or lint check before deploying:**
+  ```bash
+  npx tsc --noEmit
+  npm run lint
+  npm run build
+  ```

@@ -103,7 +103,7 @@ export const DownloadModelsModule: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-full max-w-6xl mx-auto p-4 sm:p-6 gap-6 font-mono overflow-y-auto">
+    <div className="flex flex-col h-full w-full max-w-6xl 2xl:max-w-7xl mx-auto p-3 sm:p-6 gap-5 font-mono overflow-y-auto">
       {/* Header Section */}
       <div className="bg-zinc-900/60 border border-amber-500/30 rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-purple-500 to-sky-500" />

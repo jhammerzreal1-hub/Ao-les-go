@@ -59,6 +59,8 @@ export interface JanusExecutionOptions {
   modelId?: string;
   deepthink?: boolean;
   zeroTokenMode?: boolean;
+  skipServerChat?: boolean;
+  abortSignal?: AbortSignal;
   onToken?: (token: string, chunkInfo?: JanusStreamChunk) => void;
   onReasoningProgress?: (phase: string, partialThought: string) => void;
 }
@@ -188,16 +190,15 @@ class JanusGateService {
       const isLocalReady = localLlmManager.isReady();
       const isLocalFirstModel = modelId && ['webllm', 'llamacpp', 'ollama'].includes(AVAILABLE_LOCAL_MODELS.find((m: any) => m.id === modelId)?.source || '');
 
-      // RESTORED: Online connectivity enabled; local substrate remains the primary priority.
       const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-      
-      // 🌐 AUTOMATICALLY ONLINE FIRST: Only skip cloud if truly offline or zeroTokenMode is explicitly active
-      const skipCloud = !isOnline || options.zeroTokenMode;
+      const skipCloud = !isOnline || options.zeroTokenMode || options.skipServerChat;
 
       if (isOnline && !skipCloud) {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(new Error('Janus cloud timeout')), 45_000);
+        const onParent = () => controller.abort(options.abortSignal?.reason);
+        options.abortSignal?.addEventListener('abort', onParent, { once: true });
         try {
-          // Zero-watchdog fetch: no AbortSignal.timeout(15000) that cuts off reasoning!
-          const controller = new AbortController();
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -213,13 +214,12 @@ class JanusGateService {
             signal: controller.signal
           });
 
-            if (res.ok) {
-              this.pushLog(`Cloud Bridge: Request Dispatched (${modelId || 'gemini-3.8-flash'})`);
-              const data = await res.json();
-              if (data && data.text && !data.error) {
-                this.pushLog('Cloud Bridge: Synchronized Payload Received');
-                const fullText = data.text;
-              // Stream output gracefully via cooperative yielding
+          if (res.ok) {
+            this.pushLog(`Cloud Bridge: Request Dispatched (${modelId || 'gemini-4-hydrogen'})`);
+            const data = await res.json();
+            if (data && data.text && !data.error) {
+              this.pushLog('Cloud Bridge: Synchronized Payload Received');
+              const fullText = data.text;
               const words = fullText.split(/(\s+)/);
               for (const w of words) {
                 await handleChunk(w);
@@ -228,8 +228,10 @@ class JanusGateService {
             }
           }
         } catch (cloudErr: any) {
-          // Fallback handled silently
           dev_null('Cloud bridge note:', cloudErr);
+        } finally {
+          clearTimeout(tid);
+          options.abortSignal?.removeEventListener('abort', onParent);
         }
       }
 
@@ -241,9 +243,14 @@ class JanusGateService {
           
             if (localLlmManager.isReady()) {
               this.pushLog(`Local Substrate: Engaging WebGPU (${modelId})`);
-              await localLlmManager.generateWithWebLlm(prompt, systemInstruction, async (token) => {
-                await handleChunk(token);
-              });
+              await localLlmManager.generateWithWebLlm(
+                prompt,
+                systemInstruction,
+                async (token) => {
+                  await handleChunk(token);
+                },
+                { skipServerChat: options.skipServerChat }
+              );
             } else {
               // Check Termux llama-server on 8080
               const hasTermux = await localLlmManager.probeLlamaCppServer();
@@ -291,13 +298,13 @@ class JanusGateService {
       this.reasoningProtected++;
       
       // Zero-loss synthesis via compendium removed per user directive.
-      accumulated = `[JANUS_GATE_CRITICAL_ERROR] The speculative continuum and sovereign anchor have both failed to synthesize a response. Live models are offline and the static vault fallback is disabled. Check server logs for substrate exceptions.`;
+      accumulated = `[JANUS_GATE_ERROR] Both cloud model cascade and local inference engines failed to return a response. Verify API keys in API Keys & Gateway or start Ollama/llama-server.`;
     }
 
     // Post-generation reasoning healing
     const healed = this.healReasoningStream(accumulated, prompt);
     const elapsed = Math.max(15, Math.round(performance.now() - startTime));
-    this.pushLog(`Consensus Verification Complete: ${elapsed}ms · Ring -3 Invariant Verified`);
+    this.pushLog(`Execution Complete: ${elapsed}ms · Output Verified`);
     const proofHash = `0xJANUS_${Date.now().toString(16)}_${Math.random().toString(36).substring(2, 8)}`;
 
     // Signal memory state transaction completed

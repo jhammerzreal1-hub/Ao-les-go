@@ -8,8 +8,11 @@ export default defineConfig({
     react(),
   ],
   server: {
+    host: '0.0.0.0',
     port: 3000,
+    allowedHosts: true,
     hmr: false,
+    ws: false,
     watch: {
       ignored: ['**/data/**', '**/*.db', '**/*.db-*', '**/*.tar.gz', '**/node_modules/**']
     }

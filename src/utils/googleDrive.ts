@@ -1,71 +1,16 @@
-import { auth, googleProvider, signInWithPopup, signOut } from '../firebase';
-import { GoogleAuthProvider, onAuthStateChanged, type User } from 'firebase/auth';
+import {
+  initWorkspaceAuth,
+  signInWithGoogleWorkspace,
+  getWorkspaceAccessToken,
+  setWorkspaceAccessToken,
+  signOutGoogleWorkspace
+} from './googleWorkspace';
 
-// Add Google Drive scopes to provider
-googleProvider.addScope('https://www.googleapis.com/auth/drive');
-googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
-
-let isSigningIn = false;
-let cachedAccessToken: string | null = null;
-
-/**
- * Initialize Firebase Auth listener for Google Drive OAuth
- */
-export const initDriveAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
-  onAuthFailure?: () => void
-) => {
-  return onAuthStateChanged(auth, async (user: User | null) => {
-    if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        cachedAccessToken = null;
-        if (onAuthFailure) onAuthFailure();
-      }
-    } else {
-      cachedAccessToken = null;
-      if (onAuthFailure) onAuthFailure();
-    }
-  });
-};
-
-/**
- * Trigger Google Sign-In with Drive Scopes
- */
-export const signInWithGoogleDrive = async (): Promise<{ user: User; accessToken: string } | null> => {
-  try {
-    isSigningIn = true;
-    const result = await signInWithPopup(auth, googleProvider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to obtain Google Drive OAuth access token.');
-    }
-
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
-  } catch (error: any) {
-    console.error('Google Drive sign in error:', error);
-    throw error;
-  } finally {
-    isSigningIn = false;
-  }
-};
-
-export const getDriveAccessToken = (): string | null => {
-  return cachedAccessToken;
-};
-
-export const setDriveAccessToken = (token: string | null) => {
-  cachedAccessToken = token;
-};
-
-export const signOutGoogleDrive = async () => {
-  await signOut(auth);
-  cachedAccessToken = null;
-};
+export const initDriveAuth = initWorkspaceAuth;
+export const signInWithGoogleDrive = signInWithGoogleWorkspace;
+export const getDriveAccessToken = getWorkspaceAccessToken;
+export const setDriveAccessToken = setWorkspaceAccessToken;
+export const signOutGoogleDrive = signOutGoogleWorkspace;
 
 export interface DriveFile {
   id: string;
@@ -86,7 +31,7 @@ export interface DriveFile {
  */
 export async function listDriveFiles(
   accessToken: string,
-  queryStr = "trashed = false",
+  queryStr = 'trashed = false',
   pageSize = 40
 ): Promise<DriveFile[]> {
   const fields = 'files(id, name, mimeType, size, iconLink, webViewLink, webContentLink, createdTime, modifiedTime, owners, shared)';
@@ -95,7 +40,7 @@ export async function listDriveFiles(
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      'Accept': 'application/json'
+      Accept: 'application/json'
     }
   });
 
@@ -117,11 +62,7 @@ export async function createDriveFile(
   content: string,
   mimeType = 'text/plain'
 ): Promise<DriveFile> {
-  const metadata = {
-    name,
-    mimeType
-  };
-
+  const metadata = { name, mimeType };
   const boundary = '-------314159265358979323846';
   const delimiter = `\r\n--${boundary}\r\n`;
   const closeDelimiter = `\r\n--${boundary}--`;
@@ -153,7 +94,7 @@ export async function createDriveFile(
 }
 
 /**
- * Delete a file from Google Drive (Requires user confirmation before invoking!)
+ * Delete a file from Google Drive (Requires explicit user confirmation before invoking)
  */
 export async function deleteDriveFile(accessToken: string, fileId: string): Promise<boolean> {
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {

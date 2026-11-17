@@ -1889,13 +1889,13 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                     onChange={(e) => setSelectedAgent(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-zinc-100 focus:outline-none focus:border-sky-500 font-mono"
                   >
-                    <option value="Aurelius-Teraflop-Omega">Aurelius Teraflop-Ω (DeepSeek-R1 4,096 GFLOPS)</option>
+                    <option value="Aurelius-Teraflop-Omega">Aurelius Strategic Core (DeepSeek-R1 / Gemini Cascade)</option>
                     <option value="Sovereign-Engineer-Core">Sovereign Engineer (Qwen 2.5 Coder 32B)</option>
                     <option value="Lysander-30-CBP">Lysander 3.0 CBP (Llama 3.2 Termux Edge)</option>
                     <option value="Logic-Proof-Node">Logic Node (Phi-4 14B Proofs)</option>
                     <option value="Vision-Spatial-Node">Vision Node (Llama 3.2 11B Vision)</option>
                     <option value="Memory-Vector-Node">Memory Node (Qwen 2.5 7B Axioms)</option>
-                    <option value="Kernel-God-RingMinus3">Kernel God-Node (DeepSeek-R1 32B Bare-Metal)</option>
+                    <option value="Kernel-God-RingMinus3">Kernel Core Node (DeepSeek-R1 32B Local)</option>
                   </select>
                 </div>
               </div>

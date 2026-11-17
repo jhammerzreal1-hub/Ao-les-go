@@ -36,7 +36,13 @@ import {
   Network,
   Wrench,
   Activity,
-  Phone
+  Phone,
+  ListTodo,
+  Key,
+  Package,
+  ShieldCheck,
+  BookmarkPlus,
+  Layers
 } from 'lucide-react';
 import type { ModuleType, Artifact } from '../types';
 
@@ -112,9 +118,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       { id: 'projects', title: 'Unified Projects Orchestrator', desc: 'Consolidate and merge all 8 sovereign repositories under Joshua Hamilton with Immutable seals', icon: FolderGit2, color: 'text-amber-400', badge: '17.8k Commits' },
       { id: 'functions', title: 'Function Deck & Toolbelt', desc: '12+ instant browser utilities (Base64, JSON, Regex, Hash, Passwords, UUIDs)', icon: Zap, color: 'text-rose-400', badge: '12 Tools' },
       { id: 'drive', title: 'Google Drive Storage', desc: 'Browse, view, create, and manage files in Google Drive with OAuth 2.0', icon: HardDrive, color: 'text-amber-400', badge: 'Drive' },
+      { id: 'integrations', title: 'Sovereign Integration Control Plane', desc: 'Unified live probe & bridge across all 15+ add-ons, OAuth Workspace & LLM gateways', icon: Layers, color: 'text-amber-400', badge: 'All Add-Ons' },
+      { id: 'tasks', title: 'Google Tasks Sync', desc: 'Create, organize, complete, and manage Google Tasks & lists with confirmation gates', icon: ListTodo, color: 'text-emerald-400', badge: 'Tasks' },
+      { id: 'api-secrets', title: 'Internal Secrets Vault & Gateway', desc: 'AES-256-GCM encrypted server secrets handler, dynamic masking & proxy workbench', icon: Key, color: 'text-emerald-400', badge: 'AES-256-GCM' },
+      { id: 'presets', title: 'Prompt Presets', desc: 'Curated architectural directives, code reviews & creative templates', icon: BookmarkPlus, color: 'text-amber-400', badge: 'Templates' },
+      { id: 'audit', title: 'Forensic Audit Ledger', desc: 'Immutable execution audit trail & cryptographic proof hashes', icon: ShieldCheck, color: 'text-emerald-400', badge: 'WORM' },
+      { id: 'swarm-test', title: 'Swarm Diagnostic Matrix', desc: 'Live multi-subsystem health, secrets, linter & endpoint verification', icon: Activity, color: 'text-amber-400', badge: 'Diagnostics' },
+      { id: 'packager', title: 'Android APK Packager', desc: 'Package orchestrator modules into Capacitor Android builds', icon: Package, color: 'text-amber-400', badge: 'APK' },
+      { id: 'download-models', title: 'Model Wardrobe', desc: 'Offline model downloads & quantized engine management', icon: Download, color: 'text-amber-400', badge: 'GGUF' },
+      { id: 'universal-installer', title: 'Universal Installer', desc: 'Cross-platform bootstrap scripts & environment setup', icon: Download, color: 'text-amber-400', badge: 'Bootstrap' },
       { id: 'knowledge-graph', title: 'Autonomous Memory Knowledge Graph', desc: 'Living interactive knowledge topology & session consolidation', icon: Network, color: 'text-amber-400', badge: 'Graph' },
       { id: 'tool-shed', title: 'Dynamic Micro-Tool Shed', desc: 'On-the-fly AI tool generator & client JS sandbox runner', icon: Wrench, color: 'text-emerald-400', badge: 'Sandbox' },
-      { id: 'autonomy-supervisor', title: 'Expanded Runtime Autonomy Supervisor', desc: 'Proactive background scratchpad de-cluttering & diagnostic pulse', icon: Activity, color: 'text-cyan-400', badge: 'Autonomy' },
+      { id: 'autonomy-supervisor', title: 'Expanded Runtime Autonomy Supervisor', desc: 'Proactive background scratchpad & substrate diagnostics', icon: Activity, color: 'text-cyan-400', badge: 'Autonomy' },
     ];
 
     for (const m of modulesConfig) {
@@ -151,11 +166,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     list.push({
       id: 'act-super-agent-teraflop',
       category: 'Sovereign Actions',
-      title: 'Engage Teraflop-Ω Super Agent Matrix',
-      description: '4,096 GFLOPS ahead compute substrate with flawless GitHub schemas and quantum speculative decoding',
+      title: 'Engage Strategic Coordinator Matrix',
+      description: 'Structured orchestrator routing, workspace schema execution, and live Gemini cascade synthesis',
       icon: Zap,
       color: 'text-amber-400 font-bold',
-      badge: '4,096 GFLOPS',
+      badge: 'Core Agent',
       action: () => {
         onSelectModule('chat');
         onClose();

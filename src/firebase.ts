@@ -3,7 +3,6 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
-  signInAnonymously,
   signOut, 
   onAuthStateChanged,
   type User 
@@ -28,7 +27,6 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export { signInAnonymously };
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
@@ -39,8 +37,9 @@ try {
   setLogLevel('silent');
 } catch (_) {}
 
-// Initialize standard Firestore connection using the newly provisioned dedicated database ID
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore using dedicated database ID when configured, else (default)
+const configuredDatabaseId = (firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId;
+export const db = configuredDatabaseId ? getFirestore(app, configuredDatabaseId) : getFirestore(app);
 
 // Validate Connection to Firestore as specified in firebase-integration-rpc
 export async function testFirestoreConnection() {
@@ -121,7 +120,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.warn('Firestore Notice: ', JSON.stringify(errInfo));
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 }
 
 export { 

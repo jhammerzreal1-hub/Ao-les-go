@@ -63,7 +63,7 @@ export const GroundingModule: React.FC<GroundingModuleProps> = ({ initialMode = 
       console.error('Grounding failure:', err);
       setResult({
         text: `Error during ${mode === 'search' ? 'Google Search' : 'Google Maps'} grounding: ${err.message}`,
-        model: 'gemini-3.5-flash'
+        model: 'gemini-3.1-flash-lite'
       });
     } finally {
       setLoading(false);
@@ -78,18 +78,18 @@ export const GroundingModule: React.FC<GroundingModuleProps> = ({ initialMode = 
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="w-full max-w-6xl 2xl:max-w-7xl mx-auto p-3 sm:p-6 space-y-5">
       {/* Mode Switcher Banner */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-xl ${mode === 'search' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`p-2.5 rounded-xl shrink-0 ${mode === 'search' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
             {mode === 'search' ? <Search className="w-5 h-5" /> : <MapPin className="w-5 h-5" />}
           </div>
-          <div>
-            <h2 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-zinc-100 flex items-center gap-2 flex-wrap">
               <span>{mode === 'search' ? 'Google Search Grounding' : 'Google Maps Grounding'}</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300">
-                gemini-3.5-flash
+                gemini-3.1-flash-lite
               </span>
             </h2>
             <p className="text-xs text-zinc-400">
@@ -139,7 +139,7 @@ export const GroundingModule: React.FC<GroundingModuleProps> = ({ initialMode = 
                 : 'Enter query for Google Maps spatial grounding (e.g. Locate high-speed rail nodes in Tokyo...)'
             }
             rows={3}
-            className="w-full bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 resize-none shadow-lg"
+            className="w-full bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 pb-14 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 resize-none shadow-lg"
           />
           <button
             onClick={() => handleExecute()}
@@ -165,9 +165,9 @@ export const GroundingModule: React.FC<GroundingModuleProps> = ({ initialMode = 
                 setPrompt(preset);
                 handleExecute(preset);
               }}
-              className="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-300 border border-zinc-800 rounded-lg px-2.5 py-1 text-left transition-colors flex items-center gap-1.5"
+              className="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-300 border border-zinc-800 rounded-lg px-2.5 py-1 text-left transition-colors flex items-center gap-1.5 max-w-full"
             >
-              <span className="truncate max-w-[260px]">{preset}</span>
+              <span className="truncate max-w-[220px] sm:max-w-[280px]">{preset}</span>
               <ArrowRight className="w-3 h-3 shrink-0 opacity-60" />
             </button>
           ))}
@@ -182,7 +182,7 @@ export const GroundingModule: React.FC<GroundingModuleProps> = ({ initialMode = 
             Aurelius consulting {mode === 'search' ? 'Google Search Grounding' : 'Google Maps Grounding'}...
           </div>
           <div className="text-xs text-zinc-500 font-mono">
-            Model: gemini-3.5-flash with live API tool verification
+            Model: gemini-3.1-flash-lite with live API tool verification
           </div>
         </div>
       )}

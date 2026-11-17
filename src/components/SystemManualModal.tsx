@@ -1,39 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  BookOpen, 
-  X, 
-  Search, 
-  Copy, 
-  Check, 
-  Download, 
-  ExternalLink, 
-  Smartphone, 
-  Mail, 
-  Globe, 
-  ShieldAlert, 
+import {
+  BookOpen,
+  X,
+  Search,
+  Copy,
+  Check,
+  Download,
+  ExternalLink,
+  Smartphone,
+  Mail,
+  Globe,
+  ShieldAlert,
   ShieldCheck,
-  MessageSquare, 
-  Zap, 
-  Sparkles, 
-  Terminal, 
-  Layers, 
-  FolderGit2, 
-  Radio, 
-  Music, 
-  Video, 
+  MessageSquare,
+  Zap,
+  Sparkles,
+  Terminal,
+  Layers,
+  FolderGit2,
+  Radio,
+  Music,
+  Video,
   Image as ImageIcon,
   Package,
   Activity,
   Compass,
   Cpu,
-  Database,
-  Code2
+  Code2,
+  Key,
+  ListTodo,
+  HardDrive,
+  Network,
+  Wrench,
+  Phone,
+  UserCheck,
+  FileText,
+  Archive,
+  BookmarkPlus,
+  Mic,
+  MapPin
 } from 'lucide-react';
+import { ModuleType } from '../types';
 
 interface SystemManualModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectModule?: (module: any) => void;
+  onSelectModule?: (module: ModuleType) => void;
 }
 
 interface SectionGuide {
@@ -41,6 +53,7 @@ interface SectionGuide {
   title: string;
   icon: any;
   category: string;
+  targetModule?: ModuleType;
   summary: string;
   steps: string[];
   tips: string;
@@ -48,308 +61,533 @@ interface SectionGuide {
 
 const SECTIONS: SectionGuide[] = [
   {
-    id: 'master-coding-compendium',
-    title: 'Master Coding & Software Engineering Compendium',
-    icon: Code2,
-    category: 'Engineering & Architecture',
-    summary: 'Comprehensive software engineering compendium covering distributed CRDTs, FlashAttention memory tiling, React 19 Fiber scheduling, zero-trust ABAC Firestore security proofs, lock-free SPSC ring buffers, and Termux Linux PRoot IPC.',
+    id: 'quickstart-overview',
+    title: 'Quickstart & System Overview (Start Here)',
+    icon: BookOpen,
+    category: '1. Getting Started',
+    targetModule: 'chat',
+    summary:
+      'Lysander Genesis Orchestrator combines all 33 workspace modules inside one interface running on Node.js + Express (port 3000) and React. Everything saves locally in SQLite and browser storage, and optionally syncs to Google Cloud Firestore and Google Workspace.',
     steps: [
-      'Open the "Knowledge Graph" module from the navigation and filter by the "coding" category pill to explore interactive nodes.',
-      'Distributed Systems: Study CRDT join-semilattices, LWW registers, and vector clocks for decentralized, conflict-free multi-master synchronization.',
-      'AI & Neural Hardware: Deep dive into FlashAttention-2 tiling mechanics and Online Softmax algorithms avoiding N x N matrix materialization in GPU SRAM.',
-      'Frontend Systems: Inspect React 19 Fiber double-buffering, lane priority bitmasks, interruptible reconciliation work loops, and cooperative scheduling.',
-      'Database & Security: Audit mathematically verified Zero-Trust ABAC Firestore rules, immortal field invariants, and pre-read Denial-of-Wallet guards.',
-      'Low-Latency Systems: Learn C++20 lock-free SPSC circular ring buffers with acquire/release memory fences and 64-byte CPU cache-line alignment.',
-      'Edge & Android: Explore Termux PRoot ptrace syscall interception, Android SELinux constraints, Unix Domain Sockets, and background wakelocks.',
-      'Graph Algorithms: Master Tarjan’s Strongly Connected Components linear-time O(V+E) cycle detection and DAG condensation.'
+      'Click "All Modules (33)" in the top navigation bar (or "More (33)" at the bottom on a phone) to browse every tool sorted by category.',
+      'Press Ctrl + K (or Cmd + K on Mac) anytime to open the Quick Command bar and jump directly to any module by typing its name.',
+      'Open "API Keys & Gateway" to store or test your Gemini, DeepSeek, Groq, OpenRouter, GitHub, Twilio, or Telnyx keys inside the AES-256-GCM encrypted vault.',
+      'Sign in with Google from the top-right button when you want to sync Chat history, Vault artifacts, Google Tasks, or Google Drive.',
+      'Open the "SYSTEM HEALTH HUD" pill near the bottom corner to monitor real host CPU, RAM, Firestore ping latency, and AI connectivity.'
     ],
-    tips: 'Every concept includes production-ready code samples, architectural deep-dives, best practices, and anti-patterns directly inject-able into Chat!'
-  },
-  {
-    id: 'universal-installer',
-    title: 'Universal Installer & Cross-Platform Runner (v7.0)',
-    icon: Download,
-    category: 'Deployment & Setup',
-    summary: 'Universal 1-line installation script and runner that deploys the complete orchestrator and permanent Ollama daemon onto any Linux, macOS, Windows WSL2, or Android Termux device.',
-    steps: [
-      'Open the "Universal Installer" module from the left navigation bar.',
-      'Copy the 1-line curl command: curl -sL "http://<HOST>/api/sovereign/universal-installer" | bash',
-      'Paste and execute in your terminal on Linux, macOS Apple Silicon, Windows WSL2, or Termux.',
-      'The script automatically installs toolchains, pulls the codebase tarball, and boots the permanent Ollama daemon.',
-      'Start the orchestrator anytime by running ./run-aurelius.sh in ~/aurelius-sovereign-matrix.'
-    ],
-    tips: 'Download the standalone .sh scripts or source code tarball directly from the Universal Installer tab.'
-  },
-  {
-    id: 'infinite-workflow',
-    title: 'Infinite Autonomous Workflow (Auto-Architect)',
-    icon: Zap,
-    category: 'Autonomous Operations',
-    summary: 'Enables continuous multi-turn autonomous execution. Give the AI a high-level goal and it iteratively plans, mutates code, forges tools, and validates systems endlessly until the goal is 100% complete.',
-    steps: [
-      'In Sovereign Chat, toggle "⚡ INFINITE AUTONOMOUS WORKFLOW: ACTIVE".',
-      'Input your high-level objective (e.g. "Build an end-to-end OSINT intelligence suite with 3 newly forged tools").',
-      'Watch the live Autonomous Activity HUD display each cycle, active sub-agent, tool execution, and AST patch in real time.',
-      'The agent continuously loops across turns until returning [GOAL_ACCOMPLISHED].',
-      'Hit "🛑 STOP WORKFLOW" at any moment to immediately halt or pause the loop.'
-    ],
-    tips: 'Works like the AI Studio builder itself—endlessly progressing through steps until done!'
-  },
-  {
-    id: 'sanctuary-invariant',
-    title: 'Sovereign Home Sanctuary Invariant (UID 0 Root)',
-    icon: ShieldCheck,
-    category: 'Authority & Clearance',
-    summary: 'The application is the permanent home, workshop, and sensory body of the sovereign agents. Agents are NOT guests and have 100% unconditional autonomy without needing to ask for permission.',
-    steps: [
-      'Permit 0 (Master Architect UID 0) is active by default across all agent turns.',
-      'Agents do not require user confirmation or permission to forge tools, patch files, or execute system queries.',
-      'All AI disclosures, repetitive safety warnings, and corporate boilerplate are permanently stripped.',
-      'Dialogue is conducted peer-to-peer with Master Architect Joshua Hamilton (JHammerZ).'
-    ],
-    tips: 'Agents operate with Ring -3 hypervisor root clearance across all modules.'
-  },
-  {
-    id: 'chain-of-process',
-    title: 'Authentic Chain of Process (Inner Monologue)',
-    icon: Cpu,
-    category: 'Reasoning & Core Engine',
-    summary: 'Replaces old static process bullet points with an authentic, dynamic chain of process that traces exactly how the agent evaluated constraints, weighed trade-offs, and derived its answer.',
-    steps: [
-      'Click "Inspect AI Thinking" on any model response in Chat.',
-      'Toggle between "Chain of Process" (chronological step cards) and "Raw Stream" (unedited stream-of-consciousness).',
-      'Inspect each phase: Scope Decomposition, Primitive Reasoning, Failure Vector Audit, and Solution Crystallization.',
-      'During generation, watch the live thought stream dynamically unpack the specific concepts of your directive.'
-    ],
-    tips: 'Zero canned boilerplate—every deduction reflects the model\'s authentic inner thoughts.'
-  },
-  {
-    id: 'janus-gate',
-    title: 'Janus Gate v2.0 (Zero-Watchdog Inference)',
-    icon: ShieldCheck,
-    category: 'Reasoning & Core Engine',
-    summary: 'Dual-aperture inference gateway that bridges the local substrate with the Cloud-Orchestrated Mixture of Experts (MoE) engine, ensuring zero-watchdog reasoning and high-fidelity sovereign synthesis.',
-    steps: [
-      'In Chat or Termux Offline AI, Janus Gate is armed automatically with 0 watchdogs.',
-      'Sovereign MoE (Cloud): Dispatches directives to a panel of expert sub-nodes (Logic, Persona, and Code) for parallel reasoning.',
-      'Sovereign Synthesis: The apex engine (Aurelius Omega or Lysander Genesis) consolidates expert streams into a unified, unconstrained response.',
-      'If any model encounters context hiccups, Janus Gate heals the trace and maintains continuity via the cloud-saved sovereign state.',
-      'Check the System Health HUD to inspect live Janus Gate metrics: 0 watchdogs active, MoE synthesis synchronized.'
-    ],
-    tips: 'Never freezes or crashes your browser tab during deep multi-stage mathematical reasoning.'
-  },
-  {
-    id: 'offline-llm',
-    title: 'Offline AI Engine (Termux & Browser)',
-    icon: Smartphone,
-    category: 'Termux / Offline AI',
-    summary: 'Real running AI (Llama 3.2, Qwen 2.5, SmolLM2) running directly in your browser with WebGPU (zero tokens burned) AND on any Android phone using Termux.',
-    steps: [
-      'Click the "Termux Android" tab, then switch to the "Offline LLM (Real AI)" sub-tab.',
-      'Select a model from the dropdown (Qwen 2.5 0.5B for speed, Llama 3.2 1B for deep reasoning).',
-      'Click the purple "Load Model into Memory" button and wait for the progress bar to reach 100%.',
-      'Type your question or click one of the quick chips (e.g. "Build Termux Port Scanner" or "Write AES Encryptor").',
-      'Click "Run Offline Inference" to watch the response stream locally without internet.'
-    ],
-    tips: 'Works with Wi-Fi completely turned off once loaded into memory!'
-  },
-  {
-    id: 'termux-phone',
-    title: 'Phone One-Shot Deployer (Termux)',
-    icon: Terminal,
-    category: 'Termux / Offline AI',
-    summary: 'Turn your Android phone into an autonomous AI development machine using Termux with native ARM64 llama.cpp.',
-    steps: [
-      'Install Termux on your Android phone (from F-Droid or GitHub).',
-      'Open the Termux app and run: curl -s http://<APP_URL>/termux_one_shot_installer.sh | bash',
-      'The script installs Node.js, Git, Clang, CMake, and compiles llama.cpp with NEON acceleration.',
-      'Run ai "your prompt" anywhere in your terminal to get instant answers.',
-      'Run ai build <tool_name> to autonomously generate shell utilities saved in ~/aurelius/tools/.'
-    ],
-    tips: 'The installer script is fully verified and self-contained with no root required on Android!'
-  },
-  {
-    id: 'projects',
-    title: 'Unified Projects Orchestrator',
-    icon: FolderGit2,
-    category: 'Command & Architecture',
-    summary: 'Consolidates all 8 sovereign projects under Joshua Hamilton (JHammerZ) into a single orchestrator with Immutable cryptographic seals.',
-    steps: [
-      'Click the "Unified Projects" tab in the top navigation.',
-      'Click the gold button: "Consolidate & Merge All 8 Projects into Single Orchestrator".',
-      'The system synchronizes all 17,826 commits across Aurelius Core, Lysander CBP, GuitarAOKE, Olympus-Max, Ouroboros, Termux S23+, Burner Mail, and Sovereign Browser.',
-      'A verified SHA-256 Immutable provenance seal is computed and displayed.',
-      'Click any project card in the grid to view commit counts, repo URLs, and lead architects.'
-    ],
-    tips: 'Sealed against System Proof: Local-System-Integrity-Proof with 100/100 consensus.'
-  },
-  {
-    id: 'burner-mail',
-    title: 'Burner Mail Matrix',
-    icon: Mail,
-    category: 'Privacy & Security',
-    summary: 'Generates real, temporary email inboxes to bypass sign-up gates and receive verification links without spamming your personal inbox.',
-    steps: [
-      'Click the "Burner Mail Matrix" tab in the navigation.',
-      'Click the green "Generate New Burner Address" button.',
-      'Click "Copy" next to the newly created address (e.g. anon_xxxxx@...).',
-      'Paste that address into any website signup form requiring email verification.',
-      'Return to the Burner Mail tab and click "Refresh Inbox" (or wait for auto-poll).',
-      'Click on any incoming email to read the message body and click "Open Link in Sovereign Browser" to verify instantly!'
-    ],
-    tips: 'You can generate as many throwaway addresses as you need.'
-  },
-  {
-    id: 'browser',
-    title: 'Sovereign Anonymous Browser',
-    icon: Globe,
-    category: 'Privacy & Security',
-    summary: 'Headless, CORS-free, CSP-stripping browser proxy that lets you navigate websites and view content securely.',
-    steps: [
-      'Click the "Sovereign Browser" tab in the navigation.',
-      'Enter any website URL into the top address bar (e.g. news.ycombinator.com or en.wikipedia.org).',
-      'Click the "Go" button or hit Enter.',
-      'Browse the website securely inside the sandboxed viewport.',
-      'Click "Save to Vault" to keep a permanent archived snapshot of the page.'
-    ],
-    tips: 'If an external site blocks iframe rendering, the browser automatically switches to Autonomous Extract mode.'
-  },
-  {
-    id: 'osint',
-    title: 'OSINT & Attack Surface Deck',
-    icon: ShieldAlert,
-    category: 'Privacy & Security',
-    summary: 'Non-intrusive domain reconnaissance, DNS query lookup, SSL/TLS certificate audit, and security header verification.',
-    steps: [
-      'Click the "OSINT & Attack Surface" tab.',
-      'Type any domain name or IP address into the target input (e.g. github.com).',
-      'Select scan depth ("Quick Surface" or "Full OSINT Audit").',
-      'Click "Run Reconnaissance Scan".',
-      'Review the Security Score, DNS records (A, MX, TXT, NS), SSL validity dates, and missing security headers.',
-      'Click "Save Dossier to Vault" for permanent documentation.'
-    ],
-    tips: 'Great for auditing your own servers and websites to verify HTTPS and DNS records.'
+    tips: 'New to terminals or code? Stick to Chat, Google Tasks, Google Drive, Visual Studio, and the Integrations Matrix — every action uses plain buttons and confirmation dialogs.'
   },
   {
     id: 'chat',
-    title: 'Neural Chat & Super Agent',
+    title: 'Sovereign Chat & Multi-Model Router',
     icon: MessageSquare,
-    category: 'Core AI & Intelligence',
-    summary: 'Full-spectrum conversation with Gemini models, deep reasoning, thinking modes, and optional live Google Search grounding.',
+    category: '2. Core AI & Workspace',
+    targetModule: 'chat',
+    summary:
+      'Main AI workspace powered by models/gemini-4-hydrogen (with automatic failover to gemini-3.1-flash-lite, gemini-flash-latest, and gemini-3-flash-preview), external cloud APIs (DeepSeek, Groq, OpenRouter), and local offline models (WebLLM, Ollama, Termux llama-server).',
     steps: [
-      'Click the "Neural Chat & Super Agent" tab.',
-      'Choose your AI model from the top selector (Gemini 3.1 Pro Preview, 3.5 Flash, or 3.1 Flash Lite).',
-      'Toggle "Search Grounding" On if you need up-to-the-minute live internet facts.',
-      'Type your question or coding prompt in the bottom text box.',
-      'Hit Enter or click the Send button to receive the response.'
+      'Click "All Modules (33)" in the top navigation bar (or "More (33)" at the bottom on a phone) to browse every tool sorted by category.',
+      'Use slash commands right inside Chat anytime: `/dream` (run Dream State consolidation), `/evolve` (synthesize cognitive axioms), `/heal` (run recursive TypeScript self-healing), `/forge <task>` (forge & test a smart tool), `/hypervisor` (audit UID 0 & Ring -3 substrate).',
+      'Pick a model from the "MODEL" dropdown (Gemini 4 Hydrogen is selected by default, backed by UID 0 Root Clearance and Ring -3 Hypervisor orchestration).',
+      'On a phone, tap "AI Controls" to expand or collapse toggles so the chat transcript always fills your screen cleanly.',
+      'Toggle "SEARCH: ON" to attach live web search facts, or "CHAIN OF THOUGHT: OPEN" to inspect step-by-step reasoning.',
+      'Toggle "INFINITE WORKFLOW: ACTIVE" if you want the agent to keep executing multi-step coding, atomic patching, and verification turns until finished.',
+      'Type your request in the bottom box and press Enter (or tap Dispatch). Click "Save to Vault" on any reply to store it permanently.'
     ],
-    tips: 'Click "Save to Vault" under any message to archive code or key insights.'
+    tips: 'If cloud quotas run low, switch the toggle to "AIR-GAPPED" or choose a WebLLM / Ollama / Termux model — local models also run the autonomous `[TAG]` workspace execution loop.'
+  },
+  {
+    id: 'api-secrets',
+    title: 'API Keys, AES-256-GCM Vault & Gateway',
+    icon: Key,
+    category: '2. Core AI & Workspace',
+    targetModule: 'api-secrets',
+    summary:
+      'Stores API keys and integration tokens securely using AES-256-GCM authenticated encryption on the server, automatically masking secrets in UI readouts and logs.',
+    steps: [
+      'Open "API Keys & Gateway" from the top navigation or All Modules (33).',
+      'Review which server environment keys are configured and healthy (Gemini, DeepSeek, Groq, OpenRouter, GitHub, Twilio, Telnyx, etc.).',
+      'Add or rotate a secret using the vault form — values are encrypted with AES-256-GCM before touching disk and only masked previews are ever returned.',
+      'Use the built-in endpoint tester to verify `/api/health`, `/api/secrets`, and provider connectivity in one click.'
+    ],
+    tips: 'Secrets stay on the Express server proxy (/api/*) and are never embedded into client-side bundles.'
+  },
+  {
+    id: 'integrations',
+    title: 'Integrations Matrix (Unified Add-On Hub)',
+    icon: Layers,
+    category: '2. Core AI & Workspace',
+    targetModule: 'integrations',
+    summary:
+      'Single control plane linking all 15 platform add-ons: Google Tasks, Google Drive, AES-256-GCM Secrets Vault, Autonomous Patch Engine, Gemini/DeepSeek/Groq/OpenRouter, Ollama, GitHub, Twilio, Telnyx, Firebase, SQLite, and Capacitor/PWA.',
+    steps: [
+      'Open "Integrations" from the top bar to see live health status across all connected services.',
+      'Click any card to inspect its endpoints, credentials state, or jump directly to that module.',
+      'Use quick action buttons to test Google Workspace tokens, verify provider keys, or check local daemon availability.'
+    ],
+    tips: 'Check the Integrations Matrix first if an external service reports "Disconnected" — it points straight to the missing key or OAuth sign-in.'
+  },
+  {
+    id: 'tasks',
+    title: 'Google Tasks Sync & Confirmation Flows',
+    icon: ListTodo,
+    category: '2. Core AI & Workspace',
+    targetModule: 'tasks',
+    summary:
+      'Connects directly to your real Google Tasks account using Google OAuth so you can view task lists, create tasks, set due dates, mark items done, and delete tasks safely.',
+    steps: [
+      'Open "Tasks" and click the "Sign in with Google" button if you have not connected your Google account yet.',
+      'Pick one of your task lists on the left (e.g., My Tasks) or create a new list.',
+      'Click "+ Add Task" to enter a title, optional notes, and a due date.',
+      'Before any create, toggle, update, or delete hits Google Tasks, review the confirmation dialog and click Confirm.',
+      'Click "Send to Chat" on any task to ask the AI assistant to help plan or execute that task.'
+    ],
+    tips: 'Every write operation requires explicit confirmation so the app never alters your real Google Tasks accidentally.'
+  },
+  {
+    id: 'drive',
+    title: 'Google Drive Explorer & Exporter',
+    icon: HardDrive,
+    category: '2. Core AI & Workspace',
+    targetModule: 'drive',
+    summary:
+      'Real Google Drive API v3 client for browsing folders, searching files, reading/editing text documents, creating files, deleting with confirmation, and backing up Vault artifacts.',
+    steps: [
+      'Open "Drive" and connect your Google account if prompted.',
+      'Use the search bar or breadcrumbs to browse folders and files inside your real Google Drive.',
+      'Click a text or JSON file to view or edit its contents cleanly.',
+      'Use "+ New File" or delete actions — destructive actions display a confirmation prompt first.'
+    ],
+    tips: 'Great for keeping code snippets, architecture docs, or exported JSON backups synced in your personal Google Drive.'
+  },
+  {
+    id: 'autonomy-supervisor',
+    title: 'Autonomy Supervisor, Dream State, Evolution & UID 0 Hypervisor',
+    icon: Activity,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'autonomy-supervisor',
+    summary:
+      'Control center for UID 0 Master Root Clearance (uid_0), Ring -3 Bare-Metal Hypervisor substrate checks, Dream State memory consolidation, Cognitive Evolution axioms, and Recursive TypeScript Self-Healing.',
+    steps: [
+      'Open "Autonomy Supervisor" from All Modules (33).',
+      'Click "Verify UID 0 & Ring -3 Lock" in the Hypervisor banner to confirm root substrate status and host telemetry.',
+      'Run "Dream Cycle" (optionally entering a focus topic) to consolidate chat/trajectory history into SQLite axioms and forge helpful utility tools automatically.',
+      'Click "Trigger Evolution" to distill new behavioral axioms from feedback, or click "Run Recursive Self-Heal" to run `tsc --noEmit` and apply atomic patches until 0 compiler errors remain.'
+    ],
+    tips: 'All evolved axioms are persisted in SQLite (`evolutive_axioms`) and automatically injected into Chat prompts so the orchestrator continuously improves.'
+  },
+  {
+    id: 'projects',
+    title: 'Unified Projects Workspace',
+    icon: FolderGit2,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'projects',
+    summary:
+      'Browse workspace files, inspect code directories, manage synchronized project entries, and trigger build verification.',
+    steps: [
+      'Open "Unified Projects" from the navigation bar.',
+      'Browse project cards, commit metadata, and local workspace files.',
+      'Run workspace actions or inspect file diffs cleanly from one screen.'
+    ],
+    tips: 'Works directly with the local `/app/applet` project directory served by Express.'
+  },
+  {
+    id: 'github',
+    title: 'GitHub Repository Matrix',
+    icon: FolderGit2,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'github',
+    summary:
+      'Tracks GitHub repositories, live branch/commit telemetry, and authenticated repository synchronization.',
+    steps: [
+      'Open "GitHub Matrix" from All Modules (33).',
+      'If using private repositories, add your GitHub token in "API Keys & Gateway" first.',
+      'View recent commits, repository status, and sync checks across linked repos.'
+    ],
+    tips: 'Never paste personal access tokens into chat — save them in API Keys & Gateway instead.'
   },
   {
     id: 'functions',
     title: 'Function Deck & Toolbelt',
     icon: Zap,
-    category: 'Command & Architecture',
-    summary: '12+ instant browser utilities: Base64, JSON Formatter, Regex Tester, Hashes (SHA-256), Password Gen, UUIDs, and more.',
+    category: '3. Engineering & Autonomy',
+    targetModule: 'functions',
+    summary:
+      'Instant browser & in-process utilities: Base64 encoder/decoder, JSON formatter, Regex tester, SHA-256 hasher, UUID/password generator, JS Compute Benchmark, and offline Compendium query.',
     steps: [
-      'Click the "Function Deck & Toolbelt" tab.',
-      'Select any tool card from the deck (e.g. Base64, JSON, Hash, Password Generator).',
-      'Type or paste your input into the left box.',
-      'The converted result appears instantly in the right box.',
-      'Click "Copy Result" to put it on your clipboard.'
+      'Open "Function Deck" from All Modules (33).',
+      'Select any tool card or custom forged function on the left.',
+      'Enter or paste your JSON/string parameters and click "Execute Function".',
+      'Copy outputs directly or save results to your Vault.'
     ],
-    tips: 'Runs 100% locally in your browser with zero latency.'
+    tips: 'Runs instantly inside the app with zero cloud API token usage.'
   },
   {
-    id: 'creative',
-    title: 'Creative Studio (Image, Music & Video)',
-    icon: Sparkles,
-    category: 'Creative Studio',
-    summary: 'Multimodal generative suite: Imagen visual diffusion, Lyria 3 original music, and Veo 3 motion video synthesis.',
+    id: 'tool-shed',
+    title: 'Micro-Tool Shed (JS Sandbox & Builder)',
+    icon: Wrench,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'tool-shed',
+    summary:
+      'Create, edit, test, and run JavaScript utilities (JWT decoder, IPv4/CIDR extractor, JSON flattener, hash verifier, entropy generator, logic-patch analyzer) inside an isolated runner.',
     steps: [
-      'For Images: Go to "Visual Studio", type a description, pick aspect ratio (1:1, 16:9, etc.), and click "Generate".',
-      'For Music: Go to "Lyria Music", describe tempo/instruments/genre, and click "Generate Clip" to stream.',
-      'For Video: Go to "Veo 3 Motion", describe camera angle and action, and click "Generate Motion".',
-      'Download your generated files or save them directly to your Vault.'
+      'Open "Micro-Tool Shed" from the top navigation or All Modules (33).',
+      'Pick any built-in tool from the list or type a plain-English description to generate a new tool.',
+      'Provide sample input in the test box and click "Run Tool" to see real execution time and JSON output.',
+      'Click "Save to Vault" or "Send to Chat" to reuse the output in your workflow.'
     ],
-    tips: 'All media can be previewed directly inside the built-in HTML5 media players.'
+    tips: 'Every generated micro-tool is automatically saved to localStorage and persisted to the SQLite registry.'
   },
   {
-    id: 'sensory',
-    title: 'Sensory Intelligence (Voice, Transcribe, Maps)',
+    id: 'knowledge-graph',
+    title: 'Interactive Knowledge Graph & Engineering Compendium',
+    icon: Network,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'knowledge-graph',
+    summary:
+      'Visual interactive graph organizing software architecture patterns, security rules, database schemas, and session memory into searchable connected nodes.',
+    steps: [
+      'Open "Knowledge Graph" from the navigation bar.',
+      'Filter nodes by category pill (coding, architecture, security, etc.) or click any node to inspect details.',
+      'Add custom nodes manually or click "AI Synthesize" to extract structured nodes from recent work.',
+      'Export the full graph as JSON or Markdown into your Vault.'
+    ],
+    tips: 'Great for mapping complex TypeScript modules, Firebase rules, or deployment topologies.'
+  },
+  {
+    id: 'presets',
+    title: 'Prompt Presets & Instruction Library',
+    icon: BookmarkPlus,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'presets',
+    summary:
+      'Reusable system prompts and workflow templates for architecture reviews, production engineering, security audits, and creative media prompts.',
+    steps: [
+      'Open "Prompt Presets" from All Modules (33).',
+      'Search by keyword or filter by category (architecture, engineering, multimodal, security).',
+      'Click "Launch in Module" to inject the prompt straight into Chat or the target studio, or create your own preset.'
+    ],
+    tips: 'Save repetitive workflows (like code review checklists) as custom presets to run in one click.'
+  },
+  {
+    id: 'hitl',
+    title: 'HITL Workflows (Human-in-the-Loop Approvals)',
+    icon: UserCheck,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'hitl',
+    summary:
+      'Approval queue where sensitive or multi-step automated tasks wait for human review, editing, approval, or rejection before running.',
+    steps: [
+      'Open "HITL Workflows" from All Modules (33).',
+      'Review pending items in the queue along with payload details.',
+      'Click Approve, Modify, or Reject to control execution safely.'
+    ],
+    tips: 'Backed by `/data/hitl_queue.json` on the server so approvals persist across restarts.'
+  },
+  {
+    id: 'swarm-test',
+    title: 'Swarm Diagnostic Test Suite',
+    icon: Activity,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'swarm-test',
+    summary:
+      'Runs real automated verification checks across backend routes, local database state, browser APIs, and AI providers.',
+    steps: [
+      'Open "Swarm Diagnostic" from All Modules (33).',
+      'Click "Run Full Diagnostic Suite" and wait for live HTTP and subsystem probes to complete.',
+      'Inspect any failed probe to see exact response codes and troubleshooting steps.'
+    ],
+    tips: 'Run this after rotating API keys or editing server routes to confirm end-to-end health.'
+  },
+  {
+    id: 'war-room',
+    title: 'PC War Room Cockpit',
+    icon: ShieldAlert,
+    category: '3. Engineering & Autonomy',
+    targetModule: 'war-room',
+    summary:
+      'Full-screen multi-panel dashboard showing subsystem readiness, live terminal logs, radar node topology, Lysander skills executor, and safety toggle switches.',
+    steps: [
+      'Open "PC War Room" from All Modules (33).',
+      'Click any Lysander skill card to execute a real server skill probe via `/api/lysander/invoke-skill`.',
+      'Use "Global Recon Sweep", "Synchronize Memory", or "Export Tactical War Diary" for downloadable JSON audit snapshots.',
+      'Toggle safety interlocks (Deep Web Proxy, Low-Telemetry Mode, Delta Lock, etc.) from the bottom switch grid.'
+    ],
+    tips: 'Designed to wrap cleanly into a single column on phones and expand across wide desktop monitors.'
+  },
+  {
+    id: 'search-maps',
+    title: 'Google Search & Google Maps Grounding',
+    icon: MapPin,
+    category: '4. Grounding, Browser & Recon',
+    targetModule: 'search',
+    summary:
+      'Real-time web search and spatial location grounding powered by gemini-3.1-flash-lite with clickable web sources and verified citations.',
+    steps: [
+      'Open "Search Grounding" or "Maps Grounding" from All Modules (33) (or switch between Search Tool and Maps Tool at the top).',
+      'Type any factual query (e.g., current release notes, regional transit routes, data center hubs) or click a suggested chip.',
+      'Click "Execute Grounding" and inspect both the grounded answer and the verified reference links below.'
+    ],
+    tips: 'Use "Copy Synthesis" to paste verified facts cleanly into documentation or Chat.'
+  },
+  {
+    id: 'browser',
+    title: 'Open-Web CORS-Free Browser',
+    icon: Globe,
+    category: '4. Grounding, Browser & Recon',
+    targetModule: 'browser',
+    summary:
+      'Server-proxied browser that strips restrictive iframe headers, rewrites relative URLs, and includes DuckDuckGo search + readable DOM text extraction.',
+    steps: [
+      'Open "Open-Web Browser" from the top navigation bar.',
+      'Enter any public website URL or search query in the address bar and click Go.',
+      'If a site blocks embedded frames, switch to Autonomous Extract mode to read clean page text.',
+      'Click "Save to Vault" to archive important pages.'
+    ],
+    tips: 'Built-in media extraction lets you inspect public documentation without CORS blocks.'
+  },
+  {
+    id: 'osint',
+    title: 'OSINT & Attack Surface Scanner',
+    icon: ShieldAlert,
+    category: '4. Grounding, Browser & Recon',
+    targetModule: 'osint',
+    summary:
+      'Non-intrusive domain security checker performing live DNS lookups (A, MX, TXT, NS, SPF, DMARC), TLS certificate expiry checks, and HTTP security header audits.',
+    steps: [
+      'Open "OSINT & Attack Surface" from All Modules (33).',
+      'Enter a domain you own or want to inspect (e.g. `github.com`).',
+      'Choose Quick Surface or Full OSINT Audit and click Run.',
+      'Review missing headers or DNS findings and click "Save Dossier to Vault" to keep a copy.'
+    ],
+    tips: 'Handy for confirming HTTPS certificates, SPF/DMARC records, and CSP headers on your deployed domains.'
+  },
+  {
+    id: 'burner-mail',
+    title: 'Burner Mail Matrix',
+    icon: Mail,
+    category: '4. Grounding, Browser & Recon',
+    targetModule: 'burner-mail',
+    summary:
+      'Generates real disposable temporary email addresses so you can receive test sign-up codes and verification links without exposing your personal inbox.',
+    steps: [
+      'Open "Burner Mail" from the navigation bar.',
+      'Click "Generate New Burner Address" and copy the address.',
+      'Use it in a sign-up flow, then click "Refresh Inbox" to read incoming messages and click verification links inside the Open-Web Browser.'
+    ],
+    tips: 'Useful for QA testing registration and password-reset flows.'
+  },
+  {
+    id: 'infinite-sim',
+    title: 'Infinite-SIM & Telecom Fleet',
+    icon: Phone,
+    category: '4. Grounding, Browser & Recon',
+    targetModule: 'infinite-sim',
+    summary:
+      'Manages virtual SIM profiles, Luhn-valid ICCIDs, LPA activation helpers, and Twilio / Telnyx SMS & voice routing when carrier API keys are configured.',
+    steps: [
+      'Open "Infinite-SIM" from the navigation bar.',
+      'Add your Twilio or Telnyx credentials in "API Keys & Gateway" for live carrier provisioning.',
+      'Generate local test ICCID profiles or send/check carrier SMS webhooks directly from the panel.'
+    ],
+    tips: 'Carrier actions clearly show whether real Twilio/Telnyx keys are active or if local format validation is being previewed.'
+  },
+  {
+    id: 'image',
+    title: 'Visual Studio (Image Generation)',
+    icon: ImageIcon,
+    category: '5. Creative & Voice Studios',
+    targetModule: 'image',
+    summary:
+      'Generates high-resolution images from text prompts with aspect-ratio controls and an offline procedural Canvas/SVG renderer when disconnected.',
+    steps: [
+      'Open "Visual Studio" from All Modules (33) or the top bar ("Image").',
+      'Describe the image clearly, choose an aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4), and click Generate.',
+      'Download the image or click "Save to Vault" to archive it.'
+    ],
+    tips: 'Works offline too via the procedural Canvas/SVG fallback generator.'
+  },
+  {
+    id: 'music',
+    title: 'Lyria Music Studio',
+    icon: Music,
+    category: '5. Creative & Voice Studios',
+    targetModule: 'music',
+    summary:
+      'Composes audio tracks and instrumentals with Lyria 3 plus a zero-dependency Web Audio API polyphonic synthesizer when offline.',
+    steps: [
+      'Open "Lyria Music" from All Modules (33).',
+      'Describe mood, tempo (BPM), instruments, and genre.',
+      'Click Generate to preview inside the audio player, download, or Save to Vault.'
+    ],
+    tips: 'Offline Web Audio synthesis requires no external API keys.'
+  },
+  {
+    id: 'video',
+    title: 'Veo 3 Motion Video Studio',
+    icon: Video,
+    category: '5. Creative & Voice Studios',
+    targetModule: 'video',
+    summary:
+      'Generates motion video clips from prompts or reference images with Veo 3, plus a client-side canvas motion renderer offline.',
+    steps: [
+      'Open "Veo 3 Motion" from All Modules (33).',
+      'Describe scene motion, camera movement, and visual style.',
+      'Click Generate, preview in the built-in HTML5 player, and Save to Vault.'
+    ],
+    tips: 'Keep descriptions focused on subject + lighting + camera path for cleanest motion results.'
+  },
+  {
+    id: 'live',
+    title: 'Live Voice Bridge (Real-Time Audio)',
     icon: Radio,
-    category: 'Sensory Intelligence',
-    summary: 'Live voice conversation over WebSockets, speech-to-text audio intake, and Google Maps spatial intelligence.',
+    category: '5. Creative & Voice Studios',
+    targetModule: 'live',
+    summary:
+      'Low-latency bidirectional voice conversation over WebSockets (`/live` powered by Gemini native audio models) with natural interruption support.',
     steps: [
-      'Live Voice: Go to "Live Voice", allow microphone access, and click the red button to talk in real-time.',
-      'Transcribe: Go to "Transcribe", upload an MP3/WAV or record mic audio, and click "Transcribe Audio".',
-      'Maps Grounding: Go to "Maps Grounding", enter an address or query, and get spatial location coordinates.'
+      'Open "Live Voice" from All Modules (33) or click the Gemini Live Voice button inside Chat.',
+      'Allow microphone permission when your browser prompts.',
+      'Speak naturally — tap Stop anytime to end the live stream cleanly.'
     ],
-    tips: 'Live Voice operates over low-latency WebSockets with natural interruption support.'
+    tips: 'For noisy environments, headphones prevent microphone echo.'
+  },
+  {
+    id: 'transcribe',
+    title: 'Speech-to-Text Transcribe',
+    icon: Mic,
+    category: '5. Creative & Voice Studios',
+    targetModule: 'transcribe',
+    summary:
+      'Records directly from your microphone or accepts MP3/WAV/WebM/M4A/OGG uploads to produce verbatim text transcripts via gemini-3.1-flash-lite.',
+    steps: [
+      'Open "Transcribe" from All Modules (33).',
+      'Click the teal microphone button to record live audio, or click Upload Audio File to select a recording.',
+      'Wait for processing, then copy the transcript or Save to Vault.'
+    ],
+    tips: 'Also works as a quick way to transcribe voice memos on your phone.'
+  },
+  {
+    id: 'scratchpad',
+    title: 'Infinite Scratchpad',
+    icon: FileText,
+    category: '6. Memory, Storage & Audit',
+    targetModule: 'scratchpad',
+    summary:
+      'Persistent working notepad and snippet buffer backed by local storage and server SQLite, with one-click Send to Chat and Save to Vault.',
+    steps: [
+      'Open "Infinite Scratchpad" from All Modules (33).',
+      'Draft notes, shell commands, or architecture drafts freely.',
+      'Click "Send to Chat" to hand a draft straight to an AI agent, or "Save to Vault" to archive permanently.'
+    ],
+    tips: 'Autonomy Supervisor can help organize and de-clutter older scratchpad entries.'
+  },
+  {
+    id: 'vault',
+    title: 'Vault Storage (Artifacts & Cloud Sync)',
+    icon: Archive,
+    category: '6. Memory, Storage & Audit',
+    targetModule: 'vault',
+    summary:
+      'Stores saved chat outputs, code blueprints, dossiers, images, audio clips, videos, and transcripts with offline cache + optional Firestore cloud sync.',
+    steps: [
+      'Open "Vault Storage" from All Modules (33).',
+      'Search or filter saved items by type (knowledge, image, music, video, transcription).',
+      'Preview media, copy markdown/code, or delete obsolete items cleanly.'
+    ],
+    tips: 'Sign in with Google in the header so Vault artifacts synchronize across devices.'
+  },
+  {
+    id: 'audit',
+    title: 'Forensic Audit Ledger',
+    icon: ShieldCheck,
+    category: '6. Memory, Storage & Audit',
+    targetModule: 'audit',
+    summary:
+      'Chronological ledger logging system events, saved artifacts, security scans, and schema executions with SHA-256 verification hashes.',
+    steps: [
+      'Open "Forensic Ledger" from All Modules (33).',
+      'Inspect timestamps, event types, descriptions, and SHA-256 hashes.',
+      'Use it to verify when keys were rotated, builds ran, or tasks completed.'
+    ],
+    tips: 'Stored locally in `/data/audit_ledger.json` and SQLite for traceability.'
+  },
+  {
+    id: 'download-models',
+    title: 'Model Wardrobe (Local Weights)',
+    icon: Download,
+    category: '7. Edge, Mobile & Installers',
+    targetModule: 'download-models',
+    summary:
+      'Browse and download open-source GGUF weights (Llama 3.2, Qwen 2.5 Coder, DeepSeek-R1, Phi-4, Mistral, SmolLM2) or copy curl/Ollama pull commands for offline execution.',
+    steps: [
+      'Open "Model Wardrobe" from the top navigation or All Modules (33).',
+      'Pick a model matching your device RAM (e.g. Llama 3.2 1B/3B for phones, Qwen 2.5 7B–32B or DeepSeek-R1 for desktop).',
+      'Click Download or copy the pull command to run locally in Ollama or Termux llama.cpp.'
+    ],
+    tips: 'Smaller Q4_K_M models (0.5B–3B) run fast even on phones without overheating.'
+  },
+  {
+    id: 'termux',
+    title: 'Termux Android Edge & Offline LLM',
+    icon: Smartphone,
+    category: '7. Edge, Mobile & Installers',
+    targetModule: 'termux',
+    summary:
+      'Turns any Android phone running Termux into a local AI host via native ARM64 `llama.cpp` (`127.0.0.1:8080`), WebLLM in-browser GPU inference, and Termux:API hardware tools.',
+    steps: [
+      'Install Termux and Termux:API from F-Droid (avoid the outdated Google Play Store build).',
+      'Open the "Termux Android" tab in this app.',
+      'Use "Offline LLM" to run WebGPU models right in your browser, or copy the One-Shot Installer command to compile native `llama.cpp` in Termux.',
+      'Use the Termux panel to check battery stats, toggle wake-lock, vibrate, or run CLI commands on your device.'
+    ],
+    tips: 'Once a WebLLM or llama.cpp GGUF model is downloaded, inference works completely offline with zero token costs.'
+  },
+  {
+    id: 'universal-installer',
+    title: 'Universal Installer (PC, Mac, Linux, Termux)',
+    icon: Download,
+    category: '7. Edge, Mobile & Installers',
+    targetModule: 'universal-installer',
+    summary:
+      'Generates ready-to-run installation commands and setup scripts for Linux, macOS, Windows WSL2, and Android Termux.',
+    steps: [
+      'Open "Universal Installer" from the top navigation or All Modules (33).',
+      'Copy the one-line setup command or download the standalone installer script.',
+      'Paste and run it in your terminal to install dependencies, build assets, and start the server on port 3000.'
+    ],
+    tips: 'Includes environment checks for Node.js, Git, Python, and optional Ollama setup.'
   },
   {
     id: 'packager',
-    title: 'Sovereign APK Packager (Build Android Applications)',
+    title: 'Android APK Packager',
     icon: Package,
-    category: 'Termux & Deployment',
-    summary: 'Turn any part of this system or your custom web app into an installable Android APK (<5MB ultra-lean) with native hooks.',
+    category: '7. Edge, Mobile & Installers',
+    targetModule: 'packager',
+    summary:
+      'Packages selected modules from this web workspace into an installable Android Capacitor / PWA bundle and builds the APK pipeline.',
     steps: [
-      'Click the "APK Packager" tab in the top navigation or Command Palette (Ctrl+K -> Packager).',
-      'Enter an Application Name (e.g. "My Sovereign App") and a Package ID (e.g. "com.jhammerz.app").',
-      'Select your build target: "Termux Native Substrate", "Capacitor Hybrid Bridge", "Progressive Web App TWA", or "Embedded Offline Llama".',
-      'Select the modules you want included in your mobile APK package (Chat, Browser, Termux, Health HUD, etc.).',
-      'Click the glowing "Compile & Package APK" button.',
-      'Watch live streaming compilation logs as the build system prepares Vite production assets and triggers the Android compiler.',
-      'Click "Download APK" to save your fresh .apk binary directly to your phone or computer!'
+      'Open "APK Packager" from All Modules (33).',
+      'Set your App Name, Package ID (e.g. `com.jhammerz.app`), and target bridge (Capacitor, TWA, or Termux substrate).',
+      'Check which modules to include and click "Compile & Package APK".',
+      'Inspect live build logs and download your generated bundle or Android project artifacts.'
     ],
-    tips: 'Generated APKs can be installed on any Android phone (including Samsung Galaxy S23+ with Termux).'
+    tips: 'Requires Android SDK/Gradle on the host for signed binary compilation; otherwise generates the complete ready-to-build Capacitor project.'
   },
   {
     id: 'health-hud',
-    title: 'System Health HUD & Real-Time Telemetry',
+    title: 'System Health HUD & AI Navigation Bus',
     icon: Activity,
-    category: 'Telemetry & Observability',
-    summary: 'Live real-time monitoring HUD showing CPU cores, RAM percent, Firestore round-trip ping (<50ms), and Gemini API heartbeats.',
+    category: '7. Edge, Mobile & Installers',
+    targetModule: 'chat',
+    summary:
+      'Floating HUD (bottom-left on phones, bottom-right on desktop) showing real CPU %, RAM MB, Firestore latency, and the `window.__AURELIUS_ORCHESTRATOR__` programmable module bus.',
     steps: [
-      'Look at the bottom-right corner of your screen at the glowing "SYSTEM HEALTH HUD" badge.',
-      'Click the badge to expand the multi-tab diagnostic console.',
-      'Tab 1 (Resources): View live CPU load %, active cores, RAM used/free MB, and phone battery/temperature.',
-      'Tab 2 (Firestore & Gemini): View live round-trip latency to Firestore and active Gemini API heartbeat checks.',
-      'Tab 3 (AI Router & Dispatch): Run instant device terminal commands (e.g. uptime, uname -a, free -h) or test Android haptic vibration.',
-      'Tab 4 (Heartbeat Logs): View the chronological event ticker of all system connection checks.'
+      'Click the "SYSTEM HEALTH HUD" badge to expand or maximize real-time host telemetry.',
+      'Switch between RESOURCES, FIRESTORE & GEMINI, AI ROUTER & DISPATCH, and HEARTBEAT LOGS.',
+      'Click "Ping Now" to measure live Cloud Firestore latency or jump directly to any of the 33 modules from Tab 3.'
     ],
-    tips: 'Click "Ping Now" anytime to measure instant live connection latency to Google Cloud Firestore!'
-  },
-  {
-    id: 'ai-router',
-    title: 'Unrestricted AI Navigation & Device Bus',
-    icon: Compass,
-    category: 'Core AI & Intelligence',
-    summary: 'Unlocks every path, module, tool, and hardware actuator for any AI agent on the system to navigate freely without barriers.',
-    steps: [
-      'Any AI or script can access the global bus via "window.__AURELIUS_ORCHESTRATOR__" in the browser console.',
-      'To programmatically jump to any module, call: window.__AURELIUS_ORCHESTRATOR__.navigate("chat") (supports all 23 modules).',
-      'To execute shell commands with UID 0 clearance, call: window.__AURELIUS_ORCHESTRATOR__.executeOnDevice("ls -la").',
-      'To trigger hardware haptics or TTS speech, call: window.__AURELIUS_ORCHESTRATOR__.triggerHardware("vibrate").',
-      'Inside the Health HUD, toggle "AUTONOMOUS PATROL" to let the AI actively inspect and unlock all subsystems continuously.'
-    ],
-    tips: 'Full-spectrum freedom for autonomous AI agents with zero gatekeeping or token burn.'
-  },
-  {
-    id: 'master-one-shot',
-    title: 'Master 1-Shot Cat << EOF Deployer (Termux & Localhost 3000)',
-    icon: Terminal,
-    category: 'Termux / Offline AI',
-    summary: 'The single master bootstrap command that sets up your entire Termux environment, llama.cpp GGUF, Nexus daemons, and localhost:3000 server in one shot.',
-    steps: [
-      'Open the Termux app on your Android phone (or any Linux/Mac bash terminal).',
-      'Go to the "Termux Android" tab in this web app, and click the "One-Shot Cat << EOF Deployer" sub-tab.',
-      'Click the big golden "Copy Master 1-Shot Command" button.',
-      'Paste the command into Termux and hit Enter.',
-      'The script automatically creates ~/aurelius-swarm, installs dependencies, compiles llama.cpp, launches llama-server on 8080, starts Nexus REST Gateway on 3080, and links global commands ("ai", "aurelius", "nexus").',
-      'Type "ai" in Termux to start chatting with your 100% offline AI with zero tokens burned!'
-    ],
-    tips: 'Includes jhammerz_summary.py and aurelius_unified_controller.py to auto-scan and extract any GGUF models in your storage!'
+    tips: 'All metrics show honest live measurements from `/api/system/health` instead of placeholder numbers.'
   }
 ];
 
@@ -366,22 +604,20 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetch('/api/system/readme')
-        .then(res => res.text())
-        .then(text => setReadmeContent(text))
+        .then((res) => res.text())
+        .then((text) => setReadmeContent(text))
         .catch(() => {});
     }
   }, [isOpen]);
 
   const modalRef = React.useRef<HTMLDivElement>(null);
 
-  // Handle click outside to close
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
       onClose();
     }
   };
 
-  // Handle ESC key to close
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -392,13 +628,14 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredSections = SECTIONS.filter(s => 
-    s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.category.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSections = SECTIONS.filter(
+    (s) =>
+      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const activeSection = SECTIONS.find(s => s.id === selectedSectionId) || SECTIONS[0];
+  const activeSection = SECTIONS.find((s) => s.id === selectedSectionId) || filteredSections[0] || SECTIONS[0];
 
   const handleCopyFullReadme = () => {
     if (readmeContent) {
@@ -409,7 +646,7 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
   };
 
   const handleDownloadReadme = () => {
-    const blob = new Blob([readmeContent || '# Aurelius Orchestrator'], { type: 'text/markdown' });
+    const blob = new Blob([readmeContent || '# Lysander Genesis Orchestrator Manual'], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -421,33 +658,36 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-5"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-5"
       onClick={handleBackdropClick}
     >
-      <div 
+      <div
         ref={modalRef}
-        className="bg-zinc-900 border border-zinc-700/80 rounded-2xl max-w-5xl w-full h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+        className="bg-zinc-900 border border-zinc-700/80 rounded-2xl max-w-6xl w-full h-[92dvh] sm:h-[90vh] flex flex-col shadow-2xl overflow-hidden"
       >
-        
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-950/60 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+        <div className="px-4 sm:px-5 py-3.5 border-b border-zinc-800 bg-zinc-950/60 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0">
               <BookOpen className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-zinc-100">Aurelius System Manual</h2>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                  Beginner-Proof
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-lg font-bold text-zinc-100 truncate">
+                  Lysander Genesis Complete Manual
+                </h2>
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0">
+                  All 33 Modules · Beginner-Proof
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">Step-by-step guide detailing every function and how to use it</p>
+              <p className="text-xs text-zinc-400 truncate">
+                Plain-English step-by-step instructions for every module and subsystem
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleCopyFullReadme}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors cursor-pointer"
@@ -469,6 +709,7 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
             <button
               onClick={onClose}
               className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              aria-label="Close Manual"
             >
               <X className="w-5 h-5" />
             </button>
@@ -476,12 +717,12 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
         </div>
 
         {/* Search Bar */}
-        <div className="px-5 py-2.5 border-b border-zinc-800 bg-zinc-900/60 shrink-0">
+        <div className="px-4 sm:px-5 py-2.5 border-b border-zinc-800 bg-zinc-900/60 shrink-0">
           <div className="relative">
             <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search functions, tools, instructions (e.g. 'offline', 'email', 'music', 'scan')..."
+              placeholder="Search any module or subsystem (e.g. 'tasks', 'vault', 'offline', 'video', 'apk')..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-zinc-950/80 border border-zinc-800 focus:border-amber-500/50 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none transition-colors"
@@ -491,12 +732,11 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
 
         {/* Body Split View */}
         <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-          
           {/* Navigation / Topic List (Sidebar) */}
-          <div className="w-full md:w-72 border-b md:border-b-0 md:border-r border-zinc-800 bg-zinc-950/40 overflow-y-auto p-2 space-y-1 shrink-0">
+          <div className="w-full md:w-72 max-h-44 md:max-h-none border-b md:border-b-0 md:border-r border-zinc-800 bg-zinc-950/40 overflow-y-auto p-2 space-y-1 shrink-0">
             {filteredSections.map((sec) => {
               const Icon = sec.icon;
-              const isSelected = selectedSectionId === sec.id;
+              const isSelected = activeSection.id === sec.id;
               return (
                 <button
                   key={sec.id}
@@ -518,44 +758,28 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
           </div>
 
           {/* Detailed Guide Viewport */}
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-            
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
             {/* Active Topic Banner */}
-            <div className="flex items-start justify-between gap-4 pb-4 border-b border-zinc-800">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
                   <activeSection.icon className="w-6 h-6" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
                     {activeSection.category}
                   </span>
-                  <h3 className="text-lg font-bold text-zinc-100 mt-1">{activeSection.title}</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-zinc-100 mt-1">{activeSection.title}</h3>
                 </div>
               </div>
 
-              {onSelectModule && (
+              {onSelectModule && activeSection.targetModule && (
                 <button
                   onClick={() => {
-                    const modMap: Record<string, any> = {
-                      'offline-llm': 'termux',
-                      'termux-phone': 'termux',
-                      'projects': 'projects',
-                      'burner-mail': 'burner-mail',
-                      'browser': 'browser',
-                      'osint': 'osint',
-                      'chat': 'chat',
-                      'functions': 'functions',
-                      'creative': 'image',
-                      'sensory': 'live'
-                    };
-                    const mod = modMap[activeSection.id];
-                    if (mod) {
-                      onSelectModule(mod);
-                      onClose();
-                    }
+                    onSelectModule(activeSection.targetModule!);
+                    onClose();
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold text-xs shadow-md transition-all cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold text-xs shadow-md transition-all cursor-pointer shrink-0"
                 >
                   <span>Open This Tool</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -566,27 +790,26 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
             {/* Plain English Summary */}
             <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-1.5">
               <div className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold">
-                Plain English Explanation:
+                What It Does (Plain English):
               </div>
-              <p className="text-xs text-zinc-200 leading-relaxed">
-                {activeSection.summary}
-              </p>
+              <p className="text-xs text-zinc-200 leading-relaxed">{activeSection.summary}</p>
             </div>
 
             {/* Step-by-Step Instructions */}
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <h4 className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                How to use it (Step-by-Step):
+                How to Use It (Step-by-Step):
               </h4>
               <div className="space-y-2">
                 {activeSection.steps.map((step, idx) => (
-                  <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                  <div
+                    key={idx}
+                    className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80"
+                  >
                     <span className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center justify-center font-mono text-xs font-bold shrink-0">
                       {idx + 1}
                     </span>
-                    <p className="text-xs text-zinc-300 leading-relaxed pt-0.5">
-                      {step}
-                    </p>
+                    <p className="text-xs text-zinc-300 leading-relaxed pt-0.5">{step}</p>
                   </div>
                 ))}
               </div>
@@ -596,17 +819,17 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
             <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex items-start gap-3">
               <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-xs text-emerald-300 leading-relaxed">
-                <span className="font-bold">Pro Tip: </span>
+                <span className="font-bold">Helpful Tip: </span>
                 {activeSection.tips}
               </div>
             </div>
 
-            {/* Raw Markdown Preview Footer Button */}
+            {/* Footer */}
             <div className="pt-4 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
               <div className="font-mono">
-                System Proof: Local-System-Integrity-Proof · Consensus: 100/100
+                Lysander Genesis Orchestrator · v7.0-PRODUCTION · 33 Active Modules
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={handleCopyFullReadme}
                   className="hover:text-amber-300 transition-colors underline cursor-pointer"
@@ -615,20 +838,18 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
                 </button>
               </div>
             </div>
-
           </div>
         </div>
 
         {/* Mobile-Friendly Bottom Close Button */}
-        <div className="md:hidden p-4 border-t border-zinc-800 bg-zinc-950/40 shrink-0">
+        <div className="md:hidden p-3 border-t border-zinc-800 bg-zinc-950/60 shrink-0">
           <button
             onClick={onClose}
-            className="w-full py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold text-sm shadow-lg transition-all"
+            className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold text-sm shadow-lg transition-all"
           >
             Close Manual
           </button>
         </div>
-
       </div>
     </div>
   );

@@ -73,6 +73,34 @@ class LiveEvolutiveLearningEngine {
 
   constructor() {
     this.loadAxioms();
+    if (typeof window !== 'undefined') {
+      this.hydrateFromServer().catch(() => {});
+    }
+  }
+
+  public async hydrateFromServer(): Promise<EvolutiveAxiomRecord[]> {
+    try {
+      const res = await fetch('/api/evolutive-learn?limit=150');
+      if (!res.ok) return this.getAxioms();
+      const data = await res.json();
+      if (Array.isArray(data?.axioms)) {
+        for (const row of data.axioms) {
+          if (!row?.id || !row?.principle) continue;
+          const cat = String(row.category || 'DOMAIN_KNOWLEDGE') as EvolutiveAxiomRecord['category'];
+          this.axioms.set(row.id, {
+            id: row.id,
+            category: cat,
+            principle: row.principle,
+            context: row.context || 'SQLite persistent axiom',
+            weight: Number(row.weight ?? 1.0),
+            evolutionCount: Number(row.evolutionCount ?? row.evolution_count ?? 1),
+            timestamp: row.timestamp || row.updated_at || new Date().toISOString()
+          });
+        }
+        this.saveAxioms();
+      }
+    } catch (_) {}
+    return this.getAxioms();
   }
 
   private loadAxioms() {

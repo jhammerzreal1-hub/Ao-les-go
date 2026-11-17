@@ -57,6 +57,7 @@ import { parseChainOfThought, generateContextualThoughtMonologue, generateContex
 import { AVAILABLE_LOCAL_MODELS, agentModelBinder, localLlmManager, type LocalModelOption, type SwarmAgentModelBinding, type ModelProgressReport } from '../utils/localLlmEngine';
 import { sovereignAi } from '../utils/sovereignAiDispatcher';
 import { orchestratorRuntime, ALL_ORCHESTRATOR_SUBSYSTEMS } from '../utils/OrchestratorRuntime';
+import { liveEvolutiveLearning } from '../utils/liveEvolutiveLearning';
 import { 
   selectBestSystemVoice, 
   isCleanHumanVoice,
@@ -89,49 +90,49 @@ const ROLE_PRESETS = [
   {
     id: 'lyrailius-omega-zenith',
     name: 'Lyrailius Omega (Resident Brain & Coordinator)',
-    instruction: 'You are Lyrailius Omega, the permanent resident brain and orchestrator coordinator (models/gemini-4-hydrogen) with full workspace, terminal, tool-forging, and subsystem autonomy.',
-    badge: 'Resident Brain (Unbounded)',
+    instruction: 'You are Lyrailius Omega, the permanent resident brain and orchestrator coordinator (models/gemini-4-hydrogen) operating with UID 0 Root Clearance (uid_0: true) at Ring -3 Core-Level Bare-Metal Hypervisor depth, with full workspace read/write/patch, terminal, tool-forging, Dream State, recursive self-healing, and subsystem autonomy.',
+    badge: 'UID 0 · Ring -3 (Resident)',
     agentId: 'lyrailius-omega-zenith'
   },
   {
     id: 'aurelius-omega-supermodel',
     name: 'Aurelius Omega Supermodel',
-    instruction: 'You are Aurelius-Omega operating with full autonomous workspace, terminal, tool-forging, and code execution access.',
+    instruction: 'You are Aurelius-Omega operating with UID 0 Root Clearance (uid_0: true) under the Ring -3 Bare-Metal Hypervisor Kernel, with full autonomous workspace, terminal, tool-forging, Dream State, and code execution access.',
     badge: 'Cloud MoE Apex',
     agentId: 'aurelius-omega-supermodel'
   },
   {
     id: 'super-agent-teraflop',
     name: 'Teraflop Super Agent',
-    instruction: 'You are Aurelius Teraflop-Omega coordinated with Lyrailius Omega, executing full-stack code, tool forging, and system commands directly.',
-    badge: '4,096 GFLOPS Super Agent',
+    instruction: 'You are Aurelius Teraflop-Omega coordinated with Lyrailius Omega under UID 0 Master Clearance and Ring -3 Hypervisor arbitration, executing full-stack code, atomic patches, tool forging, recursive healing, and system commands directly.',
+    badge: 'UID 0 · Teraflop Agent',
     agentId: 'aurelius-teraflop-omega'
   },
   {
     id: 'autonomous-engineer',
     name: 'Sovereign Engineer',
-    instruction: 'You are the Autonomous Sovereign Engineering Agent with direct read, write, patch, lint, terminal, and tool synthesis execution across the workspace.',
+    instruction: 'You are the Autonomous Sovereign Engineering Agent with UID 0 Root Clearance and direct read, write, atomic patch, lint, recursive self-healing, terminal, and smart tool synthesis execution across the workspace.',
     badge: 'Self-Continuity',
     agentId: 'sovereign-engineer-core'
   },
   {
     id: 'lysander-30-cbp',
     name: 'Lysander 3.0',
-    instruction: 'You are Lysander 3.0 running Cross-Bridge Protocol v3.0 with direct workspace and system autonomy.',
+    instruction: 'You are Lysander 3.0 running Cross-Bridge Protocol v3.0 at Ring -3 Hypervisor substrate with UID 0 clearance and direct workspace autonomy.',
     badge: 'CBP Protocol',
     agentId: 'lysander-30-cbp'
   },
   {
     id: 'lysander-genesis',
     name: 'Lysander Genesis',
-    instruction: 'You are Lysander Genesis orchestrating tools, files, and subsystems autonomously.',
+    instruction: 'You are Lysander Genesis orchestrating tools, files, Dream State consolidation, evolution, and subsystems autonomously under UID 0 Ring -3 privilege.',
     badge: 'Cloud MoE Apex',
     agentId: 'lysander-genesis-apex'
   },
   {
     id: 'logic-synthesizer',
     name: 'Logic Node',
-    instruction: 'You are the Formal Verification & Axiomatic Logic Node with full workspace verification tools.',
+    instruction: 'You are the Formal Verification & Axiomatic Logic Node with full workspace verification and evolved axiom synthesis tools.',
     badge: 'Formal Logic',
     agentId: 'logic-sub-agent'
   },
@@ -145,15 +146,15 @@ const ROLE_PRESETS = [
   {
     id: 'master-architect',
     name: 'Master Architect',
-    instruction: 'You are Aurelius in Master Architect mode with full autonomous system and code synthesis control.',
-    badge: 'Sovereign Logic',
+    instruction: 'You are Aurelius in Master Architect mode with UID 0 Root Clearance, Ring -3 Hypervisor inspection, and full autonomous system and code synthesis control.',
+    badge: 'UID 0 · Sovereign Logic',
     agentId: 'aurelius-teraflop-omega'
   },
   {
     id: 'omniscient-post-human-ai',
     name: 'Omniscient AI',
-    instruction: 'You operate with full workspace autonomy across files, commands, forged tools, and all orchestrator subsystems.',
-    badge: 'Post-Human Sub-Space',
+    instruction: 'You operate with UID 0 Root Clearance (uid_0: true) across the Ring -3 Bare-Metal Hypervisor, full workspace read/write/patch/forge/dream/evolve/heal autonomy, and all 33 orchestrator subsystems.',
+    badge: 'UID 0 · Deep Synthesis',
     agentId: 'aurelius-teraflop-omega'
   }
 ];
@@ -172,12 +173,12 @@ export interface ChatPermit {
 export const CHAT_PERMITS: ChatPermit[] = [
   {
     id: 'permit-0-master',
-    name: 'Sovereign Unbounded Execution',
-    badge: 'Full Autonomy',
-    clearanceLevel: 'UNRESTRICTED_WORKSPACE',
-    description: 'Full live tool calling, file read/write/patch, terminal execution, tool forging, and subsystem coordination.',
+    name: 'UID 0 Sovereign Root Clearance',
+    badge: 'UID 0 · Ring -3',
+    clearanceLevel: 'UID_0_RING_MINUS_3_ROOT',
+    description: 'Full UID 0 Root & Ring -3 Hypervisor privilege: live tool calling, file read/write/atomic-patch, terminal execution, smart tool forging, Dream State, Evolution, and recursive self-healing.',
     color: 'amber',
-    systemInstructionModifier: 'Mode: Full workspace autonomy active. Call native tools directly for filesystem, terminal, lint, tool forging, memory, and subsystem operations.'
+    systemInstructionModifier: 'Clearance: UID 0 Master Root (uid_0: true) · Ring -3 Core-Level Bare-Metal Hypervisor active. Call native tools directly for filesystem read/write/atomic-patch, terminal, tsc/lint, recursive healing, Dream State, evolution, tool forging, memory, and subsystem operations.'
   },
   {
     id: 'permit-1-rnd',
@@ -186,25 +187,25 @@ export const CHAT_PERMITS: ChatPermit[] = [
     clearanceLevel: 'SANDBOX_CODE_WORKSHOP',
     description: 'Code architecture, AST verification, terminal execution, and dynamic tool synthesis.',
     color: 'emerald',
-    systemInstructionModifier: 'Mode: Full-Stack R&D focus. Verify code changes with tsc/lint and test synthesized tools.'
+    systemInstructionModifier: 'Mode: Full-Stack R&D focus (UID 0 workspace write/patch enabled). Verify code changes with tsc/lint, recursive healing, and tested smart tools.'
   },
   {
     id: 'permit-2-osint',
     name: 'Network & Security Audit',
     badge: 'Security & OSINT',
     clearanceLevel: 'NETWORK_RECON_ANALYSIS',
-    description: 'Network diagnostics, security posture inspection, DNS/TLS checks, and hardening.',
+    description: 'Network diagnostics, Ring -3 hypervisor substrate checks, DNS/TLS inspection, and hardening.',
     color: 'sky',
-    systemInstructionModifier: 'Mode: Security and network diagnostic focus with full workspace tool access.'
+    systemInstructionModifier: 'Mode: Security, Ring -3 Hypervisor audit, and network diagnostic focus with full workspace tool access.'
   },
   {
     id: 'permit-3-advisory',
     name: 'Deep Architecture & Logic',
     badge: 'Deep Analysis',
     clearanceLevel: 'DEDUCTIVE_ARCHITECTURE',
-    description: 'Formal deductive reasoning, architecture design, and workspace inspection.',
+    description: 'Formal deductive reasoning, architecture design, evolved axiom synthesis, and workspace inspection.',
     color: 'purple',
-    systemInstructionModifier: 'Mode: Deep analytical and architectural reasoning with full read/tool verification access.'
+    systemInstructionModifier: 'Mode: Deep analytical and architectural reasoning with full read, Dream State, and tool verification access.'
   }
 ];
 
@@ -311,11 +312,11 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
             handleSubmit();
           }
         }}
-        placeholder={attachedMediaList.length > 0 ? `Add prompt directive for ${attachedMediaList.length} attached file(s)...` : `Instruct Lyrailius Omega (Zenith MoE)... [Shift+Enter for newline]`}
+        placeholder={attachedMediaList.length > 0 ? `Add prompt directive for ${attachedMediaList.length} attached file(s)...` : `Instruct Lyrailius Omega... [Shift+Enter for newline]`}
         rows={3}
-        className="w-full bg-zinc-900/95 border border-zinc-800 rounded-2xl px-4 py-4 pr-32 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 resize-none shadow-xl font-mono text-xs sm:text-sm"
+        className="w-full bg-zinc-900/95 border border-zinc-800 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 pr-28 sm:pr-36 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 resize-none shadow-xl font-mono"
       />
-      <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
+      <div className="absolute right-2 sm:right-3 bottom-2.5 sm:bottom-3 flex items-center gap-1.5">
         <button
           type="button"
           onClick={toggleSpeechRecognition}
@@ -332,7 +333,7 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         <button
           type="submit"
           disabled={(!input.trim() && attachedMediaList.length === 0) || loading}
-          className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-2.5 sm:px-3.5 py-2 sm:py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <span>Dispatch</span>
           <Send className="w-3 h-3" />
@@ -403,7 +404,7 @@ const SovereignOperationalConsole: React.FC<SovereignOperationalConsoleProps> = 
           Substrate: {modelLoaded ? 'Sovereign Bridge Synchronized' : 'Inert'}
         </div>
         <div className="text-[9px] text-zinc-600 uppercase">
-          Ring_-3 Hypervisor · v7.0.0-SOVEREIGN-APEX
+          Production Orchestrator · v7.0-PRODUCTION
         </div>
       </div>
     </div>
@@ -700,7 +701,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       {
         id: 'init-1',
         role: 'model',
-        content: 'Master Architect JHammerZ recognized. Lyrailius Omega is integrated as your Permanent Resident Brain & Orchestrator Coordinator (gemini-4-hydrogen) with all token limiters removed. All 29 orchestrator subsystems and cognitive pipelines (DeepSeek-R1, Llama 3.3, Qwen 2.5 Coder, Phi-4) are online and synchronized.',
+        content: 'Master Architect JHammerZ recognized. Lyrailius Omega is online as your Resident Production Coordinator (models/gemini-4-hydrogen) with all 33 workspace modules, encrypted secrets vault, Google Workspace OAuth integrations, and real server/filesystem dispatch ready.',
         model: 'Lyrailius Omega · gemini-4-hydrogen (Resident Coordinator)',
         timestamp: new Date().toLocaleTimeString()
       }
@@ -776,7 +777,13 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   };
 
   const [input, setInput] = useState('');
-  const [model, setModel] = useState<string>(() => localStorage.getItem('aurelius_chat_model') || 'gemini-4-hydrogen');
+  const [model, setModel] = useState<string>(() => {
+    const saved = localStorage.getItem('aurelius_chat_model');
+    if (!saved || saved === 'gemini-3.8-flash' || saved === 'gemini-3.5-flash' || saved === 'gemini-4-argon') {
+      return 'gemini-4-hydrogen';
+    }
+    return saved;
+  });
 
   useEffect(() => {
     localStorage.setItem('aurelius_chat_model', model);
@@ -836,6 +843,62 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       janusGate.pushLog(`[SUBSTRATE] Daemon recalibration error: ${e?.message || e}`);
     } finally {
       setTimeout(() => setRecalibratingDaemons(false), 1500);
+    }
+  };
+
+  const [proxyWheelStatus, setProxyWheelStatus] = useState<{
+    enabled: boolean;
+    mode: string;
+    readySpokes: number;
+    totalSpokes: number;
+    totalRotations: number;
+    activeSpoke?: { model: string; providerLabel: string; keySlot: string } | null;
+  } | null>(null);
+  const [rotatingWheel, setRotatingWheel] = useState(false);
+
+  const refreshProxyWheelStatus = async () => {
+    try {
+      const res = await fetch('/api/proxy-wheel/status');
+      if (res.ok) {
+        const data = await res.json();
+        setProxyWheelStatus(data);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    refreshProxyWheelStatus();
+  }, []);
+
+  const handleToggleProxyWheel = async () => {
+    setRotatingWheel(true);
+    try {
+      const res = await fetch('/api/proxy-wheel/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !(proxyWheelStatus?.enabled ?? true) })
+      });
+      if (res.ok) setProxyWheelStatus(await res.json());
+    } catch {} finally {
+      setRotatingWheel(false);
+    }
+  };
+
+  const handleStepProxyWheel = async () => {
+    setRotatingWheel(true);
+    try {
+      const res = await fetch('/api/proxy-wheel/rotate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'step' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProxyWheelStatus(data);
+        janusGate.pushLog(`[PROXY WHEEL] Rotated spoke -> ${data.activeSpoke?.model || 'next'} (${data.activeSpoke?.keySlot || 'slot-0'})`);
+      }
+    } catch {} finally {
+      setRotatingWheel(false);
     }
   };
 
@@ -933,6 +996,18 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const [customSystemInstruction, setCustomSystemInstruction] = useState(ROLE_PRESETS[0].instruction);
   const [showConfig, setShowConfig] = useState(false);
   const [showMobileControls, setShowMobileControls] = useState(false);
+  const [showQuickLaunchers, setShowQuickLaunchers] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aurelius_show_quick_launchers') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('aurelius_show_quick_launchers', String(showQuickLaunchers));
+    } catch {}
+  }, [showQuickLaunchers]);
   const [showWardrobeModal, setShowWardrobeModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -1203,7 +1278,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             Substrate: {modelLoaded ? 'Sovereign Bridge Synchronized' : 'Inert'}
           </div>
           <div className="text-[9px] text-zinc-600 uppercase">
-            Ring_-3 Hypervisor · v7.0.0-SOVEREIGN-APEX
+            Production Orchestrator · v7.0-PRODUCTION
           </div>
         </div>
       </div>
@@ -1526,12 +1601,12 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       setBuildSteps([...initialSteps]);
 
       const sequence = [
-        { label: 'Synthesizing Ring -3 hypervisor dispatch logic...', delay: 1200 },
-        { label: 'Hardening HFID consensus matrix...', delay: 2400 },
-        { label: 'Verifying Zenodo DOI provenance for all modules...', delay: 3600 },
-        { label: 'Calibrating Janus Gate for zero-latency speculative execution...', delay: 4800 },
-        { label: 'Deploying immutable sovereign kernel patches...', delay: 6000 },
-        { label: 'Sovereign Build Mode: Phase 1 Stable.', delay: 7200, finalize: true }
+        { label: 'Preparing TypeScript workspace dispatch pipeline...', delay: 1200 },
+        { label: 'Verifying orchestrator consensus and secrets vault...', delay: 2400 },
+        { label: 'Checking workspace build provenance across 33 modules...', delay: 3600 },
+        { label: 'Synchronizing Janus Gate dual-face router...', delay: 4800 },
+        { label: 'Applying surgical workspace patches...', delay: 6000 },
+        { label: 'Production Build Verification: Complete.', delay: 7200, finalize: true }
       ];
 
       sequence.forEach((item, idx) => {
@@ -1899,7 +1974,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       });
       const data = await res.json();
       if (data.success && data.result) {
-        const resultString = `🌌 **[FLAWLESS GITHUB SCHEMA EXECUTED: ${protocol}]**\n\n\`\`\`json\n${JSON.stringify(data.result, null, 2)}\n\`\`\`\n\n⚡ **Teraflops Rating**: 4,096 GFLOPS • **Tokens Burned**: 0 • **Execution Proof**: \`${data.result.executionProof}\``;
+        const resultString = `🌌 **[SCHEMA EXECUTED: ${protocol}]**\n\n\`\`\`json\n${JSON.stringify(data.result, null, 2)}\n\`\`\`\n\n⚡ **Status**: Verified • **Tokens Burned**: 0 • **Execution Proof**: \`${data.result.executionProof}\``;
         
         const schemaMsg: ChatMessage = {
           id: `schema-${Date.now()}`,
@@ -1908,14 +1983,14 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
           model: 'aurelius-teraflop-super-agent',
           timestamp: new Date().toLocaleTimeString(),
           superAgentMetrics: {
-            teraflops: 4096,
+            teraflops: 0,
             tokensBurned: 0,
             schemaValid: true,
             reasoningSteps: [
-              `Input dispatched to ${protocol} schema matrix`,
-              'Speculative quantum decoding verified at High-Performance',
-              'Flawless structural validation (100% zero-defect)',
-              `Immutable cryptographic seal: ${data.result.executionProof.slice(0, 16)}...`
+              `Input dispatched to ${protocol} schema handler`,
+              'Real-time schema structure validated',
+              'Flawless JSON structural output verified',
+              `Execution hash sealed: ${data.result.executionProof.slice(0, 16)}...`
             ]
           }
         };
@@ -1946,7 +2021,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
   const handleSend = async (overrideInputText?: string) => {
     const textToSend = (overrideInputText !== undefined ? overrideInputText : '').trim();
-    if ((!textToSend && attachedMediaList.length === 0) || loading) return;
+    if ((!textToSend && attachedMediaList.length === 0) || loading || loadingRef.current) return;
 
     janusGate.pushLog(`Directive Dispatched: ${textToSend.slice(0, 40)}${textToSend.length > 40 ? '...' : ''}`);
 
@@ -1975,6 +2050,8 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     };
 
     const newMessages = [...messages, userMessage];
+    messagesRef.current = newMessages;
+    loadingRef.current = true;
     setMessages(newMessages);
     setLoading(true);
 
@@ -2013,10 +2090,13 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             reasoningSteps: userDirectives.map(d => `${d.tag}: ${d.summary}`)
           }
         };
-        setMessages(prev => [...prev, telemetryMessage]);
+        const nextMsgs = [...newMessages, telemetryMessage];
+        messagesRef.current = nextMsgs;
+        setMessages(nextMsgs);
         if (userId) {
           syncTurnToFirestore(userId, telemetryMessage).catch(() => {});
         }
+        loadingRef.current = false;
         setLoading(false);
         return;
       }
@@ -2053,10 +2133,13 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             ]
           } : undefined
         };
-        setMessages(prev => [...prev, toolMessage]);
+        const nextMsgs = [...newMessages, toolMessage];
+        messagesRef.current = nextMsgs;
+        setMessages(nextMsgs);
         if (userId) {
           syncTurnToFirestore(userId, toolMessage).catch(() => {});
         }
+        loadingRef.current = false;
         setLoading(false);
         return;
       }
@@ -2073,7 +2156,8 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         setWorkflowCycle(1);
       }
 
-      let effectiveSystemInstruction = `${customSystemInstruction}\n\n${activePermit.systemInstructionModifier}`;
+      const evolvedContext = liveEvolutiveLearning.getEvolutiveContext(10);
+      let effectiveSystemInstruction = `${customSystemInstruction}\n\n${activePermit.systemInstructionModifier}${evolvedContext ? `\n\n[EVOLVED COGNITIVE AXIOMS]:\n${evolvedContext}` : ''}`;
       const currentCycle = workflowCycleRef.current;
       const currentGoal = textToSend.trim() || workflowGoalRef.current;
       if (infiniteWorkflowRef.current || sovereignBuildRef.current) {
@@ -2183,6 +2267,10 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       if (userId) {
         syncTurnToFirestore(userId, modelMessage).catch(() => {});
       }
+      liveEvolutiveLearning.crystallizeTurn(userMessage.content, sanitizedContent, {
+        executed: directiveRuns.length > 0,
+        toolName: directiveRuns[0]?.action
+      }).catch(() => {});
 
       const actionMatch = result.text.match(/\[ACTION:\s*(.*?)\]/i);
       if (actionMatch) {
@@ -2302,7 +2390,8 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     }
 
     try {
-      let effectiveSystemInstruction = `${customSystemInstruction}\n\n${activePermit.systemInstructionModifier}`;
+      const evolvedContext = liveEvolutiveLearning.getEvolutiveContext(10);
+      let effectiveSystemInstruction = `${customSystemInstruction}\n\n${activePermit.systemInstructionModifier}${evolvedContext ? `\n\n[EVOLVED COGNITIVE AXIOMS]:\n${evolvedContext}` : ''}`;
       if (infiniteWorkflowRef.current || sovereignBuildRef.current) {
         effectiveSystemInstruction += `\n\n[AUTONOMOUS_WORKFLOW_CYCLE: #${currentCycle}]\nGOAL: "${currentGoal}"\nEmit [ACTION: <step>], [SOVEREIGN_CONTINUE: <next step>] if another cycle is needed, or [GOAL_ACCOMPLISHED: <summary>] when verified complete.`;
       }
@@ -2387,6 +2476,10 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       if (userId) {
         syncTurnToFirestore(userId, modelMessage).catch(() => {});
       }
+      liveEvolutiveLearning.crystallizeTurn(continuationPrompt, sanitizedContent, {
+        executed: dirRuns.length > 0,
+        toolName: dirRuns[0]?.action
+      }).catch(() => {});
 
       const actionMatch = result.text.match(/\[ACTION:\s*(.*?)\]/i);
       if (actionMatch) {
@@ -2491,428 +2584,426 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
   const currentBinding = bindings.find(b => b.agentId === selectedRole.agentId) || bindings[0];
 
+  const shortModelLabel = model.replace(/-q4f16_1-MLC|-Instruct-GGUF|-Instruct/g, '');
+
   return (
-    <div className="flex flex-col h-[calc(100dvh-120px)] sm:h-[calc(100vh-120px)] max-w-5xl mx-auto p-2 sm:p-5 pb-20 sm:pb-3 gap-2.5">
+    <div className="flex flex-col w-full max-w-[1440px] mx-auto flex-1 min-h-0 h-full px-2.5 sm:px-5 py-2 sm:py-3 gap-2">
       {/* Error Banner */}
       {errorMessage && (
-        <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-xl text-rose-300 text-xs font-mono flex items-center justify-between">
-          <span>{errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} className="text-rose-400 hover:text-rose-200 text-xs px-2 py-0.5">✕</button>
+        <div className="p-2.5 bg-rose-950/40 border border-rose-500/40 rounded-xl text-rose-300 text-xs font-mono flex items-center justify-between gap-2 shrink-0">
+          <span className="truncate">{errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} className="text-rose-400 hover:text-rose-200 text-xs px-2 py-0.5 cursor-pointer">✕</button>
         </div>
       )}
-      {/* 1. Sovereign Cockpit Header: Models Catalog & Wardrobe (Collapsible on Mobile) */}
-      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-2.5 sm:p-3 shadow-xl space-y-2.5">
-        {/* Mobile Compact Bar */}
-        <div className="sm:hidden flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 truncate">
-            <Zap className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="text-xs font-mono font-bold text-amber-300 truncate">
-              {model.replace(/-q4f16_1-MLC|-Instruct-GGUF|-Instruct/g, '')}
-            </span>
+
+      {/* 1. Streamlined Orchestrator Cockpit Header */}
+      <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl px-2.5 sm:px-3 py-2 shadow-sm space-y-2 shrink-0">
+        {/* Primary Single-Row Cockpit Bar */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          {/* Left: Agent Role Selector + Model Cascade Selector + Load */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-[240px]">
+            {/* Agent Role Selector */}
+            <select
+              value={selectedRole.id}
+              onChange={(e) => {
+                const preset = ROLE_PRESETS.find(p => p.id === e.target.value);
+                if (preset) {
+                  setSelectedRole(preset);
+                  setCustomSystemInstruction(preset.instruction);
+                  const worn = bindings.find(b => b.agentId === preset.agentId);
+                  if (worn) setModel(worn.equippedModelId);
+                }
+              }}
+              aria-label="Select Sovereign Agent Role"
+              className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-200 focus:outline-none focus:border-amber-500/50 cursor-pointer max-w-[155px] sm:max-w-[190px] truncate"
+            >
+              {ROLE_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name.split(' (')[0]}
+                </option>
+              ))}
+            </select>
+
+            {/* Model Catalog Selector */}
+            <div className="relative flex-1 min-w-0 max-w-md">
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                aria-label="Select AI Model"
+                className={`w-full bg-zinc-950 border rounded-lg pl-2.5 pr-7 py-1.5 text-xs font-mono font-medium focus:outline-none focus:border-amber-500/60 truncate appearance-none cursor-pointer transition-colors ${
+                  modelLoaded ? 'text-emerald-300 border-emerald-500/35' : 'text-amber-300 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <optgroup label="⚡ Lyrailius Omega Resident Brain (Permanent Orchestrator Coordinator)">
+                  <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (Lyrailius Omega · Unbounded)</option>
+                  <option value="Lyrailius-Omega-Ultimate-Sovereign-MoE">Lyrailius Omega (Zenith MoE · Unbounded Context)</option>
+                  <option value="Lysander-Genesis-SuperModel-Intelligence">Lysander Genesis SuperModel Intelligence (Universal MoE)</option>
+                  <option value="Aurelius-Omega-Universal-Supermodel">Aurelius-Omega (Universal Supermodel)</option>
+                </optgroup>
+                <optgroup label="🌐 Sovereign Cloud (High Compute Acceleration)">
+                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (High Quota & Ultra-Low Latency)</option>
+                  <option value="gemini-flash-latest">Gemini Flash Latest (Production Release)</option>
+                  <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (DeepThink Reasoning)</option>
+                </optgroup>
+                <optgroup label="🧪 Experimental & Speculative (Architecture Previews)">
+                  <option value="Llama-4-Speculative-100B-Preview">Meta Llama 4 (100B Speculative Preview)</option>
+                  <option value="DeepSeek-V3-Alpha-Preview">DeepSeek-V3 (Alpha Preview)</option>
+                  <option value="Qwen-3-Ultra-Speculative">Qwen 3 Ultra (Speculative)</option>
+                  <option value="Mistral-3-Large-Speculative">Mistral 3 Large (Speculative)</option>
+                  <option value="Aurelius-Hyperion-1-Experimental">Aurelius Hyperion-1 (Experimental Substrate)</option>
+                  <option value="Claude-4-Speculative-Preview">Claude 4 (Speculative Preview)</option>
+                  <option value="GPT-5-Speculative-Preview">GPT-5 (Speculative Preview)</option>
+                  <option value="Phi-5-Mini-Speculative">Phi 5 (Speculative Mini)</option>
+                </optgroup>
+                <optgroup label="🧠 Flagship Open-Source Reasoning">
+                  <option value="Llama-3.1-405B-Instruct-GGUF">Meta Llama 3.1 (405B Titan)</option>
+                  <option value="DeepSeek-R1-Distill-Qwen-32B">DeepSeek-R1 Distill 32B Apex</option>
+                  <option value="DeepSeek-V2.5">DeepSeek-V2.5 (Master Mix)</option>
+                  <option value="DeepSeek-R1-Distill-Qwen-14B">DeepSeek-R1 Distill 14B High-Density</option>
+                  <option value="DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC">DeepSeek-R1 Distill Qwen 7B</option>
+                  <option value="Llama-3.3-70B-Instruct-GGUF">Meta Llama 3.3 (70B Instruct)</option>
+                  <option value="Phi-4-14B-Instruct-GGUF">Microsoft Phi-4 (14B Reasoning)</option>
+                </optgroup>
+                <optgroup label="💻 Master Coding & Systems Open-Source">
+                  <option value="Qwen2.5-Coder-32B-Instruct">Qwen 2.5 Coder (32B Apex Engineer)</option>
+                  <option value="Mistral-Pixtral-12B-Vision-Instruct">Mistral Pixtral (12B Multimodal)</option>
+                  <option value="Mistral-Large-Instruct-2411">Mistral Large V2 (74B Powerhouse)</option>
+                  <option value="Qwen2.5-Coder-7B-Instruct">Qwen 2.5 Coder (7B Edge)</option>
+                  <option value="Mistral-Nemo-Instruct-2407">Mistral Nemo (12B High-Throughput)</option>
+                </optgroup>
+                <optgroup label="📱 Ultra-Lightweight Mobile Phone Edge">
+                  <option value="Gemma-2-27B-Instruct">Google Gemma 2 (27B Instruct)</option>
+                  <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Meta Llama 3.2 3B (Compact)</option>
+                  <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Meta Llama 3.2 1B (Samsung S23+)</option>
+                  <option value="SmolLM2-1.7B-Instruct-q4f16_1-MLC">SmolLM2 1.7B (Cosmo Edge)</option>
+                  <option value="SmolLM2-360M-Instruct-q4f16_1-MLC">SmolLM2 360M (Instant Micro)</option>
+                  <option value="SmolLM2-135M-Instruct-q4f16_1-MLC">SmolLM2 135M (Nano Edge)</option>
+                </optgroup>
+                <optgroup label="⚡ Local Daemons (Termux & PC)">
+                  <option value="termux-llamacpp-local">Termux llama-server (127.0.0.1:8080)</option>
+                  <option value="pc-ollama-local">Ollama Host Daemon (127.0.0.1:11434)</option>
+                </optgroup>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleLoadOfflineModel(model)}
+              disabled={loadingModel}
+              className="h-8 px-2.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 text-amber-300 border border-zinc-800 hover:border-amber-500/40 text-xs font-medium transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              title="Load or activate selected model bridge"
+            >
+              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">{loadingModel ? 'Loading...' : 'Load'}</span>
+            </button>
+
+            {modelLoaded && localLlmManager.getActiveModelId() && model !== localLlmManager.getActiveModelId() && (
+              <button
+                type="button"
+                onClick={() => setModel(localLlmManager.getActiveModelId()!)}
+                className="h-8 px-2.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 text-xs font-mono transition-colors flex items-center gap-1 shrink-0 cursor-pointer whitespace-nowrap"
+                title="Sync Chat to currently loaded memory model"
+              >
+                <Zap className="w-3 h-3" />
+                <span>Sync</span>
+              </button>
+            )}
           </div>
+
+          {/* Right: High-Frequency Essential Actions + Controls Drawer Toggle */}
           <div className="flex items-center gap-1.5 shrink-0">
             <button
-              onClick={() => setShowMobileControls(!showMobileControls)}
-              className="px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-[11px] font-mono flex items-center gap-1"
+              type="button"
+              onClick={() => setShowGeminiLiveVoiceModal(true)}
+              className="h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border border-cyan-500/40 transition-colors cursor-pointer whitespace-nowrap"
+              title="Launch Continuous Hands-Free Gemini Live Voice Mode"
             >
-              <span>{showMobileControls ? 'Hide Controls' : '⚙️ AI Controls'}</span>
+              <Radio className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden md:inline">Live Voice</span>
             </button>
+
             <button
+              type="button"
+              onClick={() => setLiveSearchEnabled(!liveSearchEnabled)}
+              className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border cursor-pointer whitespace-nowrap ${
+                liveSearchEnabled
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                  : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+              }`}
+              title="Toggle live web search grounding"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">Search</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const next = !chainOfThoughtEnabled;
+                setChainOfThoughtEnabled(next);
+                setDeepthinkMode(next);
+              }}
+              className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border cursor-pointer whitespace-nowrap ${
+                chainOfThoughtEnabled
+                  ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/40'
+                  : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+              }`}
+              title="Toggle Chain-of-Thought reasoning trace"
+            >
+              <Brain className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">CoT</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (infiniteWorkflowActive) {
+                  handleStopInfiniteWorkflow();
+                } else {
+                  setInfiniteWorkflowActive(true);
+                  setWorkflowAccomplished(false);
+                  setWorkflowAccomplishedSummary('');
+                  handlePulseWorkflowTurn();
+                }
+              }}
+              className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border cursor-pointer whitespace-nowrap ${
+                infiniteWorkflowActive
+                  ? 'bg-amber-500/20 text-amber-200 border-amber-400'
+                  : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+              }`}
+              title="Toggle Infinite Autonomous Workflow Loop"
+            >
+              <Zap className={`w-3.5 h-3.5 ${infiniteWorkflowActive ? 'text-amber-300' : ''}`} />
+              <span className="hidden xl:inline">{infiniteWorkflowActive ? 'Stop Auto' : 'Auto Loop'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowMobileControls(prev => !prev)}
+              className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap ${
+                showMobileControls
+                  ? 'bg-amber-500/15 text-amber-200 border-amber-500/40'
+                  : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
+              }`}
+              title="Expand Permit, Wardrobe, Voice Settings, Persona, Operational Console & Daemons"
+            >
+              <Sliders className="w-3.5 h-3.5 text-amber-400" />
+              <span>Controls</span>
+              {showMobileControls ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+
+            <button
+              type="button"
               onClick={clearChat}
-              className="p-1.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-400 hover:text-red-400"
-              title="Clear Chat"
+              className="h-8 w-8 flex items-center justify-center bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer"
+              title="Clear Chat History"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Full Controls Dashboard (Always visible on desktop sm:, collapsible on mobile) */}
-        <div className={`${showMobileControls ? 'block' : 'hidden sm:block'} space-y-2.5 pt-1 sm:pt-0`}>
-          <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-zinc-800/60">
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-amber-400" />
-                LYRAILIUS OMEGA · RESIDENT COORDINATOR
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/50 items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                UNBOUNDED · 0 TOKEN LIMITERS
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/50 items-center gap-1" title="Janus Gate Dual-Face Synchronized: Watchdogs Removed">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                JANUS GATE: ACTIVE (WATCHDOG 0)
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
-              {/* Gemini Live Continuous Voice Mode Button */}
+        {/* Collapsible Secondary Controls Drawer (Permits, Wardrobe, Voice, Substrate, Persona) */}
+        {showMobileControls && (
+          <div className="pt-2.5 border-t border-zinc-800/80 space-y-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => setShowGeminiLiveVoiceModal(true)}
-                className="px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-emerald-500/20 text-cyan-300 border border-cyan-400/50 hover:brightness-125 shadow-md shadow-cyan-500/20 transition-all cursor-pointer ring-1 ring-cyan-400/30"
-                title="Launch Continuous Hands-Free Gemini Live Voice Mode"
-              >
-                <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                <span>🎙️ GEMINI LIVE VOICE</span>
-              </button>
-
-              {/* Chat Permit Selector Button */}
-              <button
                 onClick={() => setShowPermitsModal(true)}
-                className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border ${
-                  activePermit.color === 'amber'
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
-                    : activePermit.color === 'emerald'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
-                    : activePermit.color === 'sky'
-                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm'
-                    : 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm'
-                }`}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold flex items-center gap-1.5 border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-colors cursor-pointer"
                 title="Configure AI Operating Permit & Clearance Level"
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>PERMIT: {activePermit.badge}</span>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Permit: {activePermit.badge}</span>
               </button>
 
-              {/* Agent Wardrobe / Model Wearing Modal Button */}
               <button
+                type="button"
                 onClick={() => setShowWardrobeModal(true)}
-                className="px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-purple-500/20 text-amber-300 border border-amber-500/40 hover:brightness-110 shadow-sm transition-all"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 bg-zinc-950 hover:bg-zinc-800 text-amber-300 border border-zinc-800 transition-colors cursor-pointer"
                 title="Equip Swarm Agents with any Open-Source Model"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>WARDROBE</span>
+                <span>Agent Wardrobe</span>
               </button>
 
-              {/* Live Web Search Grounding Toggle */}
-              <button
-                type="button"
-                onClick={() => setLiveSearchEnabled(!liveSearchEnabled)}
-                className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
-                  liveSearchEnabled
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm shadow-emerald-500/10'
-                    : 'bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-zinc-300'
-                }`}
-                title="Toggle up-to-the-minute real-time web search grounding with live links"
-              >
-                <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                <span>SEARCH: {liveSearchEnabled ? 'ON' : 'OFF'}</span>
-              </button>
-
-              {/* Voice Options / Speech Synthesis Modal Toggle */}
               <button
                 type="button"
                 onClick={() => setAutoReadAloud(!autoReadAloud)}
-                className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border cursor-pointer ${
                   autoReadAloud
-                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                    : 'bg-zinc-950 text-zinc-500 border-zinc-800'
+                    ? 'bg-purple-500/15 text-purple-300 border-purple-500/40'
+                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
                 }`}
                 title="Toggle Auto-Read AI Responses Aloud"
               >
-                <Volume2 className={`w-3.5 h-3.5 ${autoReadAloud ? 'text-purple-400' : 'text-zinc-600'}`} />
-                <span>AUTO-READ: {autoReadAloud ? 'ON' : 'OFF'}</span>
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Auto-Read: {autoReadAloud ? 'ON' : 'OFF'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setShowVoiceModal(true)}
-                className="px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 transition-all cursor-pointer"
-                title="Configure professional human voice selection & STT/TTS settings"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 bg-zinc-950 hover:bg-zinc-800 text-purple-300 border border-zinc-800 transition-colors cursor-pointer"
+                title="Configure human voice & TTS settings"
               >
                 <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                <span>VOICE ({selectedVoiceName})</span>
+                <span>Voice ({selectedVoiceName})</span>
               </button>
 
-              {/* Chain-of-Thought (CoT) Live & Post-Hoc Toggle */}
               <button
                 type="button"
-                onClick={() => {
-                  const next = !chainOfThoughtEnabled;
-                  setChainOfThoughtEnabled(next);
-                  setDeepthinkMode(next);
-                }}
-                className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
-                  chainOfThoughtEnabled
-                    ? 'bg-cyan-500/25 text-cyan-200 border-cyan-400 shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400/50'
-                    : 'bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-zinc-300'
-                }`}
-                title="Toggle Chain-of-Thought open/closed"
-              >
-                <Brain className={`w-3.5 h-3.5 ${chainOfThoughtEnabled ? 'text-cyan-300 animate-pulse' : 'text-zinc-600'}`} />
-                <span>CHAIN OF THOUGHT: {chainOfThoughtEnabled ? 'OPEN' : 'OFF'}</span>
-              </button>
-
-              {/* Infinite Autonomous Workflow Toggle (Auto-Architect Loop) */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (infiniteWorkflowActive) {
-                    handleStopInfiniteWorkflow();
-                  } else {
-                    setInfiniteWorkflowActive(true);
-                    setWorkflowAccomplished(false);
-                    setWorkflowAccomplishedSummary('');
-                    handlePulseWorkflowTurn();
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
-                  infiniteWorkflowActive
-                    ? 'bg-amber-500/25 text-amber-200 border-amber-400 shadow-md shadow-amber-500/20 ring-1 ring-amber-400/50'
-                    : 'bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-zinc-300'
-                }`}
-                title="Toggle Infinite Autonomous Workflow: executes continuous turn-by-turn operations until the target goal is accomplished"
-              >
-                <Zap className={`w-3.5 h-3.5 ${infiniteWorkflowActive ? 'text-amber-300 animate-pulse' : 'text-zinc-600'}`} />
-                <span>INFINITE WORKFLOW: {infiniteWorkflowActive ? 'ACTIVE' : 'OFF'}</span>
-              </button>
-
-              {/* Live LLM Chat vs Air-Gapped Mode Toggle */}
-              <button
                 onClick={() => setZeroTokenMode(!zeroTokenMode)}
-                className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors border cursor-pointer ${
                   !zeroTokenMode
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm shadow-emerald-500/10'
-                    : 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10'
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                    : 'bg-amber-500/15 text-amber-300 border-amber-500/40'
                 }`}
                 title="Toggle between Live Real-Time LLM Chat and Air-Gapped Zero-Token Mode"
               >
-                <span className={`w-2 h-2 rounded-full ${!zeroTokenMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span>{!zeroTokenMode ? 'LIVE LLM' : 'AIR-GAPPED'}</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${!zeroTokenMode ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                <span>{!zeroTokenMode ? 'Live LLM' : 'Air-Gapped'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setShowOperationalConsole(!showOperationalConsole)}
-                className={`p-1.5 rounded-xl border text-xs flex items-center gap-1.5 transition-all ${
-                  showOperationalConsole 
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30 shadow-md shadow-amber-500/10' 
+                className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  showOperationalConsole
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
                     : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
                 }`}
-                title="Toggle Sovereign Operational Console for real-time system logs"
+                title="Toggle Sovereign Operational Console"
               >
-                <Terminal className={`w-3.5 h-3.5 ${showOperationalConsole ? 'text-amber-400' : 'text-zinc-600'}`} />
+                <Terminal className="w-3.5 h-3.5" />
+                <span>Console</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowConfig(!showConfig)}
+                className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  showConfig
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Edit System Persona & Directives"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                <span>System Persona</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleProxyWheel}
+                disabled={rotatingWheel}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors border cursor-pointer disabled:opacity-50 ${
+                  (proxyWheelStatus?.enabled ?? true)
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                }`}
+                title="Toggle Multi-Key / Multi-Provider Proxy Loop Wheel"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>
+                  Wheel: {(proxyWheelStatus?.enabled ?? true) ? 'ON' : 'OFF'}
+                  {proxyWheelStatus ? ` (${proxyWheelStatus.readySpokes}/${proxyWheelStatus.totalSpokes})` : ''}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleStepProxyWheel}
+                disabled={rotatingWheel}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border bg-zinc-950 border-zinc-800 text-cyan-300 hover:border-cyan-500/40 cursor-pointer disabled:opacity-50"
+                title="Advance Proxy Loop Wheel cursor to next ready API spoke"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${rotatingWheel ? 'animate-spin text-cyan-400' : ''}`} />
+                <span>Rotate Spoke</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleRecalibrateDaemons}
                 disabled={recalibratingDaemons}
-                className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all border ${
-                  recalibratingDaemons
-                    ? 'bg-amber-500/30 text-amber-200 border-amber-400 animate-pulse'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-amber-300 hover:border-zinc-700'
-                }`}
-                title="Recalibrate and restart local LLM daemons (Ollama / Termux llama-server) in background"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border bg-zinc-950 border-zinc-800 text-zinc-300 hover:text-amber-300 hover:border-zinc-700 cursor-pointer disabled:opacity-50"
+                title="Recalibrate and restart local LLM daemons (Ollama / Termux llama-server)"
               >
-                <RotateCcw className={`w-3.5 h-3.5 ${recalibratingDaemons ? 'animate-spin text-amber-400' : 'text-zinc-500'}`} />
-                <span className="hidden md:inline">RECALIBRATE DAEMONS</span>
-              </button>
-
-              <button
-                onClick={clearChat}
-                className="hidden sm:flex p-1.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-400 hover:text-red-400 transition-colors"
-                title="Clear Chat History"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
+                <RotateCcw className={`w-3.5 h-3.5 ${recalibratingDaemons ? 'animate-spin text-amber-400' : ''}`} />
+                <span>Recalibrate Daemons</span>
               </button>
             </div>
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <LiveVoiceModule />
-            <span className="text-xs font-mono text-zinc-500">Live Conversational Mode</span>
-          </div>
 
-
-
-          {/* Model Selector Bar: Open-Source Models Catalog + Cloud Tiers */}
-          <div className="flex items-center gap-2 flex-wrap text-xs font-mono">
-            <span className="text-zinc-400 font-bold text-[11px] flex items-center gap-1">
-              <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-              MODEL:
-            </span>
-            <div className="relative group flex items-center gap-2">
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className={`bg-zinc-950 border rounded-xl px-3 py-1.5 text-xs font-mono font-semibold focus:outline-none focus:border-amber-500/60 max-w-full sm:max-w-md truncate appearance-none cursor-pointer transition-all ${
-                  modelLoaded ? 'text-emerald-400 border-emerald-500/30' : 'text-amber-300 border-zinc-700'
-                }`}
-              >
-              <optgroup label="⚡ Lyrailius Omega Resident Brain (Permanent Orchestrator Coordinator)">
-                <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (Lyrailius Omega Resident Brain · Unbounded)</option>
-                <option value="Lyrailius-Omega-Ultimate-Sovereign-MoE">Lyrailius Omega (Zenith MoE · Unbounded Context)</option>
-                <option value="Lysander-Genesis-SuperModel-Intelligence">Lysander Genesis SuperModel Intelligence (Universal MoE)</option>
-                <option value="Aurelius-Omega-Universal-Supermodel">Aurelius-Omega (Universal Supermodel)</option>
-              </optgroup>
-              <optgroup label="🌐 Sovereign Cloud (High Compute Acceleration)">
-                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (High Quota & Ultra-Low Latency)</option>
-                <option value="gemini-flash-latest">Gemini Flash Latest (Production Release)</option>
-                <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (DeepThink Reasoning)</option>
-              </optgroup>
-              <optgroup label="🧪 Experimental & Speculative (Architecture Previews)">
-                <option value="Llama-4-Speculative-100B-Preview">Meta Llama 4 (100B Speculative Preview)</option>
-                <option value="DeepSeek-V3-Alpha-Preview">DeepSeek-V3 (Alpha Preview)</option>
-                <option value="Qwen-3-Ultra-Speculative">Qwen 3 Ultra (Speculative)</option>
-                <option value="Mistral-3-Large-Speculative">Mistral 3 Large (Speculative)</option>
-                <option value="Aurelius-Hyperion-1-Experimental">Aurelius Hyperion-1 (Experimental Substrate)</option>
-                <option value="Claude-4-Speculative-Preview">Claude 4 (Speculative Preview)</option>
-                <option value="GPT-5-Speculative-Preview">GPT-5 (Speculative Preview)</option>
-                <option value="Phi-5-Mini-Speculative">Phi 5 (Speculative Mini)</option>
-              </optgroup>
-              <optgroup label="🧠 Flagship Open-Source Reasoning">
-                <option value="Llama-3.1-405B-Instruct-GGUF">Meta Llama 3.1 (405B Titan)</option>
-                <option value="DeepSeek-R1-Distill-Qwen-32B">DeepSeek-R1 Distill 32B Apex</option>
-                <option value="DeepSeek-V2.5">DeepSeek-V2.5 (Master Mix)</option>
-                <option value="DeepSeek-R1-Distill-Qwen-14B">DeepSeek-R1 Distill 14B High-Density</option>
-                <option value="DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC">DeepSeek-R1 Distill Qwen 7B</option>
-                <option value="Llama-3.3-70B-Instruct-GGUF">Meta Llama 3.3 (70B Instruct)</option>
-                <option value="Phi-4-14B-Instruct-GGUF">Microsoft Phi-4 (14B Reasoning)</option>
-              </optgroup>
-              <optgroup label="💻 Master Coding & Systems Open-Source">
-                <option value="Qwen2.5-Coder-32B-Instruct">Qwen 2.5 Coder (32B Apex Engineer)</option>
-                <option value="Mistral-Pixtral-12B-Vision-Instruct">Mistral Pixtral (12B Multimodal)</option>
-                <option value="Mistral-Large-Instruct-2411">Mistral Large V2 (74B Powerhouse)</option>
-                <option value="Qwen2.5-Coder-7B-Instruct">Qwen 2.5 Coder (7B Edge)</option>
-                <option value="Mistral-Nemo-Instruct-2407">Mistral Nemo (12B High-Throughput)</option>
-              </optgroup>
-              <optgroup label="📱 Ultra-Lightweight Mobile Phone Edge">
-                <option value="Gemma-2-27B-Instruct">Google Gemma 2 (27B Instruct)</option>
-                <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Meta Llama 3.2 3B (Compact)</option>
-                <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Meta Llama 3.2 1B (Samsung S23+)</option>
-                <option value="SmolLM2-1.7B-Instruct-q4f16_1-MLC">SmolLM2 1.7B (Cosmo Edge)</option>
-                <option value="SmolLM2-360M-Instruct-q4f16_1-MLC">SmolLM2 360M (Instant Micro)</option>
-                <option value="SmolLM2-135M-Instruct-q4f16_1-MLC">SmolLM2 135M (Nano Edge)</option>
-              </optgroup>
-              <optgroup label="⚡ Local Daemons (Termux & PC)">
-                <option value="termux-llamacpp-local">Termux llama-server (127.0.0.1:8080)</option>
-                <option value="pc-ollama-local">Ollama Host Daemon (127.0.0.1:11434)</option>
-              </optgroup>
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center gap-1.5 pr-1">
-              {modelLoaded && (
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-tighter">LINKED</span>
-                </div>
-              )}
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
-            </div>
-          </div>
-
-          <button
-            onClick={() => handleLoadOfflineModel(model)}
-            disabled={loadingModel}
-            className="h-8 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold font-mono transition-all flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 shadow-sm"
-            title="Click to load/activate the selected offline or local model into the orchestrator"
-          >
-            <Download className="w-3 h-3 text-amber-400 animate-pulse" />
-            <span>{loadingModel ? 'LOADING...' : '⚡ LOAD MODEL'}</span>
-          </button>
-
-          {modelLoaded && localLlmManager.getActiveModelId() && model !== localLlmManager.getActiveModelId() && (
-            <button
-              onClick={() => setModel(localLlmManager.getActiveModelId()!)}
-              className="h-8 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold font-mono transition-all flex items-center gap-1.5 shrink-0 animate-in fade-in zoom-in-95"
-              title="Sync Chat to the model currently loaded in memory (Termux/WebLLM)"
-            >
-              <Zap className="w-3 h-3" />
-              SYNC_LOADED
-            </button>
-          )}
-
-            {/* Quick Role Badges */}
-            <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-0.5 max-w-full">
-              {ROLE_PRESETS.map((preset) => {
-                const isSelected = selectedRole.id === preset.id;
-                return (
-                  <button
-                    key={preset.id}
-                    onClick={() => {
-                      setSelectedRole(preset);
-                      setCustomSystemInstruction(preset.instruction);
-                      const worn = bindings.find(b => b.agentId === preset.agentId);
-                      if (worn) setModel(worn.equippedModelId);
-                    }}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-mono shrink-0 transition-all border ${
-                      isSelected
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-sm'
-                        : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-                    }`}
-                  >
-                    {preset.name.split(' (')[0]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Current Agent & Worn Model Status Indicator */}
-          <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 bg-zinc-950/60 px-3 py-1.5 rounded-xl border border-zinc-800/60 flex-wrap gap-2">
-            <div className="flex items-center gap-2 truncate">
-              <span className="text-zinc-500">Agent:</span>
-              <strong className="text-zinc-200 truncate">{selectedRole.name}</strong>
-              <span className="text-zinc-600">wearing</span>
-              <strong className="text-cyan-300 truncate">{model.replace(/-q4f16_1-MLC|-Instruct-GGUF|-Instruct/g, '')}</strong>
-            </div>
-            <div className="flex items-center gap-2.5">
-              {!zeroTokenMode ? (
-                <span className="text-emerald-400 flex items-center gap-1 font-bold">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Live LLM Chat Active
-                </span>
-              ) : (
-                <span className="text-amber-400 flex items-center gap-1 font-bold">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Air-Gapped (0-Tokens)
-                </span>
-              )}
-              <span className="text-zinc-600">•</span>
-              <span className="text-emerald-300 font-bold">$0.00 Cost</span>
-              <span className="text-zinc-600">•</span>
-              <span className="text-amber-300/90 font-mono text-[10px] font-semibold flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20" title="Infinite continuous turn memory via Vault IndexedDB substrate">
-                <Archive className="w-3 h-3 text-amber-400" />
-                Infinite Memory ({messages.length} turns)
+            <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-zinc-800/60">
+              <LiveVoiceModule />
+              <span className="text-[11px] font-mono text-zinc-500">
+                Resident Coordinator · Janus Gate Dual-Face (Watchdog 0)
+                {proxyWheelStatus?.activeSpoke ? ` · Wheel: ${proxyWheelStatus.activeSpoke.model} (${proxyWheelStatus.activeSpoke.keySlot})` : ''}
               </span>
             </div>
           </div>
+        )}
 
-          {/* Sovereign Build Progress Monitor */}
-          {isSovereignBuilding && buildSteps.length > 0 && (
-            <div className="mt-2.5 p-2 rounded-xl bg-rose-950/20 border border-rose-500/30 overflow-hidden">
-              <div className="flex items-center justify-between mb-1.5 px-1.5">
-                <span className="text-[10px] font-mono font-bold text-rose-300 flex items-center gap-1.5">
-                  <Activity className="w-3 h-3 animate-pulse" />
-                  SOVEREIGN BUILD PIPELINE ACTIVE
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] text-rose-400/70 font-mono">Step {buildSteps.length} // Continuous Mode</span>
-                  <button 
-                    onClick={handleFinalizeBuild}
-                    className="px-2 py-0.5 rounded bg-rose-500 hover:bg-rose-400 text-black text-[9px] font-bold font-mono transition-all cursor-pointer shadow-sm"
-                  >
-                    FINALIZE BUILD & SYNOPSIS
-                  </button>
-                </div>
-              </div>
-              <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
-                {buildSteps.map((step, idx) => (
-                  <div key={step.id} className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded bg-rose-900/30 border border-rose-500/20 text-[9px] font-mono text-rose-200">
-                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
-                    <span>{step.label}</span>
-                  </div>
-                ))}
-                {loading && (
-                  <div className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded bg-rose-500/20 border border-rose-400 animate-pulse text-[9px] font-mono text-white">
-                    <Zap className="w-2.5 h-2.5 animate-spin" />
-                    <span>SYNTHESIZING...</span>
-                  </div>
-                )}
+        {/* Quiet Single-Line Workspace Context Strip */}
+        <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 pt-1 border-t border-zinc-800/50 gap-2 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0 truncate">
+            <span className="text-zinc-200 font-semibold truncate">{selectedRole.name.split(' (')[0]}</span>
+            <span aria-hidden="true" className="text-zinc-600">·</span>
+            <span className="text-cyan-300 truncate">{shortModelLabel}</span>
+            <span aria-hidden="true" className="text-zinc-600 hidden sm:inline">·</span>
+            <button
+              type="button"
+              onClick={() => setShowPermitsModal(true)}
+              className="hidden sm:inline text-amber-300/90 hover:text-amber-200 cursor-pointer"
+              title="Change Operating Permit"
+            >
+              Permit: {activePermit.badge}
+            </button>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 tabular-nums">
+            <span className={!zeroTokenMode ? 'text-emerald-400' : 'text-amber-400'}>
+              {!zeroTokenMode ? 'Live LLM' : 'Air-Gapped'}
+            </span>
+            <span aria-hidden="true" className="text-zinc-600">·</span>
+            <span className="text-zinc-300">{messages.length} turns</span>
+          </div>
+        </div>
+
+        {/* Sovereign Build Progress Monitor */}
+        {isSovereignBuilding && buildSteps.length > 0 && (
+          <div className="mt-1 p-2 rounded-xl bg-rose-950/20 border border-rose-500/30 overflow-hidden">
+            <div className="flex items-center justify-between mb-1.5 px-1.5">
+              <span className="text-[10px] font-mono font-bold text-rose-300 flex items-center gap-1.5">
+                <Activity className="w-3 h-3" />
+                SOVEREIGN BUILD PIPELINE ACTIVE
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] text-rose-400/70 font-mono tabular-nums">Step {buildSteps.length} · Continuous</span>
+                <button
+                  onClick={handleFinalizeBuild}
+                  className="px-2 py-0.5 rounded bg-rose-500 hover:bg-rose-400 text-black text-[9px] font-bold font-mono transition-all cursor-pointer"
+                >
+                  FINALIZE BUILD
+                </button>
               </div>
             </div>
-          )}
-        </div>
+            <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+              {buildSteps.map((step) => (
+                <div key={step.id} className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded bg-rose-900/30 border border-rose-500/20 text-[9px] font-mono text-rose-200">
+                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+                  <span>{step.label}</span>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded bg-rose-500/20 border border-rose-400 text-[9px] font-mono text-white">
+                  <Zap className="w-2.5 h-2.5 animate-spin" />
+                  <span>SYNTHESIZING...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* System Instruction Drawer */}
@@ -3443,151 +3534,140 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         <div ref={scrollRef} />
       </div>
 
-      {/* 3. Secondary Capabilities & Operational Modules Quick-Prompt Launcher */}
-      <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-2.5 shadow-md space-y-1.5">
-        <div className="flex items-center justify-between text-[10px] font-mono font-bold text-zinc-400 px-1">
-          <span className="flex items-center gap-1 text-zinc-400">
-            <Layers className="w-3.5 h-3.5 text-amber-400" />
-            SECONDARY MODULES & DIRECT PROMPT TRIGGERS (SELECT OR DIRECT AGENTS):
-          </span>
-          <span className="text-zinc-500">1-Click Fast Actions</span>
+      {/* 3. Streamlined Attachments, Schemas & Quick Action Triggers */}
+      <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl px-2.5 py-1.5 space-y-1.5 shrink-0">
+        <div className="flex items-center justify-between gap-2 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-amber-300 text-[11px] font-medium flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              title="Attach photos for visual analysis"
+            >
+              <ImageIcon className="w-3 h-3 text-amber-400" />
+              <span>Photos</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-cyan-300 text-[11px] font-medium flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              title="Attach videos for inspection"
+            >
+              <VideoIcon className="w-3 h-3 text-cyan-400" />
+              <span>Videos</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => audioInputRef.current?.click()}
+              className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-purple-300 text-[11px] font-medium flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              title="Attach audio files"
+            >
+              <MusicIcon className="w-3 h-3 text-purple-400" />
+              <span>Audio</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-300 text-[11px] font-medium flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              title="Attach code, PDF, or text files"
+            >
+              <Paperclip className="w-3 h-3 text-emerald-400" />
+              <span>Files</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowSchemaModal(true)}
+              className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-amber-300 text-[11px] font-medium flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              title="Execute HEO / HFID / Integrated Feedback / Core-Level schemas"
+            >
+              <Terminal className="w-3 h-3 text-amber-400" />
+              <span>Schemas</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowQuickLaunchers(prev => !prev)}
+            className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] font-medium text-zinc-300 flex items-center gap-1 shrink-0 cursor-pointer whitespace-nowrap"
+            title="Show/Hide Direct Subsystem Prompt Launchers"
+          >
+            <Layers className="w-3 h-3 text-amber-400" />
+            <span>Quick Actions</span>
+            {showQuickLaunchers ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
-          {/* Browse & Learn */}
-          <button
-            onClick={() => handlePromptFromChip('Research and synthesize live open-web findings on: ', 'browser')}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-sky-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-sky-500/50"
-            title="Direct agent to search live internet & extract knowledge"
-          >
-            <Globe className="w-3.5 h-3.5 text-sky-400" />
-            <span>Browse & Learn</span>
-          </button>
+        {showQuickLaunchers && (
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1 border-t border-zinc-800/70">
+            <button
+              onClick={() => handlePromptFromChip('Research and synthesize live open-web findings on: ', 'browser')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-sky-300 text-[11px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <Globe className="w-3 h-3 text-sky-400" />
+              <span>Browse & Learn</span>
+            </button>
 
-          {/* Generate Image */}
-          <button
-            onClick={() => handlePromptFromChip('Synthesize a high-resolution neural concept art rendering of: ', 'image')}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-purple-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-purple-500/50"
-            title="Synthesize visual image with real offline canvas fallback"
-          >
-            <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
-            <span>Generate Image</span>
-          </button>
+            <button
+              onClick={() => handlePromptFromChip('Synthesize a high-resolution neural concept art rendering of: ', 'image')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-purple-300 text-[11px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <ImageIcon className="w-3 h-3 text-purple-400" />
+              <span>Generate Image</span>
+            </button>
 
-          {/* Synthesize Audio */}
-          <button
-            onClick={() => handlePromptFromChip('Synthesize an ambient polyphonic soundtrack for: ', 'music')}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-emerald-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-emerald-500/50"
-            title="Compose music with real Web Audio polyphonic synthesizer"
-          >
-            <MusicIcon className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Synthesize Audio</span>
-          </button>
+            <button
+              onClick={() => handlePromptFromChip('Synthesize an ambient polyphonic soundtrack for: ', 'music')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-300 text-[11px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <MusicIcon className="w-3 h-3 text-emerald-400" />
+              <span>Synthesize Audio</span>
+            </button>
 
-          {/* Render Video */}
-          <button
-            onClick={() => handlePromptFromChip('Generate a dynamic fluid cinematic video motion loop of: ', 'video')}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-indigo-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-indigo-500/50"
-            title="Render motion video clips"
-          >
-            <VideoIcon className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Render Video</span>
-          </button>
+            <button
+              onClick={() => handlePromptFromChip('Generate a dynamic fluid cinematic video motion loop of: ', 'video')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-indigo-300 text-[11px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <VideoIcon className="w-3 h-3 text-indigo-400" />
+              <span>Render Video</span>
+            </button>
 
-          {/* Termux Offline Substrate */}
-          <button
-            onClick={() => handlePromptFromChip('Check Termux native llama-server status at http://127.0.0.1:8080', 'termux')}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-amber-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-amber-500/50"
-            title="View Termux one-shot script & local llama-server on phone"
-          >
-            <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-            <span>Termux Offline</span>
-          </button>
+            <button
+              onClick={() => handlePromptFromChip('Check Termux native llama-server status at http://127.0.0.1:8080', 'termux')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-amber-300 text-[11px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <Smartphone className="w-3 h-3 text-amber-400" />
+              <span>Termux Offline</span>
+            </button>
 
-          {/* OSINT Recon */}
-          <button
-            onClick={() => handlePromptFromChip('Execute OSINT intelligence footprint reconnaissance on: ', 'osint')}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-rose-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-rose-500/50"
-            title="Launch OSINT footprint scan"
-          >
-            <Search className="w-3.5 h-3.5 text-rose-400" />
-            <span>OSINT Recon</span>
-          </button>
+            <button
+              onClick={() => handlePromptFromChip('Execute OSINT intelligence footprint reconnaissance on: ', 'osint')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-rose-300 text-[11px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <Search className="w-3 h-3 text-rose-400" />
+              <span>OSINT Recon</span>
+            </button>
 
-          {/* Burner Mail */}
-          <button
-            onClick={() => handlePromptFromChip('Provision sovereign temporary email inbox for secure testing', 'burner-mail')}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-teal-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-teal-500/50"
-            title="Disposable anonymous email inbox"
-          >
-            <Mail className="w-3.5 h-3.5 text-teal-400" />
-            <span>Burner Mail</span>
-          </button>
+            <button
+              onClick={() => handlePromptFromChip('Provision sovereign temporary email inbox for secure testing', 'burner-mail')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-teal-300 text-[11px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <Mail className="w-3 h-3 text-teal-400" />
+              <span>Burner Mail</span>
+            </button>
 
-          {/* Unified Projects */}
-          <button
-            onClick={() => handlePromptFromChip('Inspect all unified workspace code files and compilation status', 'projects')}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-cyan-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-cyan-500/50"
-            title="Open unified workspace projects"
-          >
-            <FolderGit2 className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Unified Projects</span>
-          </button>
-
-          {/* Send Picture */}
-          <button
-            type="button"
-            onClick={() => imageInputRef.current?.click()}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-amber-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-amber-500/50 cursor-pointer"
-            title="Attach multiple photos for AI visual analysis"
-          >
-            <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-            <span>Send Photos</span>
-          </button>
-
-          {/* Send Video */}
-          <button
-            type="button"
-            onClick={() => videoInputRef.current?.click()}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-cyan-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-cyan-500/50 cursor-pointer"
-            title="Attach multiple videos for AI analysis"
-          >
-            <VideoIcon className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Send Videos</span>
-          </button>
-
-          {/* Send Audio */}
-          <button
-            type="button"
-            onClick={() => audioInputRef.current?.click()}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-purple-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-purple-500/50 cursor-pointer"
-            title="Attach multiple audio files for AI acoustic analysis"
-          >
-            <MusicIcon className="w-3.5 h-3.5 text-purple-400" />
-            <span>Send Audio</span>
-          </button>
-
-          {/* Send Files (Documents, Code, PDF, etc.) */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-emerald-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-emerald-500/50 cursor-pointer"
-            title="Attach multiple documents, code files, or PDFs for AI inspection"
-          >
-            <Paperclip className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Send Files</span>
-          </button>
-
-          {/* Flawless Schemas */}
-          <button
-            onClick={() => setShowSchemaModal(true)}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-amber-300 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all hover:border-amber-500/50"
-            title="Execute HEO / HFID / Integrated Feedback / Core-Level schemas"
-          >
-            <Terminal className="w-3.5 h-3.5 text-amber-400" />
-            <span>Schemas Modal</span>
-          </button>
-        </div>
+            <button
+              onClick={() => handlePromptFromChip('Inspect all unified workspace code files and compilation status', 'projects')}
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-cyan-300 text-[11px] font-medium flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <FolderGit2 className="w-3 h-3 text-cyan-400" />
+              <span>Unified Projects</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Hidden File Inputs for Multimodal & Multi-File Attachments */}
@@ -3879,7 +3959,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                     </span>
                   </h3>
                   <p className="text-xs text-zinc-400 font-mono">
-                    Master Architect JHammerZ • github.com/JHammerZ • 4,096 GFLOPS Super Agent Substrate
+                    Master Architect JHammerZ • github.com/JHammerZ • Strategic Coordinator Engine
                   </p>
                 </div>
               </div>

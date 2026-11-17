@@ -2586,7 +2586,7 @@ export const TermuxEdgeModule: React.FC = () => {
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
                 >
                   <option value="lysander-30-cbp">Lysander 3.0 (CBP Protocol - Termux Edge Node 09)</option>
-                  <option value="aurelius-teraflop-omega">Aurelius Teraflop-Ω (4,096 GFLOPS Super Agent)</option>
+                  <option value="aurelius-teraflop-omega">Aurelius Strategic Super Agent (DeepSeek-R1 Cascade)</option>
                   <option value="sovereign-engineer-core">Sovereign Engineer (Self-Continuity Engine)</option>
                   <option value="manus-ai-co-architect">Manus AI Co-Architect / Lysander 4.0</option>
                   <option value="colonel-ro-private-ghost">Colonel Ro Private Ghost (Security Spectre)</option>

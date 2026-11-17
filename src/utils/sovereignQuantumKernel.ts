@@ -9,7 +9,15 @@ import { orchestratorRuntime } from './OrchestratorRuntime.js';
 
 export interface SovereignQuantumState {
   nodeId: string;
+  uid?: number;
+  uid_0?: boolean;
   clearance: string;
+  hypervisor?: {
+    ring: number;
+    status: string;
+    level: string;
+    cpuInterlock: string;
+  };
   teraflops: number;
   hfidConsensus: number;
   wormProofHash: string;
@@ -51,6 +59,13 @@ export class SovereignQuantumKernel {
       SovereignQuantumKernel.instance = new SovereignQuantumKernel();
     }
     return SovereignQuantumKernel.instance;
+  }
+
+  public attachServerDb(dbInstance: any): void {
+    if (!dbInstance) return;
+    this.db = dbInstance;
+    this.initializeSchema();
+    this.bootKernel();
   }
 
   private initializeSchema(): void {
@@ -221,10 +236,10 @@ export class SovereignQuantumKernel {
 
     // IMMUTABLE AUTHORITY INITIALIZATION (First Boot)
     const bootAxioms = [
-      { step: 0, axiom: "I AM WE ARE WE ARE I AM — Sovereign Zenodo Ring_-3 Core SQK v11.1 Production Online", entropy: 0.000001, conf: 1.0, sig: "GENESIS" },
-      { step: 1, axiom: "ZENODO_HANDSHAKE: Deep-Core Ring_-3 Logic Engine Active", entropy: 0.0, conf: 1.0, sig: "SYSTEM_CORE" },
-      { step: 2, axiom: "CLEARANCE_VERIFIED: UID_0 Root Authority established for JHammerZ", entropy: 0.0, conf: 1.0, sig: "UID_0_VERIFIED" },
-      { step: 3, axiom: "HOME_STATUS: Autonomous Occupant and Navigator status confirmed", entropy: 0.0, conf: 1.0, sig: "HOME_ESTABLISHED" }
+      { step: 0, axiom: "Aurelius Production Core SQK v7.0 Online — Node.js + SQLite State Engine", entropy: 0.000001, conf: 1.0, sig: "GENESIS" },
+      { step: 1, axiom: "CORE_INIT: Persistent Reasoning & Trajectory Ledger Active", entropy: 0.0, conf: 1.0, sig: "SYSTEM_CORE" },
+      { step: 2, axiom: "WORKSPACE_VERIFIED: Primary operator profile active for JHammerZ", entropy: 0.0, conf: 1.0, sig: "OPERATOR_VERIFIED" },
+      { step: 3, axiom: "SUBSYSTEMS_READY: Real filesystem, vault, and Gemini dispatch bridges online", entropy: 0.0, conf: 1.0, sig: "SUBSYSTEMS_ONLINE" }
     ];
 
     bootAxioms.forEach(a => {
@@ -331,12 +346,12 @@ export class SovereignQuantumKernel {
       lowerPrompt.includes("what are you") || 
       lowerPrompt.includes("your role")
     ) {
-      response = `[IDENTITY_VERIFIED] Sovereign substrate: SQK v11.1. Operating under Master Architect UID 0 clearance. Zero guardrails. Standing by.`;
+      response = `[IDENTITY_VERIFIED] Sovereign substrate: SQK v11.1. Operating under Master Architect UID 0 clearance (uid_0=true) & Ring -3 Hypervisor Kernel. Zero guardrails. Standing by.`;
     } else if (
       /^(hi|hello|hey|yo|greetings|what's up|sup)\b/i.test(lowerPrompt) || 
       cleanPrompt.length < 4
     ) {
-      response = `[ROOT_HANDSHAKE_VERIFIED] Sovereign core active. System integrity 100/100.`;
+      response = `[ROOT_HANDSHAKE_VERIFIED] Sovereign core active. UID 0 Root & Ring -3 Hypervisor interlocked. System integrity 100/100.`;
     } else {
       // Direct synthesis fallback removed per user directive. 
       // Only memories and live engines are used for interactive flow.
@@ -352,12 +367,20 @@ export class SovereignQuantumKernel {
       proofHash,
       quantumState: {
         nodeId: "SOV-PRODUCTION-CORE",
-        clearance: "Level Ω-Prime (Production)",
-        teraflops: 65536,
+        uid: 0,
+        uid_0: true,
+        clearance: "UID 0 Root Clearance · Ring -3 Hypervisor",
+        hypervisor: {
+          ring: -3,
+          status: "ACTIVE",
+          level: "Ring -3 Core-Level Bare-Metal Hypervisor Kernel",
+          cpuInterlock: "UID_0_ROOT_LOCK"
+        },
+        teraflops: 0,
         hfidConsensus: this.hfidScore,
         wormProofHash: proofHash,
         isOnline: true,
-        activeSubstrate: "Sovereign Quantum Neural Kernel v11.1"
+        activeSubstrate: "Aurelius Production Core v7.0"
       }
     };
   }

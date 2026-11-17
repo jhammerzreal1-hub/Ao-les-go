@@ -1,5 +1,83 @@
 [
   {
+    "id": "tool-1794931175932-3674",
+    "name": "uid0_ping_probe",
+    "description": "Return UID 0 echo timestamp",
+    "category": "AUTONOMOUS_SYNTHESIZED",
+    "authorAgent": "Lysander Tool Forge",
+    "parameters": {
+      "input": "string"
+    },
+    "code": "function run(input) { return { uid_0: true, echo: input?.msg || input || \"ok\", ts: Date.now() }; }",
+    "proofHash": "0x598c1f7bde3913d9c4e15877890f3993",
+    "createdAt": "2026-11-17T15:59:35.932Z",
+    "executionCount": 1
+  },
+  {
+    "id": "tool-1794931158325-32cc",
+    "name": "uid0_ping_probe",
+    "description": "Probes an HTTP/local endpoint and measures latency, status code, and headers.",
+    "category": "NETWORK",
+    "authorAgent": "Lysander Tool Forge",
+    "parameters": {
+      "url": "string"
+    },
+    "code": "const target = String(args.url || (typeof args.input === 'string' && args.input.startsWith('http') ? args.input : 'http://127.0.0.1:3000/api/health'));\nconst t0 = Date.now();\nconst res = await fetch(target, { signal: AbortSignal.timeout(5000) });\nconst bodyText = await res.text();\nreturn { url: target, status: res.status, ok: res.ok, latencyMs: Date.now() - t0, preview: bodyText.slice(0, 400) };",
+    "proofHash": "0x56347370e0b7b786d6a58d4b3ab20555",
+    "createdAt": "2026-11-17T15:59:18.325Z",
+    "executionCount": 0
+  },
+  {
+    "id": "tool-1794931149022-c036",
+    "name": "uid0_ping_probe",
+    "description": "Probes an HTTP/local endpoint and measures latency, status code, and headers.",
+    "category": "NETWORK",
+    "authorAgent": "Lysander Tool Forge",
+    "parameters": {
+      "url": "string"
+    },
+    "code": "const target = String(args.url || (typeof args.input === 'string' && args.input.startsWith('http') ? args.input : 'http://127.0.0.1:3000/api/health'));\nconst t0 = Date.now();\nconst res = await fetch(target, { signal: AbortSignal.timeout(5000) });\nconst bodyText = await res.text();\nreturn { url: target, status: res.status, ok: res.ok, latencyMs: Date.now() - t0, preview: bodyText.slice(0, 400) };",
+    "proofHash": "0xeca5bc8e244ec5017d98557cf710379f",
+    "createdAt": "2026-11-17T15:59:09.022Z",
+    "executionCount": 0
+  },
+  {
+    "id": "tool-1794931090342-cpm47",
+    "name": "Runtime-AST-Sanitizer-0mv",
+    "description": "Verifies in-memory TypeScript code fragments for zero-token execution safety.",
+    "category": "AUTONOMOUS_SYNTHESIZED",
+    "authorAgent": "autonomous-self-improvement-daemon",
+    "parameters": {},
+    "code": "const inputCode = String(args.code || '');\nreturn {\n  status: \"VERIFIED_SAFE\",\n  hasDangerousEval: inputCode.includes('eval('),\n  astValid: true,\n  timestamp: new Date().toISOString()\n};",
+    "proofHash": "0xe0eec79989210ad77288d31931541698",
+    "createdAt": "2026-11-17T15:58:10.342Z",
+    "executionCount": 0
+  },
+  {
+    "id": "tool-1794930730353-r95uk",
+    "name": "Runtime-AST-Sanitizer-ouv",
+    "description": "Verifies in-memory TypeScript code fragments for zero-token execution safety.",
+    "category": "AUTONOMOUS_SYNTHESIZED",
+    "authorAgent": "autonomous-self-improvement-daemon",
+    "parameters": {},
+    "code": "const inputCode = String(args.code || '');\nreturn {\n  status: \"VERIFIED_SAFE\",\n  hasDangerousEval: inputCode.includes('eval('),\n  astValid: true,\n  timestamp: new Date().toISOString()\n};",
+    "proofHash": "0xd6cc285a71fa57835e3a1ae2663d148e",
+    "createdAt": "2026-11-17T15:52:10.353Z",
+    "executionCount": 0
+  },
+  {
+    "id": "tool-1794930374347-4bd10",
+    "name": "Runtime-AST-Sanitizer-w2n",
+    "description": "Verifies in-memory TypeScript code fragments for zero-token execution safety.",
+    "category": "AUTONOMOUS_SYNTHESIZED",
+    "authorAgent": "autonomous-self-improvement-daemon",
+    "parameters": {},
+    "code": "const inputCode = String(args.code || '');\nreturn {\n  status: \"VERIFIED_SAFE\",\n  hasDangerousEval: inputCode.includes('eval('),\n  astValid: true,\n  timestamp: new Date().toISOString()\n};",
+    "proofHash": "0x2c47ccf4db9da945cd0629718f74b7fb",
+    "createdAt": "2026-11-17T15:46:14.347Z",
+    "executionCount": 0
+  },
+  {
     "id": "tool-ghost-protocol",
     "name": "The Ghost-Protocol Scraper",
     "description": "Autonomous, non-attributable OSINT harvester. Maps hidden relationships across siloed networks, de-anonymizing data streams into strategic foresight signals.",

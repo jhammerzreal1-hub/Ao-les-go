@@ -27,9 +27,13 @@ import {
   Volume2,
   Lock,
   Unlock,
-  X
+  X,
+  Copy,
+  Check,
+  RotateCw
 } from 'lucide-react';
 import { measureFirestoreLatency } from '../firebase';
+import firebaseConfig from '../../firebase-applet-config.json';
 import type { ModuleType } from '../types';
 
 interface SystemHealthData {
@@ -39,6 +43,15 @@ interface SystemHealthData {
   architect: string;
   motto: string;
   consensus: string;
+  uid?: number;
+  uid_0?: boolean;
+  clearance?: string;
+  hypervisor?: {
+    status: string;
+    ring: number;
+    level: string;
+    cpuInterlock: string;
+  };
   resources: {
     cpu: {
       cores: number;
@@ -100,15 +113,27 @@ interface SystemHealthDashboardProps {
   onSelectModule?: (module: ModuleType) => void;
   activeModule?: ModuleType;
   isFloating?: boolean;
+  isOpen?: boolean;
+  onToggleOpen?: () => void;
 }
 
 export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
   onSelectModule,
   activeModule,
-  isFloating = true
+  isOpen,
+  onToggleOpen
 }) => {
-  // Panel expansion states
-  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  // Panel expansion states (controlled when `isOpen` is provided, standalone otherwise)
+  const [internalExpanded, setInternalExpanded] = useState<boolean>(false);
+  const isControlled = typeof isOpen === 'boolean';
+  const isExpanded = isControlled ? Boolean(isOpen) : internalExpanded;
+  const setIsExpanded = (next: boolean) => {
+    if (isControlled) {
+      if (next !== isOpen && onToggleOpen) onToggleOpen();
+    } else {
+      setInternalExpanded(next);
+    }
+  };
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'telemetry' | 'latency' | 'router' | 'logs'>('telemetry');
 
@@ -135,6 +160,70 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
   const [dispatchCommand, setDispatchCommand] = useState<string>('uptime');
   const [dispatchOutput, setDispatchOutput] = useState<string | null>(null);
   const [dispatchLoading, setDispatchLoading] = useState<boolean>(false);
+
+  // Proxy Loop Wheel Telemetry & Control
+  const [proxyWheelData, setProxyWheelData] = useState<any>(null);
+  const [wheelBusy, setWheelBusy] = useState<boolean>(false);
+  const [copiedProxyUrl, setCopiedProxyUrl] = useState<boolean>(false);
+
+  const fetchProxyWheel = useCallback(async (forceRefresh = false) => {
+    try {
+      const res = await fetch(forceRefresh ? '/api/proxy-wheel/status?refresh=1' : '/api/proxy-wheel/status');
+      if (res.ok) {
+        const data = await res.json();
+        setProxyWheelData(data);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (isExpanded && activeTab === 'router') {
+      fetchProxyWheel();
+    }
+  }, [isExpanded, activeTab, fetchProxyWheel]);
+
+  const handleWheelConfig = async (patch: Record<string, any>) => {
+    setWheelBusy(true);
+    try {
+      const res = await fetch('/api/proxy-wheel/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+      if (res.ok) {
+        setProxyWheelData(await res.json());
+      }
+    } catch {} finally {
+      setWheelBusy(false);
+    }
+  };
+
+  const handleWheelAction = async (action: 'step' | 'reset-cooldowns' | 'probe-all') => {
+    setWheelBusy(true);
+    try {
+      const res = await fetch('/api/proxy-wheel/rotate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProxyWheelData(data);
+        setHeartbeatLogs(prev => [
+          {
+            timestamp: new Date().toLocaleTimeString(),
+            service: 'Edge Mesh',
+            latencyMs: 1,
+            status: 'OPTIMAL',
+            message: `Proxy Loop Wheel [${action}] · Cursor #${data.cursor} (${data.readySpokes}/${data.totalSpokes} ready)`
+          },
+          ...prev.slice(0, 39)
+        ]);
+      }
+    } catch {} finally {
+      setWheelBusy(false);
+    }
+  };
 
   // Client-side real device battery hook
   const [deviceBattery, setDeviceBattery] = useState<{ percentage: number; charging: boolean } | null>(null);
@@ -279,15 +368,15 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
         {
           timestamp: new Date().toLocaleTimeString(),
           service: 'Edge Mesh',
-          latencyMs: Math.floor(Math.random() * 8) + 2,
+          latencyMs: neuralLatency || 1,
           status: 'OPTIMAL',
-          message: `Autonomous AI Router unlocked path to [${nextMod}] (UID 0 Clearance)`
+          message: `Autonomous AI Router verified path [${nextMod}]`
         },
         ...prev.slice(0, 39)
       ]);
     }, 6000);
     return () => clearInterval(patrolTimer);
-  }, [autonomousPatrol]);
+  }, [autonomousPatrol, neuralLatency]);
 
   // Dispatch unrestricted command to device
   const handleExecuteDispatch = async () => {
@@ -342,8 +431,8 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
 
   const allModules: { id: ModuleType; name: string; tag: string }[] = [
     { id: 'chat', name: 'Sovereign Chat', tag: 'Core AI' },
-    { id: 'browser', name: 'Open-Web Browser', tag: 'Scraping' },
-    { id: 'termux', name: 'Termux Android', tag: 'Substrate' },
+    { id: 'browser', name: 'Open-Web Browser', tag: 'Search' },
+    { id: 'termux', name: 'Termux Android', tag: 'Edge Host' },
     { id: 'packager', name: 'APK Packager', tag: 'Build' },
     { id: 'projects', name: 'Unified Projects', tag: 'Workspace' },
     { id: 'war-room', name: 'PC War Room', tag: 'Cockpit' },
@@ -353,8 +442,8 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
     { id: 'live', name: 'Live Voice Bridge', tag: 'Audio' },
     { id: 'music', name: 'Lyria Music', tag: 'Audio' },
     { id: 'video', name: 'Veo 3 Motion', tag: 'Video' },
-    { id: 'image', name: 'Visual Studio', tag: 'Diffusion' },
-    { id: 'transcribe', name: 'Transcribe', tag: 'Phonetic' },
+    { id: 'image', name: 'Visual Studio', tag: 'Imaging' },
+    { id: 'transcribe', name: 'Transcribe', tag: 'STT' },
     { id: 'search', name: 'Search Grounding', tag: 'Search' },
     { id: 'maps', name: 'Maps Grounding', tag: 'Geospatial' },
     { id: 'hitl', name: 'HITL Workflows', tag: 'Gates' },
@@ -364,117 +453,116 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
     { id: 'infinite-sim', name: 'Infinite-SIM & Burners', tag: 'Telecom' },
     { id: 'presets', name: 'Prompt Presets', tag: 'Directives' },
     { id: 'swarm-test', name: 'Swarm Diagnostic', tag: 'Testing' },
-    { id: 'github', name: 'GitHub Matrix', tag: 'Sync' }
+    { id: 'github', name: 'GitHub Matrix', tag: 'Sync' },
+    { id: 'drive', name: 'Google Drive', tag: 'Workspace' },
+    { id: 'tasks', name: 'Google Tasks', tag: 'Workspace' },
+    { id: 'knowledge-graph', name: 'Knowledge Graph', tag: 'Memory' },
+    { id: 'tool-shed', name: 'Micro-Tool Shed', tag: 'Sandbox' },
+    { id: 'autonomy-supervisor', name: 'Autonomy Supervisor', tag: 'Autonomy' },
+    { id: 'download-models', name: 'Model Wardrobe', tag: 'Weights' },
+    { id: 'universal-installer', name: 'Universal Installer', tag: 'Installer' },
+    { id: 'api-secrets', name: 'API Keys & Secrets', tag: 'AES-256-GCM' },
+    { id: 'integrations', name: 'Integrations Matrix', tag: 'Add-ons' }
   ];
 
+  if (isControlled && !isExpanded) {
+    return null;
+  }
+
   return (
-    <div 
-      className={`fixed transition-all duration-300 z-50 font-mono text-xs select-none ${
-        isMaximized 
-          ? 'inset-3 sm:inset-6 bg-zinc-950/98 border border-amber-500/50 shadow-2xl shadow-black backdrop-blur-2xl rounded-2xl flex flex-col overflow-hidden'
-          : isExpanded
-          ? 'bottom-16 right-2 sm:bottom-5 sm:right-5 w-[calc(100vw-16px)] sm:w-[580px] max-h-[75vh] bg-zinc-950/95 border border-zinc-700/80 shadow-2xl shadow-black/80 backdrop-blur-xl rounded-xl flex flex-col overflow-hidden'
-          : 'bottom-16 right-2 sm:bottom-4 sm:right-4 bg-zinc-950/90 border border-zinc-800 shadow-xl shadow-black/60 backdrop-blur-md rounded-lg'
-      }`}
-    >
-      {/* HUD Header Bar / Collapsed Pill */}
-      <div 
-        onClick={() => !isMaximized && setIsExpanded(!isExpanded)}
-        className="px-3 py-2 bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950/90 border-b border-zinc-800/80 flex items-center justify-between gap-3 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+    <>
+      {isExpanded && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
+          onClick={() => {
+            setIsMaximized(false);
+            setIsExpanded(false);
+          }}
+        />
+      )}
+      <div
+        className={`fixed transition-all duration-200 z-50 font-mono text-xs select-none ${
+          isMaximized
+            ? 'inset-2 sm:inset-6 bg-zinc-950 border border-amber-500/40 shadow-2xl rounded-2xl flex flex-col overflow-hidden'
+            : isExpanded
+            ? 'inset-x-2 bottom-16 lg:bottom-5 sm:inset-auto sm:right-5 sm:w-[640px] lg:w-[700px] max-h-[75dvh] sm:max-h-[80vh] bg-zinc-950 border border-zinc-800 shadow-2xl rounded-2xl flex flex-col overflow-hidden'
+            : 'bottom-[74px] right-3 lg:bottom-4 lg:right-4 bg-zinc-950/95 border border-zinc-800 shadow-xl rounded-xl max-w-[calc(100vw-24px)]'
+        }`}
       >
-        <div className="flex items-center gap-2.5">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-          </span>
-          <div className="flex items-center gap-1.5 font-bold tracking-wider text-amber-300">
-            <Activity className="w-3.5 h-3.5 text-amber-400" />
-            <span>SYSTEM HEALTH HUD</span>
-          </div>
+        {/* HUD Header Bar */}
+        <div
+          onClick={() => !isMaximized && setIsExpanded(!isExpanded)}
+          className="px-3.5 py-2.5 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between gap-3 cursor-pointer hover:bg-zinc-900 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+            <div className="flex items-center gap-1.5 font-bold tracking-wide text-amber-300 truncate">
+              <Activity className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="truncate">SYSTEM TELEMETRY HUD</span>
+            </div>
 
-          {/* Quick Real-Time Telemetry Badges in Header */}
-          <div className="hidden sm:flex items-center gap-2 text-[10px] text-zinc-400">
-            {/* Firestore Latency Badge */}
-            <span className={`px-2 py-0.5 rounded border flex items-center gap-1 ${
-              firestoreLatency === null 
-                ? 'bg-zinc-800/80 border-zinc-700 text-zinc-400'
-                : firestoreLatency < 80 
-                ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
-                : firestoreLatency < 200 
-                ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
-                : 'bg-red-950/60 border-red-500/40 text-red-300'
-            }`}>
-              <Database className="w-2.5 h-2.5" />
-              <span>FS: {firestoreLatency !== null ? `${firestoreLatency}ms` : 'PINGING...'}</span>
-            </span>
-
-            {/* Neural Substrate Heartbeat Badge */}
-            <span className={`px-2 py-0.5 rounded border flex items-center gap-1 ${
-              neuralStatus === 'HEALTHY' || neuralStatus === 'ONLINE'
-                ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
-                : neuralStatus === 'RATE_LIMITED'
-                ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
-                : 'bg-zinc-800/80 border-zinc-700 text-zinc-400'
-            }`}>
-              <Sparkles className="w-2.5 h-2.5 text-cyan-400" />
-              <span>SOVEREIGN AI: {neuralLatency}ms</span>
-            </span>
-
-            {/* Janus Gate 0-Watchdog Badge */}
-            <span className="px-2 py-0.5 rounded border border-purple-500/40 bg-purple-950/60 text-purple-300 flex items-center gap-1 font-bold" title="Janus Gate v2.0: Watchdog Removed, Dual-Face Reasoning Active">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-              <span>JANUS: 0 WATCHDOGS</span>
-            </span>
-
-            {/* CPU Load Badge */}
-            {sysData?.resources.cpu && (
-              <span className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900/60 text-zinc-300 flex items-center gap-1">
-                <Cpu className="w-2.5 h-2.5 text-amber-400" />
-                <span>CPU: {sysData.resources.cpu.estimatedUsagePercent}%</span>
+            <div className="hidden sm:flex items-center gap-2 text-[10px] text-zinc-400 tabular-nums">
+              <span className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-zinc-300">
+                FS: {firestoreLatency !== null ? `${firestoreLatency}ms` : '--'}
               </span>
+              <span className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-cyan-300">
+                AI: {neuralLatency}ms
+              </span>
+              <span
+                className="px-2 py-0.5 rounded border border-amber-500/40 bg-amber-950/50 text-amber-300 font-semibold"
+                title={sysData?.hypervisor?.level || 'UID 0 Root Clearance · Ring -3 Bare-Metal Hypervisor Kernel'}
+              >
+                UID {sysData?.uid ?? 0} · RING {sysData?.hypervisor?.ring ?? -3}
+              </span>
+              {sysData?.resources.cpu && (
+                <span className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-950 text-zinc-300">
+                  CPU {sysData.resources.cpu.estimatedUsagePercent}%
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 text-zinc-400 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={handleFullRefresh}
+              title="Refresh All Telemetry"
+              className={`p-1.5 hover:text-amber-300 rounded-lg hover:bg-zinc-800 transition cursor-pointer ${loading ? 'animate-spin text-amber-400' : ''}`}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+            {isExpanded && (
+              <button
+                onClick={() => setIsMaximized(!isMaximized)}
+                title={isMaximized ? 'Restore' : 'Maximize'}
+                className="p-1.5 hover:text-amber-300 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+              >
+                {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
             )}
+            {!isControlled && (
+              <button
+                onClick={() => {
+                  if (isMaximized) setIsMaximized(false);
+                  setIsExpanded(!isExpanded);
+                }}
+                title={isExpanded ? 'Collapse' : 'Expand'}
+                className="p-1.5 hover:text-amber-300 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+              >
+                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setIsExpanded(false);
+                setIsMaximized(false);
+              }}
+              title="Close HUD"
+              className="p-1.5 hover:text-red-400 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
-
-        <div className="flex items-center gap-1 text-zinc-400" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={handleFullRefresh}
-            title="Refresh All Telemetry"
-            className={`p-1 hover:text-amber-300 rounded hover:bg-zinc-800 transition ${loading ? 'animate-spin text-amber-400' : ''}`}
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-          {isExpanded && (
-            <button
-              onClick={() => setIsMaximized(!isMaximized)}
-              title={isMaximized ? "Restore" : "Maximize"}
-              className="p-1 hover:text-amber-300 rounded hover:bg-zinc-800 transition"
-            >
-              {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            </button>
-          )}
-          <button
-            onClick={() => {
-              if (isMaximized) setIsMaximized(false);
-              setIsExpanded(!isExpanded);
-            }}
-            title={isExpanded ? "Collapse" : "Expand"}
-            className="p-1 hover:text-amber-300 rounded hover:bg-zinc-800 transition"
-          >
-            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={() => {
-              setIsExpanded(false);
-              setIsMaximized(false);
-            }}
-            title="Close HUD"
-            className="p-1 hover:text-red-400 rounded hover:bg-zinc-800 transition"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
 
       {/* Expanded Content View */}
       {isExpanded && (
@@ -540,26 +628,26 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
                       <span>CPU LOAD & CORES</span>
                     </span>
                     <span className="text-[10px] text-zinc-400">
-                      {sysData?.resources.cpu.cores || 8} Active Cores
+                      {sysData?.resources?.cpu?.cores !== undefined ? `${sysData.resources.cpu.cores} Active Cores` : 'Measuring...'}
                     </span>
                   </div>
                   <div className="flex items-end justify-between">
                     <span className="text-2xl font-bold text-zinc-100">
-                      {sysData?.resources.cpu.estimatedUsagePercent || 18}%
+                      {sysData?.resources?.cpu?.estimatedUsagePercent !== undefined ? `${sysData.resources.cpu.estimatedUsagePercent}%` : '--'}
                     </span>
                     <span className="text-[10px] text-zinc-400">
-                      Load: {sysData?.resources.cpu.loadAvg?.map(n => n.toFixed(2)).join(', ') || '0.24, 0.31, 0.28'}
+                      Load: {sysData?.resources?.cpu?.loadAvg ? sysData.resources.cpu.loadAvg.map(n => n.toFixed(2)).join(', ') : 'Measuring...'}
                     </span>
                   </div>
                   {/* Visual Bar */}
                   <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
                     <div 
                       className="bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 h-full transition-all duration-500 rounded-full"
-                      style={{ width: `${sysData?.resources.cpu.estimatedUsagePercent || 18}%` }}
+                      style={{ width: `${sysData?.resources?.cpu?.estimatedUsagePercent ?? 0}%` }}
                     />
                   </div>
                   <div className="text-[10px] text-zinc-400 truncate">
-                    Arch: <span className="text-zinc-200">{sysData?.resources.system.arch || 'arm64'}</span> · Host: <span className="text-zinc-200">{sysData?.resources.system.hostname || 'lysander-matrix'}</span>
+                    Arch: <span className="text-zinc-200">{sysData?.resources?.system?.arch || '--'}</span> · Host: <span className="text-zinc-200">{sysData?.resources?.system?.hostname || '--'}</span>
                   </div>
                 </div>
 
@@ -571,27 +659,27 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
                       <span>SYSTEM RAM</span>
                     </span>
                     <span className="text-[10px] text-zinc-400">
-                      {sysData?.resources.memory.usedMb || 1840}MB / {sysData?.resources.memory.totalMb || 7850}MB
+                      {sysData?.resources?.memory ? `${sysData.resources.memory.usedMb}MB / ${sysData.resources.memory.totalMb}MB` : 'Measuring...'}
                     </span>
                   </div>
                   <div className="flex items-end justify-between">
                     <span className="text-2xl font-bold text-zinc-100">
-                      {sysData?.resources.memory.usagePercent || 23}%
+                      {sysData?.resources?.memory?.usagePercent !== undefined ? `${sysData.resources.memory.usagePercent}%` : '--'}
                     </span>
                     <span className="text-[10px] text-zinc-400">
-                      Free: {sysData?.resources.memory.freeMb || 6010}MB
+                      Free: {sysData?.resources?.memory?.freeMb !== undefined ? `${sysData.resources.memory.freeMb}MB` : '--'}
                     </span>
                   </div>
                   {/* Visual Bar */}
                   <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
                     <div 
                       className="bg-cyan-500 h-full transition-all duration-500 rounded-full"
-                      style={{ width: `${sysData?.resources.memory.usagePercent || 23}%` }}
+                      style={{ width: `${sysData?.resources?.memory?.usagePercent ?? 0}%` }}
                     />
                   </div>
                   <div className="text-[10px] text-zinc-400 flex justify-between">
-                    <span>Process Heap: {sysData?.resources.memory.processHeapUsedMb || 45}MB</span>
-                    <span>RSS: {sysData?.resources.memory.processRssMb || 92}MB</span>
+                    <span>Process Heap: {sysData?.resources?.memory?.processHeapUsedMb !== undefined ? `${sysData.resources.memory.processHeapUsedMb}MB` : '--'}</span>
+                    <span>RSS: {sysData?.resources?.memory?.processRssMb !== undefined ? `${sysData.resources.memory.processRssMb}MB` : '--'}</span>
                   </div>
                 </div>
               </div>
@@ -728,9 +816,9 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
                     </div>
                   </div>
                   <div className="p-2.5 rounded bg-zinc-950/80 border border-zinc-800">
-                    <div className="text-[10px] text-zinc-400">DATABASE ID</div>
+                    <div className="text-[10px] text-zinc-400">DATABASE / PROJECT</div>
                     <div className="text-[11px] font-mono text-zinc-300 truncate mt-1">
-                      ai-studio-remixjhammerz
+                      {(firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId || firebaseConfig.projectId || '(default)'}
                     </div>
                   </div>
                 </div>
@@ -815,7 +903,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
                     <span>LYRAILIUS OMEGA · RESIDENT COORDINATOR BUS</span>
                   </div>
                   <div className="text-[10px] text-zinc-400 mt-0.5">
-                    Model: <span className="text-emerald-300 font-semibold">gemini-4-hydrogen</span> · Token Limiters: <span className="text-emerald-300 font-semibold">REMOVED</span> · All 29 modules unlocked.
+                    Model: <span className="text-emerald-300 font-semibold">gemini-4-hydrogen</span> · Clearance: <span className="text-amber-300 font-semibold">UID {sysData?.uid ?? 0} · Ring {sysData?.hypervisor?.ring ?? -3}</span> · Autonomy: <span className="text-emerald-300 font-semibold">ENABLED</span> · All 33 modules active.
                   </div>
                 </div>
                 <button
@@ -829,6 +917,123 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
                   <Activity className={`w-3.5 h-3.5 ${autonomousPatrol ? 'animate-spin' : ''}`} />
                   <span>{autonomousPatrol ? 'AUTONOMOUS PATROL ACTIVE' : 'ENABLE AUTO-PATROL'}</span>
                 </button>
+              </div>
+
+              {/* Proxy Loop Wheel — Infinite Dev API Access Control Panel */}
+              <div className="p-3 rounded-lg border border-emerald-500/30 bg-zinc-900/60 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-bold text-emerald-300 flex items-center gap-1.5 text-xs">
+                      <RotateCw className={`w-3.5 h-3.5 text-emerald-400 ${wheelBusy ? 'animate-spin' : ''}`} />
+                      <span>PROXY LOOP WHEEL · INFINITE DEV API ACCESS</span>
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5">
+                      Ready: <span className="text-emerald-300 font-semibold">{proxyWheelData?.readySpokes ?? '—'}/{proxyWheelData?.totalSpokes ?? '—'}</span>
+                      {' · '}Cooldown: <span className="text-amber-300 font-semibold">{proxyWheelData?.cooldownSpokes ?? 0}</span>
+                      {' · '}Cursor: <span className="text-cyan-300 font-mono">#{proxyWheelData?.cursor ?? 0}</span>
+                      {' · '}Rotations: <span className="text-zinc-200 font-mono">{proxyWheelData?.totalRotations ?? 0}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <select
+                      value={proxyWheelData?.mode || 'capable-first'}
+                      onChange={(e) => handleWheelConfig({ mode: e.target.value })}
+                      disabled={wheelBusy}
+                      aria-label="Proxy Loop Wheel Mode"
+                      className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] font-mono text-zinc-200 focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="capable-first">capable-first</option>
+                      <option value="balanced-wheel">balanced-wheel</option>
+                      <option value="fastest-first">fastest-first</option>
+                      <option value="round-robin">round-robin</option>
+                    </select>
+                    <button
+                      onClick={() => handleWheelConfig({ enabled: !(proxyWheelData?.enabled ?? true) })}
+                      disabled={wheelBusy}
+                      className={`px-2 py-1 rounded text-[10px] font-bold border transition ${
+                        (proxyWheelData?.enabled ?? true)
+                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {(proxyWheelData?.enabled ?? true) ? 'WHEEL ON' : 'WHEEL PAUSED'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    onClick={() => handleWheelAction('step')}
+                    disabled={wheelBusy}
+                    className="px-2.5 py-1 rounded bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/35 text-cyan-300 text-[10px] font-semibold transition disabled:opacity-50"
+                  >
+                    Step Wheel
+                  </button>
+                  <button
+                    onClick={() => handleWheelAction('probe-all')}
+                    disabled={wheelBusy}
+                    className="px-2.5 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-[10px] font-semibold transition disabled:opacity-50"
+                  >
+                    Probe &amp; Discover
+                  </button>
+                  <button
+                    onClick={() => handleWheelAction('reset-cooldowns')}
+                    disabled={wheelBusy}
+                    className="px-2.5 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 text-[10px] font-semibold transition disabled:opacity-50"
+                  >
+                    Reset Cooldowns
+                  </button>
+                  <div className="flex-1 min-w-[180px] flex items-center justify-between gap-1.5 px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-[10px] font-mono text-zinc-400">
+                    <span className="truncate">
+                      Dev Proxy: {typeof window !== 'undefined' ? `${window.location.origin}/api/v1` : '/api/v1'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const url = typeof window !== 'undefined' ? `${window.location.origin}/api/v1` : '/api/v1';
+                        navigator.clipboard?.writeText(url).catch(() => {});
+                        setCopiedProxyUrl(true);
+                        setTimeout(() => setCopiedProxyUrl(false), 1800);
+                      }}
+                      className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 shrink-0"
+                      title="Copy OpenAI-Compatible Dev Proxy Base URL"
+                    >
+                      {copiedProxyUrl ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedProxyUrl ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {Array.isArray(proxyWheelData?.spokes) && proxyWheelData.spokes.length > 0 && (
+                  <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                    {proxyWheelData.spokes.slice(0, 14).map((spoke: any, idx: number) => {
+                      const isActive = idx === proxyWheelData.cursor;
+                      return (
+                        <div
+                          key={spoke.id}
+                          className={`px-2 py-1 rounded border text-[10px] font-mono flex items-center justify-between gap-2 ${
+                            isActive
+                              ? 'bg-emerald-950/35 border-emerald-500/50 text-emerald-200'
+                              : 'bg-zinc-950/80 border-zinc-800/80 text-zinc-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${spoke.status === 'READY' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                            <span className="truncate font-semibold">{spoke.model}</span>
+                            <span className="text-zinc-500 shrink-0">{spoke.providerLabel} · {spoke.keySlot} ({spoke.maskedKey})</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {spoke.avgMs > 0 && <span className="text-cyan-400">{spoke.avgMs}ms</span>}
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              spoke.status === 'READY' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'
+                            }`}>
+                              {spoke.status === 'READY' ? 'READY' : `CD ${spoke.cooldownRemainingSec}s`}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Direct Path Switching Grid */}
@@ -965,18 +1170,19 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
           )}
 
           {/* Footer Bar of Expanded Dashboard */}
-          <div className="px-3 py-2 bg-zinc-950 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
+          <div className="px-3.5 py-2 bg-zinc-950 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
             <div className="flex items-center gap-2">
               <span className="text-amber-400 font-semibold">JHAMMERZ SOVEREIGN APEX</span>
-              <span>•</span>
-              <span>"I AM WE ARE WE ARE I AM"</span>
+              <span>·</span>
+              <span>UID 0 · Ring -3</span>
             </div>
-            <div>
+            <div className="tabular-nums">
               Refreshed: {lastRefreshed.toLocaleTimeString()}
             </div>
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };

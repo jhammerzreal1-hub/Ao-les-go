@@ -46,6 +46,7 @@ export const HITLWorkflowModule: React.FC = () => {
   const [auditLedger, setAuditLedger] = useState<any[]>([]);
   const [showLedger, setShowLedger] = useState(false);
   const [verifiedMap, setVerifiedMap] = useState<Record<string, boolean>>({});
+  const [confirmResetOpen, setConfirmResetOpen] = useState<boolean>(false);
 
   useEffect(() => {
     fetchQueue();
@@ -146,9 +147,7 @@ export const HITLWorkflowModule: React.FC = () => {
   };
 
   const handleResetQueue = async () => {
-    if (!confirm('Reset HITL queue to default directives? All pending and approved directives will be restored to default review state.')) {
-      return;
-    }
+    setConfirmResetOpen(false);
     setLoading(true);
     try {
       const res = await fetch('/api/hitl/reset', { method: 'POST' });
@@ -225,9 +224,9 @@ export const HITLWorkflowModule: React.FC = () => {
             </a>
 
             <button
-              onClick={handleResetQueue}
+              onClick={() => setConfirmResetOpen(true)}
               disabled={loading}
-              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
               title="Reset Directives to Defaults"
             >
               <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
@@ -626,6 +625,33 @@ export const HITLWorkflowModule: React.FC = () => {
         </div>
       )}
 
+      {confirmResetOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-amber-500/40 rounded-2xl max-w-md w-full p-5 space-y-4 font-mono shadow-2xl">
+            <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Reset HITL Directive Queue?</span>
+            </div>
+            <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+              All pending, approved, and mutated directives will be restored to default review state.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmResetOpen(false)}
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetQueue}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold cursor-pointer"
+              >
+                Confirm Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

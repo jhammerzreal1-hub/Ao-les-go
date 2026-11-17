@@ -142,7 +142,7 @@ export const MusicModule: React.FC<MusicModuleProps> = ({ onSaveToVault }) => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="w-full max-w-6xl 2xl:max-w-7xl mx-auto p-3 sm:p-6 space-y-5">
       {/* Header Banner */}
       <div className="relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl min-h-[160px] flex items-center">
         <img 

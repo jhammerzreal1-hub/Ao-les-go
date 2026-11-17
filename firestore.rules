@@ -1,72 +1,258 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Pillar 0: Default-deny global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.email_verified == true;
     }
 
     function isOwner(userId) {
-      return (isSignedIn() && (request.auth.uid == userId || (request.auth.token.email != null && (request.auth.token.email == 'jhammerztemp@gmail.com' || request.auth.token.email == 'joshualhamilton17@gmail.com' || request.auth.token.email == 'JHammerZreal@gmail.com')))) ||
-             userId == '0' || 
-             userId == 'guest-architect-0' || 
-             userId.matches('^guest-[a-zA-Z0-9_\\-]+$');
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        (
+          request.auth.token.email == 'jhammerzreal1@gmail.com' ||
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          )
+        );
     }
 
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
+      return id is string &&
+        id.size() > 0 &&
+        id.size() <= 128 &&
+        id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidStr(val, maxLen) {
+      return val is string && val.size() > 0 && val.size() <= maxLen;
+    }
+
+    function isOptStr(val, maxLen) {
+      return val is string && val.size() <= maxLen;
     }
 
     function isValidUserProfile(data, uid) {
-      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
-             data.uid == uid;
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == uid &&
+        isOptStr(data.email, 256) &&
+        (!('displayName' in data) || isOptStr(data.displayName, 128)) &&
+        (!('photoURL' in data) || isOptStr(data.photoURL, 1024)) &&
+        data.role in ['user', 'admin'] &&
+        isValidStr(data.createdAt, 64) &&
+        (!('updatedAt' in data) || isOptStr(data.updatedAt, 64));
     }
 
-    function isValidThread(data, uid) {
+    function isValidChatThread(data, uid) {
       return data.keys().hasAll(['userId', 'title', 'model', 'createdAt']) &&
-             data.userId == uid;
+        data.keys().hasOnly(['userId', 'title', 'rolePreset', 'model', 'createdAt', 'updatedAt']) &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        isValidStr(data.title, 256) &&
+        (!('rolePreset' in data) || isOptStr(data.rolePreset, 128)) &&
+        isValidStr(data.model, 128) &&
+        isValidStr(data.createdAt, 64) &&
+        (!('updatedAt' in data) || isOptStr(data.updatedAt, 64));
     }
 
-    function isValidMessage(data, uid, threadId) {
+    function isValidChatMessage(data, uid, threadId) {
       return data.keys().hasAll(['threadId', 'userId', 'role', 'content', 'createdAt']) &&
-             data.userId == uid &&
-             data.threadId == threadId;
+        data.keys().hasOnly(['threadId', 'userId', 'role', 'content', 'model', 'groundingData', 'createdAt']) &&
+        isValidId(data.threadId) &&
+        data.threadId == threadId &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        data.role in ['user', 'model', 'system'] &&
+        isValidStr(data.content, 50000) &&
+        (!('model' in data) || isOptStr(data.model, 128)) &&
+        (!('groundingData' in data) || isOptStr(data.groundingData, 50000)) &&
+        isValidStr(data.createdAt, 64);
+    }
+
+    function isValidAgenticMemory(data, uid, memoryId) {
+      return data.keys().hasAll(['id', 'userId', 'role', 'content', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'role', 'content', 'model', 'timestamp', 'createdAt']) &&
+        isValidId(data.id) &&
+        data.id == memoryId &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        data.role in ['user', 'model', 'system'] &&
+        isOptStr(data.content, 50000) &&
+        (!('model' in data) || isOptStr(data.model, 128)) &&
+        (!('timestamp' in data) || isOptStr(data.timestamp, 64)) &&
+        isValidStr(data.createdAt, 64);
     }
 
     function isValidArtifact(data, uid) {
       return data.keys().hasAll(['userId', 'type', 'title', 'prompt', 'model', 'createdAt']) &&
-             data.userId == uid;
+        data.keys().hasOnly(['userId', 'type', 'title', 'prompt', 'model', 'mediaUrl', 'metadataJson', 'createdAt']) &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        data.type in ['music', 'image', 'video', 'transcription', 'knowledge', 'dossier'] &&
+        isValidStr(data.title, 256) &&
+        isValidStr(data.prompt, 4000) &&
+        isValidStr(data.model, 128) &&
+        (!('mediaUrl' in data) || isOptStr(data.mediaUrl, 500000)) &&
+        (!('metadataJson' in data) || isOptStr(data.metadataJson, 50000)) &&
+        isValidStr(data.createdAt, 64);
     }
 
-    function isValidLedgerItem(data, uid) {
-      return data.keys().hasAll(['timestamp', 'subsystem', 'action']);
+    function isValidAuditLedgerItem(data, uid) {
+      return data.keys().hasAll(['userId', 'timestamp', 'subsystem', 'action']) &&
+        data.keys().hasOnly(['userId', 'timestamp', 'subsystem', 'action', 'payload', 'result', 'proofHash', 'status']) &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        isValidStr(data.timestamp, 64) &&
+        isValidStr(data.subsystem, 128) &&
+        isValidStr(data.action, 256) &&
+        (!('payload' in data) || isOptStr(data.payload, 50000)) &&
+        (!('result' in data) || isOptStr(data.result, 50000)) &&
+        (!('proofHash' in data) || isOptStr(data.proofHash, 128)) &&
+        (!('status' in data) || data.status in ['SUCCESS', 'FAILED', 'HEALED']);
     }
 
-    // Health and latency probe documents
-    match /test/{testId} {
-      allow read, write: if true;
+    // Authenticated connection health probe
+    match /test/connection {
+      allow get: if request.auth != null;
+      allow list, write: if false;
     }
 
     match /users/{userId} {
-      allow get, list, create, update, delete: if isOwner(userId);
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && existing().uid == request.auth.uid;
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        (incoming().role == 'user' || isAdmin());
+      allow update: if isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        (
+          isAdmin() ||
+          (
+            isOwner(userId) &&
+            incoming().role == existing().role &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'photoURL', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
 
       match /threads/{threadId} {
-        allow get, list, create, update, delete: if isOwner(userId);
+        allow get: if isValidId(userId) && isValidId(threadId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(threadId) &&
+          isOwner(userId) &&
+          isValidChatThread(incoming(), userId) &&
+          exists(/databases/$(database)/documents/users/$(userId));
+        allow update: if isValidId(userId) && isValidId(threadId) &&
+          isValidChatThread(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['title', 'rolePreset', 'model', 'updatedAt'])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(threadId) && (isOwner(userId) || isAdmin());
 
         match /messages/{messageId} {
-          allow get, list, create, update, delete: if isOwner(userId);
+          allow get: if isValidId(userId) && isValidId(threadId) && isValidId(messageId) && (isOwner(userId) || isAdmin());
+          allow list: if isSignedIn() && existing().userId == request.auth.uid;
+          allow create: if isValidId(userId) && isValidId(threadId) && isValidId(messageId) &&
+            isOwner(userId) &&
+            isValidChatMessage(incoming(), userId, threadId) &&
+            exists(/databases/$(database)/documents/users/$(userId)/threads/$(threadId));
+          allow update: if isValidId(userId) && isValidId(threadId) && isValidId(messageId) &&
+            isValidChatMessage(incoming(), userId, threadId) &&
+            incoming().userId == existing().userId &&
+            incoming().threadId == existing().threadId &&
+            incoming().createdAt == existing().createdAt &&
+            (
+              isAdmin() ||
+              (
+                isOwner(userId) &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['content', 'groundingData'])
+              )
+            );
+          allow delete: if isValidId(userId) && isValidId(threadId) && isValidId(messageId) && (isOwner(userId) || isAdmin());
         }
       }
 
+      match /agentic_memory/{memoryId} {
+        allow get: if isValidId(userId) && isValidId(memoryId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(memoryId) &&
+          isOwner(userId) &&
+          isValidAgenticMemory(incoming(), userId, memoryId);
+        allow update: if isValidId(userId) && isValidId(memoryId) &&
+          isValidAgenticMemory(incoming(), userId, memoryId) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['role', 'content', 'model', 'timestamp'])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(memoryId) && (isOwner(userId) || isAdmin());
+      }
+
       match /artifacts/{artifactId} {
-        allow get, list, create, update, delete: if isOwner(userId);
+        allow get: if isValidId(userId) && isValidId(artifactId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(artifactId) &&
+          isOwner(userId) &&
+          isValidArtifact(incoming(), userId);
+        allow update: if isValidId(userId) && isValidId(artifactId) &&
+          isValidArtifact(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['title', 'prompt', 'model', 'mediaUrl', 'metadataJson'])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(artifactId) && (isOwner(userId) || isAdmin());
       }
 
       match /audit_ledger/{ledgerId} {
-        allow get, list, create, update, delete: if isOwner(userId);
-      }
-
-      match /agentic_memory/{memoryId} {
-        allow get, list, create, update, delete: if isOwner(userId);
+        allow get: if isValidId(userId) && isValidId(ledgerId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(ledgerId) &&
+          isOwner(userId) &&
+          isValidAuditLedgerItem(incoming(), userId);
+        allow update: if isValidId(userId) && isValidId(ledgerId) &&
+          isValidAuditLedgerItem(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().timestamp == existing().timestamp &&
+          isAdmin();
+        allow delete: if isValidId(userId) && isValidId(ledgerId) && isAdmin();
       }
     }
   }

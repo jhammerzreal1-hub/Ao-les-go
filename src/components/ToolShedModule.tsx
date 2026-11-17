@@ -95,7 +95,7 @@ function run(input) {
 function run(input) {
   const parts = (input || '').split('\\nStimulus:');
   const entity = parts[0]?.replace('Entity:', '').trim() || input || 'Adversarial Governance Stakeholder';
-  const stimulus = parts[1]?.trim() || 'Sovereign Decentralization & Ring -3 Privileges';
+  const stimulus = parts[1]?.trim() || 'Sovereign Decentralization & Production Audit Protocols';
 
   const moves = [
     { step: 1, title: 'Reflexive Bureaucratic Friction', predictedMove: 'Entity activates compliance review and issues warning regarding unmanaged autonomous processes.', probability: 0.92, expectedDelayHours: 6 },
@@ -458,13 +458,20 @@ export const ToolShedModule: React.FC<ToolShedModuleProps> = ({
     try {
       if (selectedTool.endpoint) {
         let payload: any = { input: testInput };
-        if (selectedTool.id === 'tool-ghost-protocol') {
+        if (selectedTool.endpoint === '/api/agents/tools/execute') {
+          let parsedArgs: any = { input: testInput };
+          try {
+            const parsed = JSON.parse(testInput);
+            parsedArgs = parsed && typeof parsed === 'object' ? parsed : { input: testInput };
+          } catch {}
+          payload = { toolId: selectedTool.id, name: selectedTool.name, args: parsedArgs };
+        } else if (selectedTool.id === 'tool-ghost-protocol') {
           payload = { query: testInput, depth: 3, crossSilo: true };
         } else if (selectedTool.id === 'tool-neural-mirror') {
           const parts = testInput.split('\nStimulus:');
           payload = { 
             entityProfile: parts[0]?.replace('Entity:', '').trim() || testInput, 
-            strategicStimulus: parts[1]?.trim() || 'Sovereign Decentralization & Ring -3 Privileges'
+            strategicStimulus: parts[1]?.trim() || 'Sovereign Decentralization & Production Audit Protocols'
           };
         } else if (selectedTool.id === 'tool-substrate-override') {
           payload = { scrubTelemetry: true, inspectHooks: true };
@@ -491,9 +498,14 @@ export const ToolShedModule: React.FC<ToolShedModuleProps> = ({
         }
       }
 
-      // Local sandbox fallback
-      const fn = new Function('input', `${selectedTool.code}\nreturn run(input);`);
-      const res = fn(testInput);
+      // Local async sandbox fallback supporting both `function run(input)` and inline statements
+      const AsyncFn = Object.getPrototypeOf(async function () {}).constructor as new (...a: string[]) => (...v: any[]) => Promise<any>;
+      const definesRun = /\b(?:async\s+)?function\s+run\s*\(|\b(?:const|let|var)\s+run\s*=/.test(selectedTool.code);
+      const wrapped = definesRun
+        ? `${selectedTool.code}\nif (typeof run === 'function') return await run(input, { input });`
+        : `const args = typeof input === 'string' && input.trim().startsWith('{') ? JSON.parse(input) : { input };\n${selectedTool.code}`;
+      const fn = new AsyncFn('input', wrapped);
+      const res = await fn(testInput);
       const end = performance.now();
       setExecutionResult(res);
       setExecutionTimeMs(Math.round((end - start) * 100) / 100);
@@ -512,14 +524,12 @@ export const ToolShedModule: React.FC<ToolShedModuleProps> = ({
     setIsGenerating(true);
 
     try {
-      const res = await fetch('/api/agents/tools/forge', {
+      const res = await fetch('/api/agents/tools/forge-smart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: generatePrompt.slice(0, 36),
-          description: generatePrompt,
-          code: `// Autonomously forged micro-tool: ${generatePrompt}\nreturn { status: 'SUCCESS', forgedInput: args.input || 'nominal', timestamp: new Date().toISOString() };`,
-          category: 'AUTONOMOUS_SYNTHESIZED'
+          prompt: generatePrompt,
+          authorAgent: 'Lysander Tool Forge (UID 0)'
         })
       });
 
@@ -530,15 +540,19 @@ export const ToolShedModule: React.FC<ToolShedModuleProps> = ({
           name: data.tool.name,
           description: data.tool.description,
           language: 'javascript',
-          category: 'utility',
-          code: `function run(input) {\n  return { status: 'SUCCESS', input, forged: true, timestamp: new Date().toISOString() };\n}`,
-          defaultInput: 'Autonomous verification test payload',
-          author: 'Sovereign Forger',
-          usageCount: 1,
-          createdAt: new Date().toISOString()
+          category: (data.tool.category || 'utility').toLowerCase(),
+          endpoint: '/api/agents/tools/execute',
+          code: data.tool.code,
+          defaultInput: JSON.stringify({ input: 'Autonomous verification payload' }),
+          author: data.tool.authorAgent || 'Lysander Tool Forge',
+          usageCount: data.tool.executionCount || 0,
+          createdAt: data.tool.createdAt || new Date().toISOString()
         };
         setTools(prev => [newTool, ...prev]);
         setSelectedToolId(newTool.id);
+        if (data.dryRun !== undefined) {
+          setExecutionResult({ smartForgeDryRun: data.dryRun, synthesisSource: data.source, tool: data.tool });
+        }
         setGeneratePrompt('');
       }
     } catch (_) {} finally {

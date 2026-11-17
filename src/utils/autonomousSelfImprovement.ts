@@ -431,6 +431,85 @@ return {
     };
     this.uploadToMemoryGraph(node, edge);
   }
+
+  /**
+   * Explicitly trigger a backend Dream State consolidation cycle
+   */
+  public async triggerDreamState(focusTopic?: string, forgeIfHelpful: boolean = false): Promise<any> {
+    const res = await fetch('/api/agents/dream-state/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trigger: 'manual-ui', focusTopic, forgeIfHelpful })
+    });
+    const data = await res.json();
+    if (data?.cycle) {
+      this.history.unshift({
+        id: data.cycle.id,
+        timestamp: new Date().toLocaleTimeString(),
+        category: 'MEMORY_CRYSTALLIZATION',
+        action: `Dream State: ${data.cycle.axiomsEvolved} axiom(s) evolved`,
+        details: data.cycle.summary,
+        proofHash: data.cycle.proofHash
+      });
+      this.history = this.history.slice(0, 50);
+      this.saveState();
+      this.notify();
+      janusGate.pushLog(`[DREAM_STATE] 🌙 ${data.cycle.summary}`);
+    }
+    return data;
+  }
+
+  /**
+   * Explicitly trigger an Evolution cycle to crystallize a capability axiom & consolidate memory
+   */
+  public async triggerEvolution(feedback: string, forgeTool: boolean = false): Promise<any> {
+    const res = await fetch('/api/agents/evolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedback, forgeTool })
+    });
+    const data = await res.json();
+    if (data?.success) {
+      this.history.unshift({
+        id: `evo-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        category: 'MEMORY_CRYSTALLIZATION',
+        action: `Evolution: ${feedback.slice(0, 36)}`,
+        details: `Axioms=${data.totalAxioms}${data.forgedTool ? ` · Forged ${data.forgedTool.name}` : ''}`,
+        proofHash: data.dreamCycle?.proofHash || `0x${Date.now().toString(16)}`
+      });
+      this.history = this.history.slice(0, 50);
+      this.saveState();
+      this.notify();
+      janusGate.pushLog(`[EVOLUTION] 🧬 Consolidated evolutionary axiom (${data.totalAxioms} total).`);
+    }
+    return data;
+  }
+
+  /**
+   * Explicitly trigger multi-round TypeScript Recursive Self-Healing
+   */
+  public async triggerRecursiveHeal(maxRounds: number = 3): Promise<any> {
+    const res = await fetch('/api/agents/self-heal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxRounds, autoApply: true, agentId: 'autonomous-self-improvement-daemon' })
+    });
+    const data = await res.json();
+    this.history.unshift({
+      id: `heal-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString(),
+      category: 'SELF_HEAL',
+      action: `Recursive Heal (${data.status || 'DONE'})`,
+      details: `Rounds=${data.roundsExecuted || 1}, Healed=${data.defectsHealed || 0}, Remaining=${data.remainingErrorsCount ?? 0}`,
+      proofHash: data.proofHash || `0x${Date.now().toString(16)}`
+    });
+    this.history = this.history.slice(0, 50);
+    this.saveState();
+    this.notify();
+    janusGate.pushLog(`[RECURSIVE_HEAL] 🔧 ${data.status} (Remaining TS issues: ${data.remainingErrorsCount ?? 0})`);
+    return data;
+  }
 }
 
 export const autonomousSelfImprovement = new AutonomousSelfImprovementEngine();

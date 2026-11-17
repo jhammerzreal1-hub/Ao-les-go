@@ -255,7 +255,7 @@ export function generateDynamicChainOfProcess(prompt: string): ThoughtStep[] {
       stepIndex: 3,
       phase: 'EDGE INVARIANT CHECK',
       title: 'Stress-Testing Asynchronous & Failure Vectors',
-      description: `Evaluating null propagation, error recovery boundaries, and cross-module synchronization under Ring -3 hypervisor parameters.`
+      description: `Evaluating null propagation, error recovery boundaries, and cross-module synchronization under strict TypeScript and runtime invariants.`
     });
   } else if (ctx.isSecurity || ctx.isArchitecture) {
     steps.push({

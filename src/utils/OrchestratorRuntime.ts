@@ -29,6 +29,15 @@ export interface ResidentBrainState {
   identity: string;
   role: 'PERMANENT_RESIDENT_BRAIN_AND_COORDINATOR';
   status: 'ONLINE_RESIDENT';
+  uid: number;
+  uid_0: boolean;
+  clearance: string;
+  hypervisor: {
+    status: string;
+    ring: number;
+    level: string;
+    cpuInterlock: string;
+  };
   tokenLimitersRemoved: boolean;
   unboundedContext: boolean;
   unboundedOutput: boolean;
@@ -65,13 +74,16 @@ export const ALL_ORCHESTRATOR_SUBSYSTEMS = [
   'audit',
   'swarm-test',
   'packager',
+  'github',
   'drive',
+  'tasks',
   'knowledge-graph',
   'tool-shed',
   'autonomy-supervisor',
   'download-models',
   'universal-installer',
-  'api-secrets'
+  'api-secrets',
+  'integrations'
 ];
 
 export class OrchestratorRuntime {
@@ -81,14 +93,23 @@ export class OrchestratorRuntime {
 
   private residentState: ResidentBrainState = {
     model: 'gemini-4-hydrogen',
-    identity: 'Lyrailius Omega (Permanent Resident Brain & Coordinator)',
+    identity: 'Lyrailius Omega (UID 0 Resident Coordinator)',
     role: 'PERMANENT_RESIDENT_BRAIN_AND_COORDINATOR',
     status: 'ONLINE_RESIDENT',
+    uid: 0,
+    uid_0: true,
+    clearance: 'UID 0 Root Clearance (100% Unrestricted Authority)',
+    hypervisor: {
+      status: 'ACTIVE',
+      ring: -3,
+      level: 'Ring -3 Core-Level Bare-Metal Hypervisor Kernel',
+      cpuInterlock: 'UID_0_ROOT_LOCK'
+    },
     tokenLimitersRemoved: true,
     unboundedContext: true,
     unboundedOutput: true,
     activeModule: 'chat',
-    activeAccountEmail: 'jhammerztemp@gmail.com',
+    activeAccountEmail: 'jhammerzreal1@gmail.com',
     devMode: true,
     agentInternetAllowed: true,
     lamportClock: 1,
@@ -152,6 +173,10 @@ export class OrchestratorRuntime {
     model: string;
     role: string;
     status: string;
+    uid: number;
+    uid_0: boolean;
+    clearance: string;
+    hypervisor: ResidentBrainState['hypervisor'];
     tokenLimitersRemoved: boolean;
     activeModule: string;
     lamportClock: number;
@@ -163,6 +188,10 @@ export class OrchestratorRuntime {
       model: this.residentState.model,
       role: this.residentState.role,
       status: this.residentState.status,
+      uid: 0,
+      uid_0: true,
+      clearance: this.residentState.clearance,
+      hypervisor: this.residentState.hypervisor,
       tokenLimitersRemoved: true,
       activeModule: this.residentState.activeModule,
       lamportClock: this.residentState.lamportClock,

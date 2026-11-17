@@ -127,7 +127,7 @@ export const TranscribeModule: React.FC<TranscribeModuleProps> = ({ onSaveToVaul
     onSaveToVault(
       'Voice Transcription ' + new Date().toLocaleDateString(),
       'Microphone Audio Intake',
-      'gemini-3.5-transcribe',
+      'gemini-3.1-flash-lite',
       transcription
     );
     setSavedSuccess(true);
@@ -141,22 +141,22 @@ export const TranscribeModule: React.FC<TranscribeModuleProps> = ({ onSaveToVaul
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="w-full max-w-6xl 2xl:max-w-7xl mx-auto p-3 sm:p-6 space-y-5">
       {/* Banner */}
-      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30">
+      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-3 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30 shrink-0">
             <Mic className="w-6 h-6" />
           </div>
-          <div>
-            <h2 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-zinc-100 flex items-center gap-2 flex-wrap">
               <span>Speech-to-Text Transcription</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-300 border border-teal-500/20 font-semibold">
-                gemini-3.5-transcribe
+                gemini-3.1-flash-lite
               </span>
             </h2>
             <p className="text-xs text-zinc-400">
-              Direct microphone recording and audio file ingest transcribed using Google Gemini 3.5 Transcribe.
+              Direct microphone recording and audio file ingest transcribed via the active Gemini audio cascade.
             </p>
           </div>
         </div>
@@ -241,25 +241,25 @@ export const TranscribeModule: React.FC<TranscribeModuleProps> = ({ onSaveToVaul
         <div className="bg-zinc-900 border border-teal-500/20 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-center">
           <RefreshCw className="w-8 h-8 text-teal-400 animate-spin" />
           <div className="text-sm font-semibold text-zinc-200">
-            gemini-3.5-transcribe analyzing acoustic signal...
+            gemini-3.1-flash-lite analyzing acoustic signal...
           </div>
           <div className="text-xs text-zinc-500 font-mono">
-            Decoding phonetic layers and constructing textual transcript
+            Decoding speech frames and constructing textual transcript
           </div>
         </div>
       )}
 
       {/* Transcription Output */}
       {transcription && (
-        <div className="bg-zinc-900 border border-teal-500/30 rounded-2xl p-5 space-y-4 shadow-xl animate-in fade-in">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-            <div className="flex items-center gap-2">
+        <div className="bg-zinc-900 border border-teal-500/30 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl animate-in fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="w-2 h-2 rounded-full bg-teal-400" />
               <span className="text-xs font-mono font-bold text-zinc-200 uppercase">
                 Verbatim Transcript
               </span>
               <span className="text-[10px] font-mono text-zinc-500">
-                (gemini-3.5-transcribe)
+                (gemini-3.1-flash-lite)
               </span>
             </div>
 

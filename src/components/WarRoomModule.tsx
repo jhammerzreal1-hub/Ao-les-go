@@ -219,7 +219,7 @@ export const WarRoomModule: React.FC = () => {
 
   // Live Terminal Logs
   const [terminalLogs, setTerminalLogs] = useState<Array<{ timestamp: string; text: string; type: 'info' | 'success' | 'warn' | 'gold' | 'danger' }>>([
-    { timestamp: '00:00:01', text: 'TACTICAL COMMAND BRIDGE ONLINE — Zenodo Ring_-3 Mesh Synchronized.', type: 'gold' },
+    { timestamp: '00:00:01', text: 'TACTICAL COMMAND BRIDGE ONLINE — Lysander Production Mesh Synchronized.', type: 'gold' },
     { timestamp: '00:00:02', text: 'UID 0 Root Handshake Confirmed: Master Architect Joshua Hamilton.', type: 'gold' },
     { timestamp: '00:00:03', text: 'Lysander Engine Embodiment active: 12/12 Skills Integrated.', type: 'info' },
     { timestamp: '00:00:04', text: 'System frequency locked and verified.', type: 'success' },
@@ -553,7 +553,7 @@ export const WarRoomModule: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-2.5 sm:p-5 space-y-4 font-sans select-none">
+    <div className="w-full max-w-[1600px] mx-auto p-2.5 sm:p-5 space-y-4 font-sans select-none">
       
       {/* =========================================================================
           VIDEO GAME WAR ROOM: TOP COMMANDER DECK & DEFCON SELECTOR
@@ -948,22 +948,22 @@ export const WarRoomModule: React.FC = () => {
                     },
                     {
                       key: 'ring3',
-                      title: 'Core-Level Memory Interlock',
-                      desc: 'Direct bare-metal hypervisor DMA bus bypass for 0.08ms inference latency.',
+                      title: 'Core-Level Memory Check',
+                      desc: 'Audits resident Node.js memory, SQLite WAL state, and dispatch queue latency.',
                       freq: 1120,
                       color: 'hover:border-rose-500/50 text-rose-300'
                     },
                     {
                       key: 'byzantine',
-                      title: 'Byzantine Quorum Purge',
-                      desc: 'Cleanses adversarial noise, desynchronization, and consensus drifts.',
+                      title: 'Quorum Consistency Audit',
+                      desc: 'Verifies module manifest alignment and clears stale diagnostic queues.',
                       freq: 780,
                       color: 'hover:border-purple-500/50 text-purple-300'
                     },
                     {
                       key: 'deepmind',
-                      title: 'DeepMind Swarm Search',
-                      desc: 'Dispatches 16 parallel speculative tree reasoning rollouts at 4,096 GFLOPS.',
+                      title: 'Multi-Agent Dispatch Sync',
+                      desc: 'Dispatches parallel verification checks across resident agent coordinators.',
                       freq: 960,
                       color: 'hover:border-teal-500/50 text-teal-300'
                     }
@@ -998,14 +998,14 @@ export const WarRoomModule: React.FC = () => {
                   <span className="text-[10px] font-mono text-zinc-500">GOVERNED BY JHAMMERZ</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
                   {[
                     { key: 'agentInternet' as const, label: 'Deep Web Proxy', desc: 'Allows agents autonomous headless browsing & learning' },
-                    { key: 'ghostCloak' as const, label: 'Ghost Channel', desc: 'Total network silence & shadow threads via Colonel Ro' },
-                    { key: 'deltaLock' as const, label: 'Delta Lock', desc: 'Freezes code state from unverified outside mutations' },
-                    { key: 'truthConsensus' as const, label: 'Truth Attestation', desc: 'Rejects synthetic noise & non-factual hallucinations' },
-                    { key: 'subPlanckianSync' as const, label: 'Sub-Planckian Sync', desc: 'Locks timing jitter to <0.000008Hz via Springfield' },
-                    { key: 'reverseCausalSteering' as const, label: 'Reverse-Causal Steer', desc: 'Back-propagates optimal end states to prime tokens' }
+                    { key: 'ghostCloak' as const, label: 'Low-Telemetry Mode', desc: 'Minimizes verbose external logging for sensitive tasks' },
+                    { key: 'deltaLock' as const, label: 'Delta Lock', desc: 'Guards workspace files from unconfirmed external mutations' },
+                    { key: 'truthConsensus' as const, label: 'Tool Verification Gate', desc: 'Requires real tool outputs before reporting system status' },
+                    { key: 'subPlanckianSync' as const, label: 'Heartbeat Timer Lock', desc: 'Stabilizes background health polling interval jitter' },
+                    { key: 'reverseCausalSteering' as const, label: 'Goal-First Planning', desc: 'Evaluates completion criteria before emitting steps' }
                   ].map(sw => (
                     <div key={sw.key} className="p-3 bg-zinc-950/70 rounded-xl border border-white/5 space-y-1.5">
                       <div className="flex items-center justify-between">

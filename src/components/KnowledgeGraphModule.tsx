@@ -262,7 +262,7 @@ JSON structure expected:
   ]
 }`
           }],
-          model: 'gemini-3.8-flash'
+          model: 'gemini-4-hydrogen'
         })
       });
 
@@ -379,7 +379,7 @@ JSON structure expected:
     });
 
     if (onSaveToVault) {
-      onSaveToVault('Knowledge Graph Blueprint', md, 'gemini-3.8-flash');
+      onSaveToVault('Knowledge Graph Blueprint', md, 'gemini-4-hydrogen');
     }
   };
 

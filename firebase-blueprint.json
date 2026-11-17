@@ -9,11 +9,11 @@
         "email": { "type": "string", "maxLength": 256 },
         "displayName": { "type": "string", "maxLength": 128 },
         "photoURL": { "type": "string", "maxLength": 1024 },
-        "role": { "type": "string", "maxLength": 64 },
+        "role": { "type": "string", "enum": ["user", "admin"], "maxLength": 16 },
         "createdAt": { "type": "string", "maxLength": 64 },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
-      "required": ["uid", "email", "createdAt"]
+      "required": ["uid", "email", "role", "createdAt"]
     },
     "ChatThread": {
       "title": "ChatThread",
@@ -36,7 +36,7 @@
       "properties": {
         "threadId": { "type": "string", "maxLength": 128 },
         "userId": { "type": "string", "maxLength": 128 },
-        "role": { "type": "string", "maxLength": 32 },
+        "role": { "type": "string", "enum": ["user", "model", "system"], "maxLength": 32 },
         "content": { "type": "string", "maxLength": 50000 },
         "model": { "type": "string", "maxLength": 128 },
         "groundingData": { "type": "string", "maxLength": 50000 },
@@ -44,13 +44,28 @@
       },
       "required": ["threadId", "userId", "role", "content", "createdAt"]
     },
+    "AgenticMemory": {
+      "title": "AgenticMemory",
+      "description": "Synchronized conversational memory turn for cross-device continuity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["user", "model", "system"], "maxLength": 32 },
+        "content": { "type": "string", "maxLength": 50000 },
+        "model": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "role", "content", "createdAt"]
+    },
     "Artifact": {
       "title": "Artifact",
-      "description": "Generated multimedia artifact (images, videos, music clips, transcriptions)",
+      "description": "Generated multimedia artifact (images, videos, music clips, transcriptions, knowledge)",
       "type": "object",
       "properties": {
         "userId": { "type": "string", "maxLength": 128 },
-        "type": { "type": "string", "maxLength": 64 },
+        "type": { "type": "string", "enum": ["music", "image", "video", "transcription", "knowledge", "dossier"], "maxLength": 64 },
         "title": { "type": "string", "maxLength": 256 },
         "prompt": { "type": "string", "maxLength": 4000 },
         "model": { "type": "string", "maxLength": 128 },
@@ -72,9 +87,9 @@
         "payload": { "type": "string", "maxLength": 50000 },
         "result": { "type": "string", "maxLength": 50000 },
         "proofHash": { "type": "string", "maxLength": 128 },
-        "status": { "type": "string", "maxLength": 64 }
+        "status": { "type": "string", "enum": ["SUCCESS", "FAILED", "HEALED"], "maxLength": 64 }
       },
-      "required": ["timestamp", "subsystem", "action"]
+      "required": ["userId", "timestamp", "subsystem", "action"]
     }
   },
   "firestore": {
@@ -82,10 +97,10 @@
       "schema": {
         "type": "object",
         "properties": {
-          "status": { "type": "string" }
+          "status": { "type": "string", "maxLength": 64 }
         }
       },
-      "description": "Latency test probe documents"
+      "description": "Read-only connection verification probe (/test/connection)"
     },
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
@@ -98,6 +113,10 @@
     "/users/{userId}/threads/{threadId}/messages/{messageId}": {
       "schema": { "$ref": "#/entities/ChatMessage" },
       "description": "Messages inside a thread"
+    },
+    "/users/{userId}/agentic_memory/{memoryId}": {
+      "schema": { "$ref": "#/entities/AgenticMemory" },
+      "description": "Cross-device synchronized conversation memory turns"
     },
     "/users/{userId}/artifacts/{artifactId}": {
       "schema": { "$ref": "#/entities/Artifact" },

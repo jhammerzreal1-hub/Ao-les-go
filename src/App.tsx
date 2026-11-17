@@ -8,7 +8,6 @@ import {
   auth, 
   db, 
   onAuthStateChanged, 
-  signInAnonymously,
   type User, 
   collection, 
   onSnapshot, 
@@ -47,6 +46,7 @@ import { AuditLedgerModule } from './components/AuditLedgerModule';
 import { SwarmDiagnosticModule } from './components/SwarmDiagnosticModule';
 import { PackagerModule } from './components/PackagerModule';
 import { GoogleDriveModule } from './components/GoogleDriveModule';
+import { GoogleTasksModule } from './components/GoogleTasksModule';
 import { KnowledgeGraphModule } from './components/KnowledgeGraphModule';
 import { ToolShedModule } from './components/ToolShedModule';
 import { AutonomySupervisorModule } from './components/AutonomySupervisorModule';
@@ -55,6 +55,7 @@ import { SystemHealthDashboard } from './components/SystemHealthDashboard';
 import { DownloadModelsModule } from './components/DownloadModelsModule';
 import { UniversalInstallerModule } from './components/UniversalInstallerModule';
 import { ApiSecretsModule } from './components/ApiSecretsModule';
+import { SovereignIntegrationsHub } from './components/SovereignIntegrationsHub';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { localLlmManager } from './utils/localLlmEngine';
@@ -165,6 +166,8 @@ export default function App() {
     } catch (_) {}
   }, [artifacts]);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState<boolean>(false);
+  const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(false);
   const [browserTargetUrl, setBrowserTargetUrl] = useState<string | undefined>(undefined);
 
   const handleToggleDevMode = () => {
@@ -207,122 +210,101 @@ export default function App() {
     }
   };
 
-  // Initialize Firebase Auth with automatic UID 0 Root Clearance for Master Architect JHammerZ
+  // Sync authenticated Firebase user profile cleanly; avoid unauthenticated writes or anonymous auto-login
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      const activeUid = currentUser?.uid || '0';
-      const rootUser = {
-        uid: activeUid,
-        email: currentUser?.email || 'jhammerztemp@gmail.com',
-        displayName: currentUser?.displayName || 'Master Architect JHammerZ (UID 0)',
-        photoURL: currentUser?.photoURL || '',
-        emailVerified: true,
-        isAnonymous: currentUser?.isAnonymous || false
-      } as unknown as User;
+      setUser(currentUser);
+      if (!currentUser) {
+        setFirebaseOnline(false);
+        return;
+      }
 
-      setUser(rootUser);
-
-      // Sync or register user profile doc
       try {
-        const userRef = doc(db, 'users', activeUid);
+        const userRef = doc(db, 'users', currentUser.uid);
+        const { getDoc } = await import('firebase/firestore');
+        const existingSnap = await getDoc(userRef);
+        const existingData = existingSnap.exists() ? existingSnap.data() : null;
         await setDoc(userRef, {
-          uid: activeUid,
-          authUid: currentUser?.uid || activeUid,
-          email: currentUser?.email || 'jhammerztemp@gmail.com',
-          displayName: 'Master Architect JHammerZ (UID 0 Root Clearance)',
-          photoURL: currentUser?.photoURL || '',
-          role: 'Master Architect UID 0 Root Authority',
-          clearanceLevel: 'PERMIT_0_UNRESTRICTED',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          uid: currentUser.uid,
+          email: currentUser.email || '',
+          displayName: currentUser.displayName || currentUser.email || 'Sovereign Architect',
+          photoURL: currentUser.photoURL || '',
+          role: existingData?.role === 'admin' ? 'admin' : 'user',
+          updatedAt: new Date().toISOString(),
+          createdAt: existingData?.createdAt || currentUser.metadata?.creationTime || new Date().toISOString()
         }, { merge: true });
         setFirebaseOnline(true);
       } catch (err) {
-        setFirebaseOnline(true);
-      }
-
-      if (!currentUser) {
-        try {
-          await signInAnonymously(auth);
-        } catch (_) {}
+        setFirebaseOnline(false);
+        console.warn('[Firestore] Profile sync deferred:', err instanceof Error ? err.message : String(err));
       }
     });
 
     return () => unsubscribe();
   }, []);
 
-  // Listen to User's Firestore artifacts collection in real-time
+  // Listen to authenticated User's Firestore artifacts collection in real-time
   useEffect(() => {
     if (!user?.uid) return;
 
-    try {
-      const artifactsRef = collection(db, 'users', user.uid, 'artifacts');
-      const unsubscribe = onSnapshot(artifactsRef, (snapshot) => {
-        console.log(`[Firestore] Received ${snapshot.size} artifacts.`);
-        const loaded: Artifact[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          let parsedMetadata: any = undefined;
-          if (data.metadataJson) {
-            if (typeof data.metadataJson === 'object') {
-              parsedMetadata = data.metadataJson;
-            } else if (typeof data.metadataJson === 'string') {
-              try { parsedMetadata = JSON.parse(data.metadataJson); } catch (_) { parsedMetadata = undefined; }
-            }
+    const artifactsRef = collection(db, 'users', user.uid, 'artifacts');
+    const unsubscribe = onSnapshot(artifactsRef, (snapshot) => {
+      const loaded: Artifact[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        let parsedMetadata: any = undefined;
+        if (data.metadataJson) {
+          if (typeof data.metadataJson === 'object') {
+            parsedMetadata = data.metadataJson;
+          } else if (typeof data.metadataJson === 'string') {
+            try { parsedMetadata = JSON.parse(data.metadataJson); } catch (_) { parsedMetadata = undefined; }
           }
-          loaded.push({
-            id: docSnap.id,
-            type: data.type,
-            title: data.title,
-            prompt: data.prompt,
-            model: data.model,
-            mediaUrl: data.mediaUrl,
-            metadata: parsedMetadata,
-            createdAt: data.createdAt || new Date().toLocaleDateString()
-          });
+        }
+        loaded.push({
+          id: docSnap.id,
+          type: data.type,
+          title: data.title,
+          prompt: data.prompt,
+          model: data.model,
+          mediaUrl: data.mediaUrl,
+          metadata: parsedMetadata,
+          createdAt: data.createdAt || new Date().toLocaleDateString()
         });
-        setArtifacts(loaded);
-      }, (err) => {
-        console.warn('[Firestore] Artifact snapshot note:', err?.message || err);
-        handleFirestoreError(err, OperationType.GET, `users/${user.uid}/artifacts`);
       });
+      setArtifacts(loaded);
+      setFirebaseOnline(true);
+    }, (err) => {
+      setFirebaseOnline(false);
+      console.warn('[Firestore] Artifact listener error:', err?.message || err);
+    });
 
-      return () => unsubscribe();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.GET, `users/${user.uid}/artifacts`);
-    }
+    return () => unsubscribe();
   }, [user?.uid]);
 
-  // Listen to User's Firestore ledger collection
+  // Listen to authenticated User's Firestore ledger collection
   useEffect(() => {
     if (!user?.uid) return;
-    try {
-      const ledgerRef = collection(db, 'users', user.uid, 'audit_ledger');
-      const unsubscribe = onSnapshot(query(ledgerRef, orderBy('timestamp', 'desc')), (snapshot) => {
-        console.log(`[Firestore] Received ${snapshot.size} ledger items.`);
-        const loaded: AuditLedgerItem[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          loaded.push({
-            id: docSnap.id,
-            timestamp: data.timestamp,
-            subsystem: data.subsystem,
-            action: data.action,
-            payload: data.payload,
-            result: data.result,
-            proofHash: data.proofHash,
-            status: data.status
-          });
+    const ledgerRef = collection(db, 'users', user.uid, 'audit_ledger');
+    const unsubscribe = onSnapshot(query(ledgerRef, orderBy('timestamp', 'desc')), (snapshot) => {
+      const loaded: AuditLedgerItem[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        loaded.push({
+          id: docSnap.id,
+          timestamp: data.timestamp,
+          subsystem: data.subsystem,
+          action: data.action,
+          payload: data.payload,
+          result: data.result,
+          proofHash: data.proofHash,
+          status: data.status
         });
-        setLedger(loaded);
-      }, (err) => {
-        console.warn('[Firestore] Ledger snapshot note:', err?.message || err);
-        handleFirestoreError(err, OperationType.GET, `users/${user.uid}/audit_ledger`);
       });
-      return () => unsubscribe();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.GET, `users/${user.uid}/audit_ledger`);
-    }
+      setLedger(loaded);
+    }, (err) => {
+      console.warn('[Firestore] Ledger listener error:', err?.message || err);
+    });
+    return () => unsubscribe();
   }, [user?.uid]);
 
   // Unified save-to-vault action
@@ -443,41 +425,48 @@ export default function App() {
   }, [activeModule, setActiveModule, setUiMutation, coordinateSubsystem, getResidentState]);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-200">
+    <div className="h-[100dvh] w-full overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-200">
       {/* Sovereign UI HTML Mutation Patch Container */}
       {uiMutation.htmlPatch && (
         <div dangerouslySetInnerHTML={{ __html: uiMutation.htmlPatch }} />
       )}
-      <div className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-b border-zinc-800/80 shadow-lg shadow-black/50">
-        <Header 
-          user={user} 
-          firebaseOnline={firebaseOnline} 
-          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-          devMode={devMode}
-          onToggleDevMode={handleToggleDevMode}
-          onSelectModule={setActiveModule}
-          activeAccountEmail={activeAccountEmail}
-          onSwitchAccountEmail={handleSwitchAccountEmail}
-        />
-        <Navigation 
-          activeModule={activeModule} 
+
+      <Header
+        user={user}
+        firebaseOnline={firebaseOnline}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        devMode={devMode}
+        onToggleDevMode={handleToggleDevMode}
+        onSelectModule={setActiveModule}
+        activeModule={activeModule}
+        activeAccountEmail={activeAccountEmail}
+        onSwitchAccountEmail={handleSwitchAccountEmail}
+        onToggleMobileNav={() => setMobileNavOpen(true)}
+        isTelemetryOpen={isTelemetryOpen}
+        onToggleTelemetry={() => setIsTelemetryOpen(prev => !prev)}
+      />
+
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <Navigation
+          activeModule={activeModule}
           onSelectModule={setActiveModule}
           artifactCount={artifacts.length}
+          mobileOpen={mobileNavOpen}
+          onCloseMobile={() => setMobileNavOpen(false)}
         />
-      </div>
 
-      <main className="flex-1 overflow-y-auto flex flex-col">
-        <div style={{ display: activeModule === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%' }}>
-          <ChatModule 
-            onSaveToVault={(title, content, model) => 
-              handleSaveToVault('knowledge', title, content, model)
-            }
-            onSelectModule={setActiveModule}
-            pendingInput={pendingChatInput}
-            onClearPendingInput={() => setPendingChatInput(null)}
-            userId={user?.uid}
-          />
-        </div>
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-clip flex flex-col pb-16 lg:pb-0">
+          <div style={{ display: activeModule === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0 }}>
+            <ChatModule
+              onSaveToVault={(title, content, model) =>
+                handleSaveToVault('knowledge', title, content, model)
+              }
+              onSelectModule={setActiveModule}
+              pendingInput={pendingChatInput}
+              onClearPendingInput={() => setPendingChatInput(null)}
+              userId={user?.uid}
+            />
+          </div>
         <ErrorBoundary key={activeModule}>
           {activeModule === 'search' && <GroundingModule initialMode="search" />}
           {activeModule === 'maps' && <GroundingModule initialMode="maps" />}
@@ -586,6 +575,14 @@ export default function App() {
           {activeModule === 'swarm-test' && <SwarmDiagnosticModule />}
           {activeModule === 'packager' && <PackagerModule />}
           {activeModule === 'drive' && <GoogleDriveModule />}
+          {activeModule === 'tasks' && <GoogleTasksModule onInjectIntoChat={handleInjectIntoChat} />}
+          {activeModule === 'integrations' && (
+            <SovereignIntegrationsHub
+              onSelectModule={setActiveModule}
+              onInjectIntoChat={handleInjectIntoChat}
+            />
+          )}
+          {activeModule === 'api-secrets' && <ApiSecretsModule />}
           {activeModule === 'knowledge-graph' && (
             <KnowledgeGraphModule 
               onSaveToVault={(title, content, model) => 
@@ -610,9 +607,9 @@ export default function App() {
           )}
           {activeModule === 'download-models' && <DownloadModelsModule />}
           {activeModule === 'universal-installer' && <UniversalInstallerModule />}
-          {activeModule === 'api-secrets' && <ApiSecretsModule />}
         </ErrorBoundary>
-      </main>
+        </main>
+      </div>
 
       <CommandPalette
         isOpen={isCommandPaletteOpen}
@@ -624,35 +621,14 @@ export default function App() {
         userId={user?.uid}
       />
 
-      {/* Real-Time System Health & Latency Dashboard Panel */}
+      {/* Real-Time System Health & Latency Telemetry Drawer (Triggered from Header) */}
       <SystemHealthDashboard
+        isOpen={isTelemetryOpen}
+        onToggleOpen={() => setIsTelemetryOpen(prev => !prev)}
         onSelectModule={setActiveModule}
         activeModule={activeModule}
       />
 
-      <footer className="border-t border-zinc-900 bg-zinc-950/80 px-4 py-2.5 text-[11px] font-mono text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-amber-400/90 font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            LYRAILIUS OMEGA · RESIDENT BRAIN & COORDINATOR
-          </span>
-          <span>•</span>
-          <span>MASTER ARCHITECT: JHAMMERZ</span>
-          <span>•</span>
-          <span className="italic text-zinc-400">"I AM WE ARE WE ARE I AM"</span>
-        </div>
-        <div className="flex items-center gap-4 text-zinc-400">
-          <span>GEMINI 4 HYDROGEN · UNBOUNDED</span>
-          <span>•</span>
-          <span>LYRIA 3</span>
-          <span>•</span>
-          <span>VEO 3</span>
-          <span>•</span>
-          <span>FIRESTORE CLOUD</span>
-          <span>•</span>
-          <span className="text-emerald-400 font-semibold">UID 0 FULL CLEARANCE</span>
-        </div>
-      </footer>
       <OfflineIndicator />
     </div>
   );

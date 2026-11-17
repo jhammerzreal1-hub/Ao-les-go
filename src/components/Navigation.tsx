@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  MessageSquare, 
-  Search, 
-  MapPin, 
-  Music, 
-  Image as ImageIcon, 
-  Video, 
-  Mic, 
-  Radio, 
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  MessageSquare,
+  Search,
+  MapPin,
+  Music,
+  Image as ImageIcon,
+  Video,
+  Mic,
+  Radio,
   Archive,
   FolderGit2,
   ShieldAlert,
   ShieldCheck,
   Globe,
-  SlidersHorizontal,
   FileText,
   UserCheck,
   Eye,
@@ -23,13 +22,12 @@ import {
   Activity,
   Layers,
   Zap,
-  CheckCircle2,
   Smartphone,
   Mail,
   Grid,
   X,
   ChevronRight,
-  Filter,
+  ChevronLeft,
   BookmarkPlus,
   Package,
   HardDrive,
@@ -37,17 +35,12 @@ import {
   Wrench,
   Download,
   Key,
-  Phone
+  Phone,
+  ListTodo
 } from 'lucide-react';
 import type { ModuleType } from '../types';
 
-interface NavigationProps {
-  activeModule: ModuleType;
-  onSelectModule: (module: ModuleType) => void;
-  artifactCount?: number;
-}
-
-type CategoryType = 'all' | 'command' | 'creative' | 'intelligence' | 'data';
+export type WorkspaceGroupId = 'core' | 'workspace' | 'intelligence' | 'creative' | 'system';
 
 export interface SubAgentStatus {
   id: 'vision' | 'logic' | 'memory' | 'audio' | 'grounding' | 'kernel';
@@ -61,29 +54,400 @@ export interface SubAgentStatus {
   borderColor: string;
 }
 
-interface TabItem {
+export interface ModuleRegistryItem {
   id: ModuleType;
   label: string;
+  shortLabel?: string;
+  group: WorkspaceGroupId;
   category: 'command' | 'creative' | 'intelligence' | 'data';
   icon: React.ComponentType<{ className?: string }>;
   accentColor: string;
   activeBg: string;
   description: string;
-  badge?: number;
 }
 
-export const Navigation: React.FC<NavigationProps> = ({ 
-  activeModule, 
+export const WORKSPACE_GROUPS: Array<{ id: WorkspaceGroupId; label: string }> = [
+  { id: 'core', label: 'Core & Autonomy' },
+  { id: 'workspace', label: 'Cloud & Workspace' },
+  { id: 'intelligence', label: 'Intelligence & Web' },
+  { id: 'creative', label: 'Creative Studio' },
+  { id: 'system', label: 'Edge & Security' }
+];
+
+export const ALL_MODULES: ModuleRegistryItem[] = [
+  {
+    id: 'chat',
+    label: 'Sovereign Chat',
+    group: 'core',
+    category: 'command',
+    icon: MessageSquare,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Primary autonomous orchestrator chat with multi-model cascade, agent wardrobe & live workspace tools'
+  },
+  {
+    id: 'autonomy-supervisor',
+    label: 'Autonomy Supervisor',
+    group: 'core',
+    category: 'command',
+    icon: Activity,
+    accentColor: 'text-cyan-400',
+    activeBg: 'bg-cyan-500/12 border-cyan-500/35 text-cyan-200',
+    description: 'Dream state cycles, recursive self-healing, continuous evolution & runtime autonomy diagnostics'
+  },
+  {
+    id: 'projects',
+    label: 'Unified Projects',
+    group: 'core',
+    category: 'command',
+    icon: FolderGit2,
+    accentColor: 'text-cyan-400',
+    activeBg: 'bg-cyan-500/12 border-cyan-500/35 text-cyan-200',
+    description: 'Workspace files, multi-file code editor, and repository consolidation'
+  },
+  {
+    id: 'tool-shed',
+    label: 'Tool Shed',
+    group: 'core',
+    category: 'command',
+    icon: Wrench,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Dynamic AI micro-tool generator, sandbox runner & OSINT utilities'
+  },
+  {
+    id: 'functions',
+    label: 'Function Deck',
+    group: 'core',
+    category: 'command',
+    icon: Zap,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Zero-token utilities (hash, regex, JSON, UUID, transforms) & toolbelt'
+  },
+  {
+    id: 'presets',
+    label: 'Prompt Presets',
+    group: 'core',
+    category: 'command',
+    icon: BookmarkPlus,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Curated architectural directives, code reviews & instruction templates'
+  },
+  {
+    id: 'war-room',
+    label: 'PC War Room',
+    group: 'core',
+    category: 'command',
+    icon: ShieldAlert,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Multi-screen operational cockpit & swarm coordination overview'
+  },
+  {
+    id: 'hitl',
+    label: 'HITL Workflows',
+    group: 'core',
+    category: 'command',
+    icon: UserCheck,
+    accentColor: 'text-indigo-400',
+    activeBg: 'bg-indigo-500/12 border-indigo-500/35 text-indigo-200',
+    description: 'Human-in-the-loop validation gates & confirmation checkpoints'
+  },
+  {
+    id: 'integrations',
+    label: 'Integrations Hub',
+    group: 'workspace',
+    category: 'command',
+    icon: Layers,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Unified control plane across Google Workspace, Vault, LLM gateways & carriers'
+  },
+  {
+    id: 'tasks',
+    label: 'Google Tasks',
+    group: 'workspace',
+    category: 'data',
+    icon: ListTodo,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Google Tasks lists, due dates & confirmation-gated task synchronization'
+  },
+  {
+    id: 'drive',
+    label: 'Google Drive',
+    group: 'workspace',
+    category: 'data',
+    icon: HardDrive,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Cloud file management, document browsing, editing & artifact export'
+  },
+  {
+    id: 'github',
+    label: 'GitHub Matrix',
+    group: 'workspace',
+    category: 'data',
+    icon: FolderGit2,
+    accentColor: 'text-orange-400',
+    activeBg: 'bg-orange-500/12 border-orange-500/35 text-orange-200',
+    description: 'Repository telemetry, commits, branches & provenance inspection'
+  },
+  {
+    id: 'api-secrets',
+    label: 'API Keys & Secrets',
+    group: 'workspace',
+    category: 'command',
+    icon: Key,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'AES-256-GCM encrypted server secrets handler, dynamic masking & proxy tests'
+  },
+  {
+    id: 'browser',
+    label: 'Open-Web Browser',
+    group: 'intelligence',
+    category: 'command',
+    icon: Globe,
+    accentColor: 'text-sky-400',
+    activeBg: 'bg-sky-500/12 border-sky-500/35 text-sky-200',
+    description: 'Open-web search, headless fetching & autonomous agent learning'
+  },
+  {
+    id: 'knowledge-graph',
+    label: 'Knowledge Graph',
+    group: 'intelligence',
+    category: 'intelligence',
+    icon: Network,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Session memory consolidation & interactive architectural topology'
+  },
+  {
+    id: 'search',
+    label: 'Search Grounding',
+    group: 'intelligence',
+    category: 'intelligence',
+    icon: Search,
+    accentColor: 'text-sky-400',
+    activeBg: 'bg-sky-500/12 border-sky-500/35 text-sky-200',
+    description: 'Live web search grounding with verified source citations'
+  },
+  {
+    id: 'maps',
+    label: 'Maps Grounding',
+    group: 'intelligence',
+    category: 'intelligence',
+    icon: MapPin,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Spatial & geospatial place intelligence grounding'
+  },
+  {
+    id: 'osint',
+    label: 'OSINT Surface',
+    group: 'intelligence',
+    category: 'command',
+    icon: ShieldAlert,
+    accentColor: 'text-rose-400',
+    activeBg: 'bg-rose-500/12 border-rose-500/35 text-rose-200',
+    description: 'External perimeter scanning, DNS/TLS defense & security posture'
+  },
+  {
+    id: 'live',
+    label: 'Live Voice',
+    group: 'intelligence',
+    category: 'intelligence',
+    icon: Radio,
+    accentColor: 'text-red-400',
+    activeBg: 'bg-red-500/12 border-red-500/35 text-red-200',
+    description: 'Bidirectional real-time voice streaming bridge'
+  },
+  {
+    id: 'transcribe',
+    label: 'Transcribe',
+    group: 'intelligence',
+    category: 'intelligence',
+    icon: Mic,
+    accentColor: 'text-teal-400',
+    activeBg: 'bg-teal-500/12 border-teal-500/35 text-teal-200',
+    description: 'Speech transcription and audio intake pipeline'
+  },
+  {
+    id: 'image',
+    label: 'Visual Studio',
+    group: 'creative',
+    category: 'creative',
+    icon: ImageIcon,
+    accentColor: 'text-purple-400',
+    activeBg: 'bg-purple-500/12 border-purple-500/35 text-purple-200',
+    description: 'Image generation with offline procedural Canvas synthesis fallback'
+  },
+  {
+    id: 'music',
+    label: 'Lyria Music',
+    group: 'creative',
+    category: 'creative',
+    icon: Music,
+    accentColor: 'text-fuchsia-400',
+    activeBg: 'bg-fuchsia-500/12 border-fuchsia-500/35 text-fuchsia-200',
+    description: 'Music & soundtrack composer with offline Web Audio synthesizer'
+  },
+  {
+    id: 'video',
+    label: 'Veo 3 Motion',
+    group: 'creative',
+    category: 'creative',
+    icon: Video,
+    accentColor: 'text-rose-400',
+    activeBg: 'bg-rose-500/12 border-rose-500/35 text-rose-200',
+    description: 'Video motion generator with procedural offline canvas render'
+  },
+  {
+    id: 'termux',
+    label: 'Termux Android',
+    group: 'system',
+    category: 'command',
+    icon: Smartphone,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Mobile installer script & local llama-server edge bridge'
+  },
+  {
+    id: 'infinite-sim',
+    label: 'Infinite-SIM',
+    group: 'system',
+    category: 'command',
+    icon: Phone,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Virtual eSIM profiles, Luhn ICCIDs, LPA activation & burner numbers'
+  },
+  {
+    id: 'burner-mail',
+    label: 'Burner Mail',
+    group: 'system',
+    category: 'command',
+    icon: Mail,
+    accentColor: 'text-teal-400',
+    activeBg: 'bg-teal-500/12 border-teal-500/35 text-teal-200',
+    description: 'Disposable temporary email inboxes with instant OTP capture'
+  },
+  {
+    id: 'scratchpad',
+    label: 'Scratchpad',
+    group: 'system',
+    category: 'data',
+    icon: FileText,
+    accentColor: 'text-teal-400',
+    activeBg: 'bg-teal-500/12 border-teal-500/35 text-teal-200',
+    description: 'Working memory notes, semantic cache & architectural scratchpad'
+  },
+  {
+    id: 'vault',
+    label: 'Vault Storage',
+    group: 'system',
+    category: 'data',
+    icon: Archive,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Persistent encrypted artifact storage & session history'
+  },
+  {
+    id: 'audit',
+    label: 'Forensic Ledger',
+    group: 'system',
+    category: 'data',
+    icon: ShieldCheck,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Immutable execution audit trail & cryptographic proof records'
+  },
+  {
+    id: 'swarm-test',
+    label: 'Swarm Diagnostic',
+    group: 'system',
+    category: 'command',
+    icon: Activity,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Automated multi-subsystem verification & benchmark suite'
+  },
+  {
+    id: 'packager',
+    label: 'APK Packager',
+    group: 'system',
+    category: 'command',
+    icon: Package,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Package modules into standalone Android APK builds'
+  },
+  {
+    id: 'download-models',
+    label: 'Model Wardrobe',
+    group: 'system',
+    category: 'data',
+    icon: Download,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Manage local model manifests, WebGPU weights & offline packages'
+  },
+  {
+    id: 'universal-installer',
+    label: 'Universal Installer',
+    group: 'system',
+    category: 'command',
+    icon: Download,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Cross-platform bootstrap scripts & deployment runner'
+  }
+];
+
+export function getModuleMeta(id: ModuleType): ModuleRegistryItem {
+  return ALL_MODULES.find(m => m.id === id) || ALL_MODULES[0];
+}
+
+interface NavigationProps {
+  activeModule: ModuleType;
+  onSelectModule: (module: ModuleType) => void;
+  artifactCount?: number;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}
+
+type CategoryType = 'all' | 'command' | 'creative' | 'intelligence' | 'data';
+
+export const Navigation: React.FC<NavigationProps> = ({
+  activeModule,
   onSelectModule,
-  artifactCount = 0 
+  artifactCount = 0,
+  mobileOpen = false,
+  onCloseMobile
 }) => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aurelius_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [railFilter, setRailFilter] = useState<string>('');
   const [showAllModulesModal, setShowAllModulesModal] = useState<boolean>(false);
   const [showTelemetryModal, setShowTelemetryModal] = useState<boolean>(false);
   const [moduleSearchQuery, setModuleSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('all');
   const [tick, setTick] = useState<number>(0);
 
-  // Sub-Agents reactive status
+  useEffect(() => {
+    try {
+      localStorage.setItem('aurelius_sidebar_collapsed', String(sidebarCollapsed));
+    } catch {}
+  }, [sidebarCollapsed]);
+
   const [subAgents, setSubAgents] = useState<SubAgentStatus[]>([
     {
       id: 'vision',
@@ -142,10 +506,10 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'kernel',
-      name: 'Kernel God-Node',
+      name: 'Kernel Hypervisor',
       icon: Terminal,
       status: 'SYNCHRONIZED',
-      currentTask: 'Core-Level Hypervisor active',
+      currentTask: 'UID 0 · Ring -3 Bare-Metal',
       loadPct: 35,
       color: 'text-teal-400',
       bgColor: 'bg-teal-500/10',
@@ -153,678 +517,483 @@ export const Navigation: React.FC<NavigationProps> = ({
     }
   ]);
 
-  // Background activity heartbeat
   useEffect(() => {
     const timer = setInterval(() => setTick(t => t + 1), 4000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    setSubAgents(prev => prev.map(agent => {
-      let isBusy = false;
-      let task = agent.currentTask;
-      let status: 'IDLE' | 'PROCESSING' | 'SYNCHRONIZED' | 'STANDBY' = 'SYNCHRONIZED';
-      let load = Math.floor(Math.random() * 20) + 15;
+    setSubAgents(prev =>
+      prev.map(agent => {
+        let task = agent.currentTask;
+        let status: SubAgentStatus['status'] = 'SYNCHRONIZED';
+        let load = 18 + ((tick * 3 + agent.id.length * 5) % 14);
 
-      if (agent.id === 'vision') {
-        if (activeModule === 'image' || activeModule === 'video') {
-          isBusy = true;
-          status = 'PROCESSING';
-          task = 'Veo/Imagen neural diffusion pass';
-          load = 88;
-        } else if (activeModule === 'browser') {
-          isBusy = true;
-          status = 'PROCESSING';
-          task = 'Open-web DOM screenshot & OCR';
-          load = 64;
-        } else {
-          status = 'STANDBY';
-          task = 'Recursive spatial training';
-          load = 22;
-        }
-      } else if (agent.id === 'logic') {
-        if (activeModule === 'war-room' || activeModule === 'chat' || activeModule === 'hitl') {
-          isBusy = true;
-          status = 'PROCESSING';
-          task = 'Tensor reasoning & DeepThink';
-          load = 92;
-        } else {
+        if (agent.id === 'vision') {
+          if (activeModule === 'image' || activeModule === 'video') {
+            status = 'PROCESSING';
+            task = 'Veo / Imagen synthesis active';
+            load = 88;
+          } else if (activeModule === 'browser') {
+            status = 'PROCESSING';
+            task = 'DOM & visual inspection';
+            load = 64;
+          } else {
+            status = 'STANDBY';
+            task = 'Spatial stream standby';
+            load = 22;
+          }
+        } else if (agent.id === 'logic') {
+          if (activeModule === 'war-room' || activeModule === 'chat' || activeModule === 'hitl') {
+            status = 'PROCESSING';
+            task = 'Orchestration & tool reasoning';
+            load = 92;
+          } else {
+            status = 'SYNCHRONIZED';
+            task = 'Reasoning cascade nominal';
+            load = 34;
+          }
+        } else if (agent.id === 'memory') {
+          if (activeModule === 'vault' || activeModule === 'scratchpad' || activeModule === 'github' || activeModule === 'tasks') {
+            status = 'PROCESSING';
+            task = 'Axiom & Workspace sync';
+            load = 82;
+          } else {
+            status = 'SYNCHRONIZED';
+            task = 'SQLite + Firestore synced';
+            load = 28;
+          }
+        } else if (agent.id === 'audio') {
+          if (activeModule === 'music' || activeModule === 'transcribe' || activeModule === 'live') {
+            status = 'PROCESSING';
+            task = 'Lyria & PCM stream active';
+            load = 76;
+          } else {
+            status = 'STANDBY';
+            task = 'Audio pipeline standby';
+            load = 18;
+          }
+        } else if (agent.id === 'grounding') {
+          if (activeModule === 'search' || activeModule === 'maps' || activeModule === 'browser') {
+            status = 'PROCESSING';
+            task = 'Live web grounding';
+            load = 74;
+          } else {
+            status = 'STANDBY';
+            task = 'Web proxy standby';
+            load = 20;
+          }
+        } else if (agent.id === 'kernel') {
           status = 'SYNCHRONIZED';
-          task = '32-branch reasoning trees';
-          load = 34;
+          task = 'UID 0 · Ring -3 Hypervisor';
+          load = 32;
         }
-      } else if (agent.id === 'memory') {
-        if (activeModule === 'vault' || activeModule === 'scratchpad' || activeModule === 'github') {
-          isBusy = true;
-          status = 'PROCESSING';
-          task = 'Axiom crystallization';
-          load = 82;
-        } else {
-          status = 'SYNCHRONIZED';
-          task = 'Permanent axiom indexing';
-          load = 28;
-        }
-      } else if (agent.id === 'audio') {
-        if (activeModule === 'music' || activeModule === 'transcribe' || activeModule === 'live') {
-          isBusy = true;
-          status = 'PROCESSING';
-          task = 'Lyria & Live PCM 24kHz stream';
-          load = 76;
-        } else {
-          status = 'STANDBY';
-          task = 'Harmonic polyphony synthesis';
-          load = 18;
-        }
-      } else if (agent.id === 'grounding') {
-        if (activeModule === 'search' || activeModule === 'maps' || activeModule === 'browser') {
-          isBusy = true;
-          status = 'PROCESSING';
-          task = 'Open-web crawler scraping';
-          load = 74;
-        } else {
-          status = 'STANDBY';
-          task = 'Substrate web alignment';
-          load = 20;
-        }
-      } else if (agent.id === 'kernel') {
-        status = 'SYNCHRONIZED';
-        task = 'Core-Level bare-metal 0.08ms';
-        load = 32;
-      }
 
-      return {
-        ...agent,
-        status,
-        currentTask: task,
-        loadPct: load
-      };
-    }));
+        return { ...agent, status, currentTask: task, loadPct: load };
+      })
+    );
   }, [activeModule, tick]);
 
-  // All 19 modules completely preserved and categorized
-  const allTabs: TabItem[] = [
-    {
-      id: 'chat',
-      label: 'Sovereign Chat',
-      category: 'command',
-      icon: MessageSquare,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Premier Chat-First interface with all open-source models, agent wardrobe & tools'
-    },
-    {
-      id: 'browser',
-      label: 'Open-Web Browser',
-      category: 'command',
-      icon: Globe,
-      accentColor: 'text-sky-400',
-      activeBg: 'bg-sky-500/15 border-sky-500/40 text-sky-200',
-      description: 'Full-spectrum open-web search, DuckDuckGo HTML scraping & autonomous agent learn'
-    },
-    {
-      id: 'termux',
-      label: 'Termux Android',
-      category: 'command',
-      icon: Smartphone,
-      accentColor: 'text-emerald-400',
-      activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
-      description: 'One-shot installer script & local llama-server on phone (127.0.0.1:8080)'
-    },
-    {
-      id: 'projects',
-      label: 'Unified Projects',
-      category: 'command',
-      icon: FolderGit2,
-      accentColor: 'text-cyan-400',
-      activeBg: 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200',
-      description: 'Workspace files, multi-file editor, and compilation tools'
-    },
-    {
-      id: 'war-room',
-      label: 'PC War Room',
-      category: 'command',
-      icon: ShieldAlert,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Multi-screen sovereign cockpit & operational situational matrix'
-    },
-    {
-      id: 'osint',
-      label: 'OSINT & Attack Surface',
-      category: 'command',
-      icon: ShieldAlert,
-      accentColor: 'text-rose-400',
-      activeBg: 'bg-rose-500/15 border-rose-500/40 text-rose-200',
-      description: 'Comprehensive digital footprint scanning & threat intelligence'
-    },
-    {
-      id: 'burner-mail',
-      label: 'Burner Mail Matrix',
-      category: 'command',
-      icon: Mail,
-      accentColor: 'text-teal-400',
-      activeBg: 'bg-teal-500/15 border-teal-500/40 text-teal-200',
-      description: 'Disposable temporary email inboxes with zero tracking'
-    },
-    {
-      id: 'infinite-sim',
-      label: 'Infinite-SIM & Burners',
-      category: 'command',
-      icon: Phone,
-      accentColor: 'text-emerald-400',
-      activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
-      description: 'Unlimited virtual eSIM cards, Luhn ICCIDs, LPA activation & infinite burner phone numbers with SMS/OTP routing'
-    },
-    {
-      id: 'functions',
-      label: 'Function Deck',
-      category: 'command',
-      icon: Zap,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Zero-token autonomous tool execution & agent toolbelt'
-    },
-    {
-      id: 'hitl',
-      label: 'HITL Workflows',
-      category: 'command',
-      icon: UserCheck,
-      accentColor: 'text-indigo-400',
-      activeBg: 'bg-indigo-500/15 border-indigo-500/40 text-indigo-200',
-      description: 'Human-in-the-loop validation, approval gates & verification checkpoints'
-    },
-    {
-      id: 'image',
-      label: 'Visual Studio',
-      category: 'creative',
-      icon: ImageIcon,
-      accentColor: 'text-purple-400',
-      activeBg: 'bg-purple-500/15 border-purple-500/40 text-purple-200',
-      description: 'High-res image generation with offline procedural Canvas/SVG synthesis'
-    },
-    {
-      id: 'music',
-      label: 'Lyria Music',
-      category: 'creative',
-      icon: Music,
-      accentColor: 'text-fuchsia-400',
-      activeBg: 'bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-200',
-      description: 'Audio & soundtrack composer with offline Web Audio polyphonic synthesizer'
-    },
-    {
-      id: 'video',
-      label: 'Veo 3 Motion',
-      category: 'creative',
-      icon: Video,
-      accentColor: 'text-rose-400',
-      activeBg: 'bg-rose-500/15 border-rose-500/40 text-rose-200',
-      description: 'Cinematic motion video generator with procedural render'
-    },
-    {
-      id: 'live',
-      label: 'Live Voice',
-      category: 'intelligence',
-      icon: Radio,
-      accentColor: 'text-red-400',
-      activeBg: 'bg-red-500/15 border-red-500/40 text-red-200',
-      description: 'Bidirectional real-time voice streaming bridge'
-    },
-    {
-      id: 'transcribe',
-      label: 'Transcribe',
-      category: 'intelligence',
-      icon: Mic,
-      accentColor: 'text-teal-400',
-      activeBg: 'bg-teal-500/15 border-teal-500/40 text-teal-200',
-      description: 'Phonetic audio intake & high-accuracy speech transcription'
-    },
-    {
-      id: 'search',
-      label: 'Search Grounding',
-      category: 'intelligence',
-      icon: Search,
-      accentColor: 'text-sky-400',
-      activeBg: 'bg-sky-500/15 border-sky-500/40 text-sky-200',
-      description: 'Live search grounding & real-time verified citations'
-    },
-    {
-      id: 'maps',
-      label: 'Maps Grounding',
-      category: 'intelligence',
-      icon: MapPin,
-      accentColor: 'text-emerald-400',
-      activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
-      description: 'Spatial & location geospatial intelligence grounding'
-    },
-    {
-      id: 'scratchpad',
-      label: 'Infinite Scratchpad',
-      category: 'data',
-      icon: FileText,
-      accentColor: 'text-teal-400',
-      activeBg: 'bg-teal-500/15 border-teal-500/40 text-teal-200',
-      description: 'Working memory, semantic cache & architectural scratch notes'
-    },
-    {
-      id: 'vault',
-      label: 'Vault Storage',
-      category: 'data',
-      icon: Archive,
-      accentColor: 'text-emerald-400',
-      activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
-      description: 'Persistent encrypted artifact storage & forensic ledger',
-      badge: artifactCount > 0 ? artifactCount : undefined
-    },
-    {
-      id: 'presets',
-      label: 'Prompt Presets',
-      category: 'command',
-      icon: BookmarkPlus,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Curated architectural directives, code reviews & creative instruction templates'
-    },
-    {
-      id: 'audit',
-      label: 'Forensic Ledger',
-      category: 'data',
-      icon: ShieldCheck,
-      accentColor: 'text-emerald-400',
-      activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
-      description: 'Immutable execution audit trail & forensic memory ledger'
-    },
-    {
-      id: 'swarm-test',
-      label: 'Swarm Diagnostic',
-      category: 'command',
-      icon: Activity,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Automated multi-agent verification of sovereign subsystems'
-    },
-    {
-      id: 'github',
-      label: 'GitHub Matrix',
-      category: 'data',
-      icon: FolderGit2,
-      accentColor: 'text-orange-400',
-      activeBg: 'bg-orange-500/15 border-orange-500/40 text-orange-200',
-      description: 'JHammerZ repository telemetry, commits & schema provenance'
-    },
-    {
-      id: 'packager',
-      label: 'APK Packager',
-      category: 'command',
-      icon: Package,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Convert modules into standalone Android APK applications'
-    },
-    {
-      id: 'drive',
-      label: 'Google Drive',
-      category: 'data',
-      icon: HardDrive,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Cloud file management, document browsing, text editing & artifact export'
-    },
-    {
-      id: 'knowledge-graph',
-      label: 'Knowledge Graph',
-      category: 'intelligence',
-      icon: Network,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Autonomous session memory consolidation & interactive architectural knowledge graph'
-    },
-    {
-      id: 'tool-shed',
-      label: 'Micro-Tool Shed',
-      category: 'command',
-      icon: Wrench,
-      accentColor: 'text-emerald-400',
-      activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
-      description: 'On-the-fly AI micro-tool generator, JS sandbox runner & OSINT utilities'
-    },
-    {
-      id: 'autonomy-supervisor',
-      label: 'Autonomy Supervisor',
-      category: 'command',
-      icon: Activity,
-      accentColor: 'text-cyan-400',
-      activeBg: 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200',
-      description: 'Expanded runtime autonomy, proactive scratchpad de-cluttering & diagnostic pulse'
-    },
-    {
-      id: 'download-models',
-      label: 'Model Wardrobe',
-      category: 'data',
-      icon: Download,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Download sovereign Lyrailius Omega weights & baked engines for offline use'
-    },
-    {
-      id: 'universal-installer',
-      label: 'Universal Installer',
-      category: 'command',
-      icon: Download,
-      accentColor: 'text-amber-400',
-      activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
-      description: 'Download universal installer and cross-platform runner to run orchestrator on any device'
-    },
-    {
-      id: 'api-secrets',
-      label: 'API Keys & Gateway',
-      category: 'command',
-      icon: Key,
-      accentColor: 'text-emerald-400',
-      activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
-      description: 'Server environment key telemetry, proxy route testing workbench & API security'
-    }
-  ];
+  const filteredModalTabs = useMemo(() => {
+    const q = moduleSearchQuery.toLowerCase().trim();
+    return ALL_MODULES.filter(tab => {
+      const matchesCategory = selectedCategory === 'all' || tab.category === selectedCategory;
+      const matchesSearch =
+        !q ||
+        tab.label.toLowerCase().includes(q) ||
+        tab.description.toLowerCase().includes(q);
+      return matchesCategory && matchesSearch;
+    });
+  }, [moduleSearchQuery, selectedCategory]);
 
-  // Primary fast hubs pinned in the sleek desktop bar
-  const primaryHubIds: ModuleType[] = ['chat', 'infinite-sim', 'burner-mail', 'api-secrets', 'knowledge-graph', 'tool-shed', 'universal-installer', 'browser', 'termux', 'image', 'drive', 'projects', 'download-models'];
-  const primaryHubs = primaryHubIds.map(id => allTabs.find(t => t.id === id)!).filter(Boolean);
+  const filteredSidebarModules = useMemo(() => {
+    const q = railFilter.toLowerCase().trim();
+    if (!q) return ALL_MODULES;
+    return ALL_MODULES.filter(
+      m => m.label.toLowerCase().includes(q) || m.description.toLowerCase().includes(q)
+    );
+  }, [railFilter]);
 
-  const filteredModalTabs = allTabs.filter(tab => {
-    const matchesCategory = selectedCategory === 'all' || tab.category === selectedCategory;
-    const matchesSearch = tab.label.toLowerCase().includes(moduleSearchQuery.toLowerCase()) || 
-                          tab.description.toLowerCase().includes(moduleSearchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const handleSelect = (id: ModuleType) => {
+    onSelectModule(id);
+    if (onCloseMobile) onCloseMobile();
+  };
 
-  const activeTabMeta = allTabs.find(t => t.id === activeModule) || allTabs[0];
+  const renderSidebarContent = (isDrawer = false) => {
+    const compact = !isDrawer && sidebarCollapsed;
+    return (
+      <div className="flex flex-col h-full bg-zinc-950 border-r border-zinc-800/80 select-none">
+        {/* Sidebar Header / Search & Collapse */}
+        <div className={`p-2.5 border-b border-zinc-800/70 flex items-center ${compact ? 'justify-center' : 'justify-between gap-2'}`}>
+          {!compact && (
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={railFilter}
+                onChange={(e) => setRailFilter(e.target.value)}
+                placeholder="Filter modules..."
+                className="w-full bg-zinc-900/90 border border-zinc-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 transition-colors"
+              />
+              {railFilter && (
+                <button
+                  onClick={() => setRailFilter('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  title="Clear filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {isDrawer ? (
+            <button
+              onClick={onCloseMobile}
+              className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors shrink-0"
+              aria-label="Close navigation drawer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors shrink-0 cursor-pointer"
+              title={sidebarCollapsed ? 'Expand Workspace Sidebar' : 'Collapse Workspace Sidebar'}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+
+        {/* Grouped Module Tree */}
+        <div className="flex-1 overflow-y-auto px-2 py-2.5 space-y-4">
+          {WORKSPACE_GROUPS.map(group => {
+            const groupItems = filteredSidebarModules.filter(m => m.group === group.id);
+            if (groupItems.length === 0) return null;
+
+            return (
+              <div key={group.id} className="space-y-1">
+                {!compact && (
+                  <div className="px-2.5 pb-0.5 text-[11px] font-medium text-zinc-500 flex items-center justify-between">
+                    <span>{group.label}</span>
+                    <span className="font-mono text-[10px] text-zinc-600 tabular-nums">{groupItems.length}</span>
+                  </div>
+                )}
+                <div className="space-y-0.5">
+                  {groupItems.map(item => {
+                    const Icon = item.icon;
+                    const isActive = activeModule === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handleSelect(item.id)}
+                        title={compact ? `${item.label} — ${item.description}` : item.description}
+                        className={`w-full flex items-center ${compact ? 'justify-center px-0 py-2' : 'justify-between gap-2 px-2.5 py-2'} rounded-lg text-xs transition-colors cursor-pointer border ${
+                          isActive
+                            ? `${item.activeBg} font-semibold`
+                            : 'border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/80'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2.5 min-w-0">
+                          <Icon className={`w-4 h-4 shrink-0 ${isActive ? item.accentColor : 'text-zinc-500'}`} />
+                          {!compact && <span className="truncate">{item.label}</span>}
+                        </span>
+                        {!compact && item.id === 'vault' && artifactCount > 0 && (
+                          <span className="font-mono text-[10px] text-emerald-400 tabular-nums shrink-0">
+                            {artifactCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {filteredSidebarModules.length === 0 && !compact && (
+            <div className="px-3 py-6 text-center text-xs text-zinc-500">
+              No matching modules.
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Workspace Utilities */}
+        <div className="p-2 border-t border-zinc-800/70 space-y-1.5 bg-zinc-950">
+          <button
+            onClick={() => {
+              if (isDrawer && onCloseMobile) onCloseMobile();
+              setShowAllModulesModal(true);
+            }}
+            className={`w-full flex items-center ${compact ? 'justify-center px-0 py-2' : 'justify-between px-2.5 py-2'} rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-medium text-amber-300 transition-colors cursor-pointer`}
+            title={`Browse all ${ALL_MODULES.length} Modules`}
+          >
+            <span className="flex items-center gap-2">
+              <Grid className="w-4 h-4 text-amber-400 shrink-0" />
+              {!compact && <span>All Modules</span>}
+            </span>
+            {!compact && (
+              <span className="font-mono text-[11px] text-zinc-400 tabular-nums">{ALL_MODULES.length}</span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              if (isDrawer && onCloseMobile) onCloseMobile();
+              setShowTelemetryModal(true);
+            }}
+            className={`w-full flex items-center ${compact ? 'justify-center px-0 py-2' : 'justify-between px-2.5 py-2'} rounded-lg bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800/70 text-xs text-zinc-300 transition-colors cursor-pointer`}
+            title="Inspect 6 Swarm Sub-Agents"
+          >
+            <span className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-400 shrink-0" />
+              {!compact && <span>Swarm Agents</span>}
+            </span>
+            {!compact && (
+              <span className="font-mono text-[11px] text-emerald-400 tabular-nums">6</span>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
-      {/* Sleek, Uncluttered Navigation Bar */}
-      <nav className="border-t border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md px-3 sm:px-4 py-2 transition-all">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-          
-          {/* Left: Primary Hubs Switcher (Sleek single row, generous breathing room) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
-            {primaryHubs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeModule === tab.id;
+      {/* Desktop Persistent Collapsible Workspace Sidebar */}
+      <aside
+        className={`hidden lg:flex flex-col shrink-0 transition-[width] duration-150 ${
+          sidebarCollapsed ? 'w-[64px]' : 'w-[244px]'
+        }`}
+      >
+        {renderSidebarContent(false)}
+      </aside>
 
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => onSelectModule(tab.id)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono font-medium transition-all border cursor-pointer shrink-0 ${
-                    isActive
-                      ? `${tab.activeBg} font-bold shadow-sm shadow-amber-500/10`
-                      : 'bg-zinc-900/40 hover:bg-zinc-850 border-zinc-800/60 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? tab.accentColor : 'text-zinc-500'}`} />
-                  <span>{tab.label.split(' ')[0]}</span>
-                </button>
-              );
-            })}
-
-            {/* "All Modules" Mega-Launcher Button */}
-            <button
-              onClick={() => setShowAllModulesModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-purple-500/20 to-sky-500/20 hover:brightness-110 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold shrink-0 transition-all cursor-pointer shadow-sm"
-              title={`View all ${allTabs.length} Operational Modules`}
-            >
-              <Grid className="w-3.5 h-3.5 text-amber-400" />
-              <span>All Modules ({allTabs.length})</span>
-              {artifactCount > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
-                  {artifactCount}
-                </span>
-              )}
-            </button>
+      {/* Mobile & Tablet Slide-Over Navigation Drawer */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+            onClick={onCloseMobile}
+          />
+          <div className="relative z-10 w-[280px] max-w-[85vw] h-full shadow-2xl">
+            {renderSidebarContent(true)}
           </div>
-
-          {/* Right: Sub-Agent Swarm Realtime Status Pill (Saves 80px of vertical space!) */}
-          <button
-            onClick={() => setShowTelemetryModal(true)}
-            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-850 border border-zinc-800 text-xs font-mono text-zinc-300 hover:text-amber-300 transition-all cursor-pointer shrink-0"
-            title="Inspect 6 Sub-Agent telemetry & workload"
-          >
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <Activity className="w-3.5 h-3.5 text-amber-400" />
-            </div>
-            <span className="font-semibold text-[11px]">
-              6 Swarm Agents Synced
-            </span>
-          </button>
         </div>
-      </nav>
+      )}
 
-      {/* Mobile Ergonomic Bottom App Bar (Only visible on small phones sm:hidden for easy 1-handed thumb usage) */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800/80 px-2 py-1.5 flex items-center justify-around text-[10px] font-mono">
+      {/* Mobile Compact Bottom Thumb Dock (<= 56px, < 10% viewport height) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800/80 px-1 pb-safe-nav flex items-center justify-around text-[10px] font-medium">
         <button
-          onClick={() => onSelectModule('chat')}
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg transition-colors ${
-            activeModule === 'chat' ? 'text-amber-400 font-bold' : 'text-zinc-500 hover:text-zinc-300'
+          onClick={() => handleSelect('chat')}
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg transition-colors ${
+            activeModule === 'chat' ? 'text-amber-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
           }`}
         >
           <MessageSquare className="w-4 h-4" />
-          <span>Chat</span>
+          <span className="whitespace-nowrap">Chat</span>
         </button>
 
         <button
-          onClick={() => onSelectModule('browser')}
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg transition-colors ${
-            activeModule === 'browser' ? 'text-sky-400 font-bold' : 'text-zinc-500 hover:text-zinc-300'
+          onClick={() => handleSelect('tasks')}
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg transition-colors ${
+            activeModule === 'tasks' ? 'text-emerald-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
+          }`}
+        >
+          <ListTodo className="w-4 h-4" />
+          <span className="whitespace-nowrap">Tasks</span>
+        </button>
+
+        <button
+          onClick={() => handleSelect('projects')}
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg transition-colors ${
+            activeModule === 'projects' ? 'text-cyan-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
+          }`}
+        >
+          <FolderGit2 className="w-4 h-4" />
+          <span className="whitespace-nowrap">Projects</span>
+        </button>
+
+        <button
+          onClick={() => handleSelect('browser')}
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg transition-colors ${
+            activeModule === 'browser' ? 'text-sky-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
           }`}
         >
           <Globe className="w-4 h-4" />
-          <span>Browser</span>
-        </button>
-
-        <button
-          onClick={() => onSelectModule('termux')}
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg transition-colors ${
-            activeModule === 'termux' ? 'text-emerald-400 font-bold' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          <Smartphone className="w-4 h-4" />
-          <span>Termux</span>
-        </button>
-
-        <button
-          onClick={() => onSelectModule('image')}
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg transition-colors ${
-            activeModule === 'image' || activeModule === 'music' || activeModule === 'video' ? 'text-purple-400 font-bold' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          <ImageIcon className="w-4 h-4" />
-          <span>Studio</span>
+          <span className="whitespace-nowrap">Browser</span>
         </button>
 
         <button
           onClick={() => setShowAllModulesModal(true)}
-          className="flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-amber-300 font-bold"
+          className="flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg text-amber-300 font-semibold"
         >
           <Grid className="w-4 h-4 text-amber-400" />
-          <span>More ({allTabs.length})</span>
+          <span className="whitespace-nowrap tabular-nums">All ({ALL_MODULES.length})</span>
         </button>
-      </div>
+      </nav>
 
-      {/* All Modules Spacious Drawer / Modal */}
+      {/* Full Modules Directory Modal */}
       {showAllModulesModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-mono text-xs">
-            
-            {/* Header & Search */}
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900/80">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-6xl w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden text-xs">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900/70">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/35 flex items-center justify-center text-amber-400 shrink-0">
                   <Grid className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-zinc-100 text-sm flex items-center gap-2">
-                    <span>Aurelius Operational Modules Directory</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
-                      {allTabs.length} COMPLETE CAPABILITIES
-                    </span>
+                  <h3 className="font-bold text-zinc-100 text-sm">
+                    Operational Modules Directory
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
-                    Select any subsystem to switch workspace view immediately.
+                  <p className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
+                    <span className="tabular-nums">{ALL_MODULES.length} Active Subsystems</span>
+                    <span aria-hidden="true">·</span>
+                    <span>Switch workspace view instantly</span>
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="relative flex-1 sm:w-60">
+                <div className="relative flex-1 sm:w-64">
                   <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={moduleSearchQuery}
                     onChange={(e) => setModuleSearchQuery(e.target.value)}
                     placeholder="Search modules..."
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
+                    autoFocus
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl pl-8 pr-3 py-2 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/60"
                   />
                 </div>
                 <button
                   onClick={() => setShowAllModulesModal(false)}
-                  className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                  aria-label="Close directory"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Category Filter Pills */}
-            <div className="px-4 sm:px-6 pt-3 pb-1 border-b border-zinc-800/60 flex items-center gap-1.5 overflow-x-auto scrollbar-none text-[11px]">
+            <div className="px-4 sm:px-6 py-2.5 border-b border-zinc-800/70 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
               {(['all', 'command', 'creative', 'intelligence', 'data'] as CategoryType[]).map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 border ${
                     selectedCategory === cat
-                      ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 shadow-sm'
-                      : 'bg-zinc-900/60 hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                      : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border-zinc-800'
                   }`}
                 >
-                  {cat === 'all' ? `All (${allTabs.length})` : cat === 'command' ? 'Command & Web' : cat === 'creative' ? 'Creative Studio' : cat === 'intelligence' ? 'Sensory Intelligence' : 'Storage & Vault'}
+                  {cat === 'all'
+                    ? `All (${ALL_MODULES.length})`
+                    : cat === 'command'
+                    ? 'Command & Autonomy'
+                    : cat === 'creative'
+                    ? 'Creative Studio'
+                    : cat === 'intelligence'
+                    ? 'Intelligence & Web'
+                    : 'Storage & Workspace'}
                 </button>
               ))}
             </div>
 
-            {/* Grid of All 19 Modules */}
-            <div className="p-4 sm:p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {filteredModalTabs.map((tab) => {
+            <div className="p-4 sm:p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredModalTabs.map(tab => {
                 const Icon = tab.icon;
                 const isActive = activeModule === tab.id;
-
                 return (
                   <button
                     key={tab.id}
                     onClick={() => {
-                      onSelectModule(tab.id);
+                      handleSelect(tab.id);
                       setShowAllModulesModal(false);
                     }}
-                    className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all hover:scale-[1.01] active:scale-98 cursor-pointer ${
+                    className={`p-3.5 rounded-xl border text-left flex flex-col justify-between transition-colors cursor-pointer ${
                       isActive
-                        ? `${tab.activeBg} shadow-md`
-                        : 'bg-zinc-900/50 hover:bg-zinc-900 border-zinc-800/80 hover:border-zinc-700 text-zinc-300'
+                        ? `${tab.activeBg}`
+                        : 'bg-zinc-900/50 hover:bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-zinc-950 flex items-center justify-center border border-zinc-800">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-zinc-950 flex items-center justify-center border border-zinc-800 shrink-0">
                           <Icon className={`w-4 h-4 ${tab.accentColor}`} />
                         </div>
-                        <span className="font-bold text-zinc-100 text-xs">{tab.label}</span>
+                        <span className="font-semibold text-zinc-100 text-xs truncate">{tab.label}</span>
                       </div>
-                      {tab.badge !== undefined && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
-                          {tab.badge}
+                      {tab.id === 'vault' && artifactCount > 0 && (
+                        <span className="font-mono text-[11px] text-emerald-400 tabular-nums shrink-0">
+                          {artifactCount} items
                         </span>
                       )}
                     </div>
                     <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
                       {tab.description}
                     </p>
-                    <div className="mt-3 flex items-center justify-between text-[10px] text-zinc-500 border-t border-zinc-800/50 pt-2">
-                      <span className="uppercase tracking-wider">{tab.category}</span>
-                      <span className="text-amber-400 font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                        Launch <ChevronRight className="w-3 h-3" />
+                    <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-500 border-t border-zinc-800/60 pt-2">
+                      <span className="capitalize">{tab.category}</span>
+                      <span className="text-amber-400 font-medium flex items-center gap-1">
+                        Open <ChevronRight className="w-3 h-3" />
                       </span>
                     </div>
                   </button>
                 );
               })}
             </div>
-
-            {/* Footer */}
-            <div className="p-4 border-t border-zinc-800 flex justify-between items-center bg-zinc-900/60 text-[11px] text-zinc-400">
-              <span>Aurelius Orchestrator v7.0.0-SOVEREIGN-APEX • Sovereign Matrix Edition</span>
-              <button
-                onClick={() => setShowAllModulesModal(false)}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs"
-              >
-                Close Directory
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* Sub-Agent Telemetry Details Modal */}
+      {/* Sub-Agent Telemetry Modal */}
       {showTelemetryModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-zinc-950 border border-amber-500/30 rounded-3xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden font-mono text-xs">
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-amber-400 animate-pulse" />
-                <span className="text-xs font-bold text-zinc-100">
-                  SUB-AGENT CONCURRENT DATA PROCESSING MATRIX
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                  ZERO TOKENS BURNED
-                </span>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-3xl w-full max-h-[85dvh] flex flex-col shadow-2xl overflow-hidden text-xs">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/70">
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-4 h-4 text-amber-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-100">Sub-Agent Telemetry Matrix</h3>
+                  <p className="text-xs text-zinc-400">6 concurrent subsystem coordinators</p>
+                </div>
               </div>
               <button
                 onClick={() => setShowTelemetryModal(false)}
-                className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                aria-label="Close telemetry"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            <div className="p-4 sm:p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {subAgents.map(agent => {
                 const Icon = agent.icon;
                 return (
-                  <div key={agent.id} className={`p-3 rounded-2xl border ${agent.bgColor} ${agent.borderColor} space-y-2`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Icon className={`w-4 h-4 ${agent.color}`} />
-                        <span className="font-bold text-zinc-100">{agent.name}</span>
+                  <div key={agent.id} className={`p-3.5 rounded-xl border ${agent.bgColor} ${agent.borderColor} space-y-2`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Icon className={`w-4 h-4 shrink-0 ${agent.color}`} />
+                        <span className="font-semibold text-zinc-100 truncate">{agent.name}</span>
                       </div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                        agent.status === 'PROCESSING'
-                          ? 'bg-amber-500/20 text-amber-300 animate-pulse'
-                          : agent.status === 'SYNCHRONIZED'
-                          ? 'bg-emerald-500/20 text-emerald-300'
-                          : 'bg-zinc-800 text-zinc-400'
-                      }`}>
-                        {agent.status}
-                      </span>
+                      <span className="font-mono text-[10px] text-zinc-300 shrink-0">{agent.status}</span>
                     </div>
 
-                    <div className="text-[11px] text-zinc-300 font-sans">
+                    <div className="text-[11px] text-zinc-300">
                       {agent.currentTask}
                     </div>
 
                     <div className="space-y-1 pt-1">
-                      <div className="flex justify-between text-[10px] text-zinc-400">
+                      <div className="flex justify-between text-[11px] text-zinc-400 font-mono tabular-nums">
                         <span>Workload</span>
                         <span>{agent.loadPct}%</span>
                       </div>
-                      <div className="w-full bg-zinc-800/80 h-1.5 rounded-full overflow-hidden">
-                        <div 
+                      <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden">
+                        <div
                           className="bg-amber-400 h-full rounded-full transition-all duration-500"
                           style={{ width: `${agent.loadPct}%` }}
                         />
@@ -838,9 +1007,9 @@ export const Navigation: React.FC<NavigationProps> = ({
             <div className="p-4 border-t border-zinc-800 flex justify-end bg-zinc-900/60">
               <button
                 onClick={() => setShowTelemetryModal(false)}
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs"
+                className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-xs cursor-pointer"
               >
-                Done
+                Close
               </button>
             </div>
           </div>

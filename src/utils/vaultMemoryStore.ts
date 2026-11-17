@@ -188,7 +188,7 @@ export async function appendChatTurnToVault(message: ChatMessage): Promise<void>
  * Synchronizes an agentic conversation turn into Firestore users/{userId}/agentic_memory/{messageId}
  */
 export async function syncTurnToFirestore(userId: string, message: ChatMessage): Promise<void> {
-  if (!userId) return;
+  if (!userId || userId === '0' || userId.startsWith('guest-')) return;
   try {
     const { db } = await import('../firebase');
     const { doc, setDoc } = await import('firebase/firestore');
@@ -211,7 +211,7 @@ export async function syncTurnToFirestore(userId: string, message: ChatMessage):
  * Loads agentic memory turns from Firestore for cross-session cloud continuity
  */
 export async function loadTurnsFromFirestore(userId: string): Promise<ChatMessage[]> {
-  if (!userId) return [];
+  if (!userId || userId === '0' || userId.startsWith('guest-')) return [];
   try {
     const { db } = await import('../firebase');
     const { collection, getDocs, query, orderBy, limit } = await import('firebase/firestore');
@@ -258,7 +258,7 @@ export async function clearAllVaultTurns(): Promise<void> {
  */
 export async function convergeOfflineAndOnlineMemory(userId: string): Promise<ChatMessage[]> {
   const localTurns = await loadAllChatTurns();
-  if (!userId) return localTurns;
+  if (!userId || userId === '0' || userId.startsWith('guest-')) return localTurns;
 
   try {
     const cloudTurns = await loadTurnsFromFirestore(userId);
