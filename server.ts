@@ -53,12 +53,16 @@ import {
   getHostStorageVolumes,
   getHostSystemPlaces,
   getRealOsRuntimeInfo,
+  launchSteamGameUniversal,
   listAllHostAndOsDownloads,
   listRealDirectory,
   listRealProcesses,
+  listSovereignDesktopEntries,
+  probeUniversalCompatibilityMatrix,
   readRealFile,
   renameRealPath,
   resolveSafeHostPath,
+  scanLocalSteamLibraries,
   searchHostFiles,
   signalRealProcess,
   writeRealFile,
@@ -201,8 +205,28 @@ import {
   runAutonomousAgenticCryptoCycle,
   createOrImportCustomWallet,
   updateAgenticWalletPolicy,
-  requestSolanaDevnetAirdrop
+  requestSolanaDevnetAirdrop,
+  executeBankOrDigitalTransfer,
+  savePayoutBeneficiary,
+  deletePayoutBeneficiary,
+  linkExternalOrWatchOnlyWallet,
+  purgeSimulatedDataAndResyncReal,
+  getRealBootstrapAndConnectorStatus,
+  startAutonomousWalletDaemon,
+  getAutonomousWalletDaemonStatus,
+  setAutonomousWalletDaemonConfig,
+  executeAutonomousDaemonTick
 } from './src/server/cryptoWalletService';
+import {
+  loadGrantsState,
+  updateGrantApplicantProfile,
+  updateGrantApplicationStatus,
+  discoverRealNonReciprocalGrants,
+  generateGrantApplicationPacket,
+  buildStructuredProvenanceTemplate,
+  exportGrantApplicationToDesktop,
+  startAutonomousGrantDiscoveryDaemon
+} from './src/server/grantApplicationService';
 import {
   scanEntireProjectMerkleForensics,
   getCompetitiveOSSupremacyMatrix,
@@ -217,6 +241,8 @@ import {
 
 dotenv.config({ override: true });
 internalSecretsHandler.init();
+startAutonomousWalletDaemon();
+startAutonomousGrantDiscoveryDaemon();
 initKernelSqliteBridge(sovereignQuantumKernel)
   .then(() => {
     try {
@@ -7456,6 +7482,64 @@ app.post('/api/os/steam/execute', async (req, res) => {
   }
 });
 
+app.get('/api/os/desktop/entries', (_req, res) => {
+  try {
+    const result = listSovereignDesktopEntries();
+    res.json({ ok: true, success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, success: false, error: err?.message || 'Failed to read Sovereign Desktop directory' });
+  }
+});
+
+app.get('/api/os/steam/local-library', (req, res) => {
+  try {
+    const customPath = typeof req.query.path === 'string' ? req.query.path : undefined;
+    const result = scanLocalSteamLibraries(customPath);
+    res.json({ ok: true, success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, success: false, error: err?.message || 'Local Steam library scan failed' });
+  }
+});
+
+app.post('/api/os/steam/launch', async (req, res) => {
+  try {
+    const {
+      appId,
+      gameName,
+      runner,
+      enableControllerInput,
+      enableMangoHud,
+      enableGamemode,
+      extraArgs
+    } = req.body || {};
+    const numId = Number(appId);
+    if (!numId || Number.isNaN(numId)) {
+      return res.status(400).json({ ok: false, success: false, error: 'Valid numeric appId is required' });
+    }
+    const result = await launchSteamGameUniversal({
+      appId: numId,
+      gameName: typeof gameName === 'string' ? gameName : undefined,
+      runner,
+      enableControllerInput: enableControllerInput !== false,
+      enableMangoHud: Boolean(enableMangoHud),
+      enableGamemode: Boolean(enableGamemode),
+      extraArgs: typeof extraArgs === 'string' ? extraArgs : ''
+    });
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, success: false, error: err?.message || 'Universal Steam launch failed' });
+  }
+});
+
+app.get('/api/os/compatibility/probe', (_req, res) => {
+  try {
+    const result = probeUniversalCompatibilityMatrix();
+    res.json({ ok: true, success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, success: false, error: err?.message || 'Universal compatibility probe failed' });
+  }
+});
+
 // =========================================================================
 // REAL DISCORD REST API v10, LIVE WEBHOOK DISPATCHER & GUILD WIDGET BRIDGE
 // =========================================================================
@@ -7801,11 +7885,11 @@ app.post('/api/crypto/wallets/create', async (req, res) => {
     const wallet = createOrImportCustomWallet({
       label: String(req.body?.label || 'Custom Multi-Chain Vault'),
       role: req.body?.role === 'AGENTIC_AUTONOMOUS' ? 'AGENTIC_AUTONOMOUS' : 'PERSONAL_INVESTOR',
-      initialCashUsd: typeof req.body?.initialCashUsd === 'number' ? req.body.initialCashUsd : 10000,
+      initialCashUsd: 0,
       importPrivateKeyHex:
         typeof req.body?.importPrivateKeyHex === 'string' ? req.body.importPrivateKeyHex.trim() : undefined
     });
-    const refreshed = await syncLiveOnChainAndMarketPrices(false);
+    const refreshed = await syncLiveOnChainAndMarketPrices(true);
     res.json({
       success: true,
       wallet,
@@ -7842,6 +7926,204 @@ app.post('/api/crypto/wallets/sol-airdrop', async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Solana Devnet airdrop failed' });
+  }
+});
+
+app.post('/api/crypto/wallets/bank-transfer', async (req, res) => {
+  try {
+    const result = await executeBankOrDigitalTransfer({
+      walletId: String(req.body?.walletId || 'personal-sovereign-vault'),
+      rail: req.body?.rail || 'BANK_ACH',
+      fundingSource: req.body?.fundingSource || 'USD_CASH',
+      amountUsd: Number(req.body?.amountUsd || 0),
+      targetCurrency: typeof req.body?.targetCurrency === 'string' ? req.body.targetCurrency : 'USD',
+      recipientName: String(req.body?.recipientName || ''),
+      institutionName: typeof req.body?.institutionName === 'string' ? req.body.institutionName : undefined,
+      accountOrHandle: String(req.body?.accountOrHandle || ''),
+      routingOrSwift: typeof req.body?.routingOrSwift === 'string' ? req.body.routingOrSwift : undefined,
+      memo: typeof req.body?.memo === 'string' ? req.body.memo : undefined,
+      saveBeneficiary: Boolean(req.body?.saveBeneficiary),
+      beneficiaryLabel: typeof req.body?.beneficiaryLabel === 'string' ? req.body.beneficiaryLabel : undefined
+    });
+    const refreshed = await syncLiveOnChainAndMarketPrices(false);
+    res.json({
+      ...result,
+      ...refreshed
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Bank / digital transfer failed' });
+  }
+});
+
+app.post('/api/crypto/wallets/beneficiaries', async (req, res) => {
+  try {
+    if (req.body?.action === 'delete' && req.body?.beneficiaryId) {
+      deletePayoutBeneficiary(String(req.body.beneficiaryId));
+    } else {
+      savePayoutBeneficiary({
+        label: String(req.body?.label || ''),
+        rail: req.body?.rail || 'BANK_ACH',
+        recipientName: String(req.body?.recipientName || ''),
+        institutionName: String(req.body?.institutionName || ''),
+        accountOrHandle: String(req.body?.accountOrHandle || ''),
+        routingOrSwift: typeof req.body?.routingOrSwift === 'string' ? req.body.routingOrSwift : undefined,
+        currency: typeof req.body?.currency === 'string' ? req.body.currency : 'USD'
+      });
+    }
+    const refreshed = await syncLiveOnChainAndMarketPrices(false);
+    res.json({ success: true, ...refreshed });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Beneficiary update failed' });
+  }
+});
+
+app.get('/api/crypto/wallets/bootstrap-status', (_req, res) => {
+  try {
+    res.json({ success: true, ...getRealBootstrapAndConnectorStatus() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Bootstrap status lookup failed' });
+  }
+});
+
+app.post('/api/crypto/wallets/link-external', async (req, res) => {
+  try {
+    const result = await linkExternalOrWatchOnlyWallet({
+      label: String(req.body?.label || 'Connected Real External Wallet'),
+      source:
+        req.body?.source === 'METAMASK_EVM' || req.body?.source === 'PHANTOM_SOLANA'
+          ? req.body.source
+          : 'WATCH_ONLY_ADDRESS',
+      ethereumAddress: typeof req.body?.ethereumAddress === 'string' ? req.body.ethereumAddress : undefined,
+      bitcoinAddress: typeof req.body?.bitcoinAddress === 'string' ? req.body.bitcoinAddress : undefined,
+      solanaAddress: typeof req.body?.solanaAddress === 'string' ? req.body.solanaAddress : undefined
+    });
+    const refreshed = await syncLiveOnChainAndMarketPrices(false);
+    res.json({ ...result, ...refreshed });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to link external wallet' });
+  }
+});
+
+app.post('/api/crypto/wallets/purge-simulated', async (_req, res) => {
+  try {
+    const result = await purgeSimulatedDataAndResyncReal();
+    const refreshed = await syncLiveOnChainAndMarketPrices(false);
+    res.json({ ...result, ...refreshed });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Purge simulated data failed' });
+  }
+});
+
+app.get('/api/crypto/wallets/daemon', (_req, res) => {
+  try {
+    res.json({ success: true, daemon: getAutonomousWalletDaemonStatus() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Daemon status failed' });
+  }
+});
+
+app.post('/api/crypto/wallets/daemon', async (req, res) => {
+  try {
+    if (req.body?.action === 'tick') {
+      const daemon = await executeAutonomousDaemonTick();
+      return res.json({ success: true, daemon });
+    }
+    const daemon = setAutonomousWalletDaemonConfig({
+      enabled: typeof req.body?.enabled === 'boolean' ? req.body.enabled : undefined,
+      fullAutonomyAllWallets:
+        typeof req.body?.fullAutonomyAllWallets === 'boolean'
+          ? req.body.fullAutonomyAllWallets
+          : undefined
+    });
+    res.json({ success: true, daemon });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Daemon update failed' });
+  }
+});
+
+// =========================================================================
+// AUTONOMOUS NON-RECIPROCAL GRANT HUNTER & APPLICATION ENGINE ENDPOINTS
+// =========================================================================
+app.get('/api/grants/state', (_req, res) => {
+  try {
+    res.json({ success: true, state: loadGrantsState() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to load grant state' });
+  }
+});
+
+app.post('/api/grants/discover', async (req, res) => {
+  try {
+    const focusQuery = typeof req.body?.focusQuery === 'string' ? req.body.focusQuery.trim() : undefined;
+    const result = await discoverRealNonReciprocalGrants(focusQuery);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Autonomous grant discovery failed' });
+  }
+});
+
+app.post('/api/grants/profile', (req, res) => {
+  try {
+    const profile = updateGrantApplicantProfile(req.body || {});
+    res.json({ success: true, profile });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update applicant profile' });
+  }
+});
+
+app.post('/api/grants/apply', async (req, res) => {
+  try {
+    const grantId = String(req.body?.grantId || '').trim();
+    if (!grantId) {
+      return res.status(400).json({ success: false, error: 'grantId is required' });
+    }
+    const result = await generateGrantApplicationPacket(grantId);
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json(result);
+    }
+    res.json({ ...result, state: loadGrantsState() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to draft grant application' });
+  }
+});
+
+app.post('/api/grants/template', (req, res) => {
+  try {
+    const grantId = String(req.body?.grantId || '').trim();
+    if (!grantId) {
+      return res.status(400).json({ success: false, error: 'grantId is required' });
+    }
+    const result = buildStructuredProvenanceTemplate(grantId);
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json(result);
+    }
+    res.json({ ...result, state: loadGrantsState() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to build provenance cover sheet' });
+  }
+});
+
+app.post('/api/grants/status', (req, res) => {
+  try {
+    const applicationId = String(req.body?.applicationId || '').trim();
+    const status = req.body?.status;
+    if (!applicationId || !['DRAFT_READY', 'REVIEWED', 'SUBMITTED', 'AWARDED'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Valid applicationId and status required' });
+    }
+    const updated = updateGrantApplicationStatus(applicationId, status);
+    res.json({ success: Boolean(updated), application: updated, state: loadGrantsState() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Status update failed' });
+  }
+});
+
+app.post('/api/grants/export-desktop', (req, res) => {
+  try {
+    const applicationId = String(req.body?.applicationId || '').trim();
+    const result = exportGrantApplicationToDesktop(applicationId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Export to desktop failed' });
   }
 });
 

@@ -47,6 +47,10 @@ import { localLlmManager } from './utils/localLlmEngine';
 import { autonomousSelfImprovement } from './utils/autonomousSelfImprovement';
 import { orchestratorRuntime } from './utils/OrchestratorRuntime';
 import { useOrchestrator } from './hooks/useOrchestrator';
+import {
+  loadOSCustomizationProfile,
+  saveOSCustomizationProfile
+} from './utils/osCustomizationStore';
 import type { ModuleType, Artifact, AuditLedgerItem } from './types';
 
 // Lazy-loaded OS Applications (keeps initial boot fast & eliminates 20+ MB including Three.js from startup)
@@ -90,9 +94,11 @@ const SovereignOSSettingsModule = lazy(() => import('./components/SovereignOSSet
 const DownloadModelsModule = lazy(() => import('./components/DownloadModelsModule').then(m => ({ default: m.DownloadModelsModule })));
 const UniversalInstallerModule = lazy(() => import('./components/UniversalInstallerModule').then(m => ({ default: m.UniversalInstallerModule })));
 const SovereignCryptoWalletModule = lazy(() => import('./components/SovereignCryptoWalletModule').then(m => ({ default: m.SovereignCryptoWalletModule })));
+const AutonomousGrantEnginePanel = lazy(() => import('./components/AutonomousGrantEnginePanel').then(m => ({ default: m.AutonomousGrantEnginePanel })));
 const ApiSecretsModule = lazy(() => import('./components/ApiSecretsModule').then(m => ({ default: m.ApiSecretsModule })));
 const SovereignIntegrationsHub = lazy(() => import('./components/SovereignIntegrationsHub').then(m => ({ default: m.SovereignIntegrationsHub })));
 const SpatialArenaModule = lazy(() => import('./components/three/SpatialArenaModule').then(m => ({ default: m.SpatialArenaModule })));
+const FloatingTouchGamepadOverlay = lazy(() => import('./components/UniversalControllerDeck').then(m => ({ default: m.FloatingTouchGamepadOverlay })));
 
 const ModuleLoadingFallback: React.FC<{ label?: string }> = ({ label = 'Loading module...' }) => (
   <div className="flex-1 min-h-[220px] flex flex-col items-center justify-center gap-3 p-8 bg-zinc-950/90 text-zinc-400 font-mono text-xs">
@@ -356,6 +362,104 @@ export default function App() {
   const [osActionToast, setOsActionToast] = useState<string | null>(null);
   const [osMarketAlert, setOsMarketAlert] = useState<AutonomousMarketAlert | null>(null);
   const [dismissedMarketSymbols, setDismissedMarketSymbols] = useState<Record<string, number>>({});
+  const [showTouchControllerOverlay, setShowTouchControllerOverlay] = useState<boolean>(
+    () => loadOSCustomizationProfile().showTouchControllerOverlay
+  );
+  const [enableGamepadOsNav, setEnableGamepadOsNav] = useState<boolean>(
+    () => loadOSCustomizationProfile().enableGamepadOsNav
+  );
+
+  useEffect(() => {
+    const syncCustom = (e: Event) => {
+      const profile = (e as CustomEvent).detail || loadOSCustomizationProfile();
+      setShowTouchControllerOverlay(Boolean(profile.showTouchControllerOverlay));
+      setEnableGamepadOsNav(Boolean(profile.enableGamepadOsNav));
+    };
+    window.addEventListener('sovereign_os_customization_changed', syncCustom);
+    return () => window.removeEventListener('sovereign_os_customization_changed', syncCustom);
+  }, []);
+
+  // Event-gated Global Hardware Controller OS Navigation (Xbox, PlayStation, Switch, Steam Deck, 8BitDo, HOTAS, HID)
+  useEffect(() => {
+    if (!enableGamepadOsNav || typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') {
+      return;
+    }
+    let rafId = 0;
+    let active = false;
+    const prevPressed: Record<number, boolean> = {};
+
+    const hasConnectedPad = () => {
+      try {
+        return Array.from(navigator.getGamepads() || []).some((p) => Boolean(p && p.connected));
+      } catch {
+        return false;
+      }
+    };
+
+    const tick = () => {
+      if (!active) return;
+      const pads = Array.from(navigator.getGamepads() || []).filter((p): p is Gamepad => Boolean(p && p.connected));
+      if (pads.length === 0) {
+        active = false;
+        return;
+      }
+      const pad = pads[0];
+      const checkEdge = (idx: number, onDown: () => void) => {
+        const down = Boolean(pad.buttons[idx]?.pressed);
+        if (down && !prevPressed[idx]) {
+          onDown();
+        }
+        prevPressed[idx] = down;
+      };
+
+      // Guide (16) or Start/Options (9) toggles OS Command Palette / Launcher
+      checkEdge(16, () => setIsCommandPaletteOpen((prev) => !prev));
+      checkEdge(9, () => setIsCommandPaletteOpen((prev) => !prev));
+      // D-Pad navigation + A/B confirm/back
+      const dispatchKey = (key: string, code: string) => {
+        const target = document.activeElement || window;
+        target.dispatchEvent(new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true }));
+      };
+      checkEdge(12, () => dispatchKey('ArrowUp', 'ArrowUp'));
+      checkEdge(13, () => dispatchKey('ArrowDown', 'ArrowDown'));
+      checkEdge(14, () => dispatchKey('ArrowLeft', 'ArrowLeft'));
+      checkEdge(15, () => dispatchKey('ArrowRight', 'ArrowRight'));
+      checkEdge(0, () => dispatchKey('Enter', 'Enter'));
+      checkEdge(1, () => dispatchKey('Escape', 'Escape'));
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const startIfConnected = () => {
+      if (!active && hasConnectedPad()) {
+        active = true;
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+
+    const onConnected = (e: Event) => {
+      const gp = (e as GamepadEvent).gamepad;
+      showOsToast(`Controller Connected: ${gp?.id?.slice(0, 42) || 'Universal Gamepad'} — OS Nav Active`);
+      startIfConnected();
+    };
+    const onDisconnected = () => {
+      if (!hasConnectedPad()) {
+        active = false;
+        cancelAnimationFrame(rafId);
+      }
+    };
+
+    window.addEventListener('gamepadconnected', onConnected);
+    window.addEventListener('gamepaddisconnected', onDisconnected);
+    startIfConnected();
+
+    return () => {
+      active = false;
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('gamepadconnected', onConnected);
+      window.removeEventListener('gamepaddisconnected', onDisconnected);
+    };
+  }, [enableGamepadOsNav]);
 
   useEffect(() => {
     let active = true;
@@ -402,10 +506,20 @@ export default function App() {
       const saved = localStorage.getItem('sovereign_os_pinned_modules_v1');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          const migrated = localStorage.getItem('sovereign_os_pinned_grants_v1');
+          if (!migrated) {
+            localStorage.setItem('sovereign_os_pinned_grants_v1', '1');
+            const next = [...parsed] as ModuleType[];
+            if (!next.includes('crypto-wallet')) next.push('crypto-wallet');
+            if (!next.includes('grant-hunter')) next.push('grant-hunter');
+            return next;
+          }
+          return parsed;
+        }
       }
     } catch {}
-    return ['chat', 'browser', 'file-manager', 'terminal', 'task-manager', 'macro-telemetry', 'projects', 'os-settings'];
+    return ['chat', 'browser', 'file-manager', 'terminal', 'crypto-wallet', 'grant-hunter', 'macro-telemetry', 'projects', 'os-settings'];
   });
   const [windowStates, setWindowStates] = useState<Partial<Record<ModuleType, OSWindowGeometry>>>(() => {
     try {
@@ -1329,6 +1443,26 @@ export default function App() {
             onInjectIntoChat={handleInjectIntoChat}
           />
         );
+      case 'grant-hunter':
+        return (
+          <div className="flex-1 h-full overflow-y-auto bg-zinc-950 p-4 md:p-6">
+            <div className="max-w-7xl mx-auto space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-zinc-800/80">
+                <div className="text-xs font-mono text-zinc-400">
+                  Standalone Non-Reciprocal Grant Hunter · Linked to your Real Agentic Treasury Mainnet Addresses
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSelectOSModule('crypto-wallet')}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-bold cursor-pointer"
+                >
+                  Open Crypto Wallets →
+                </button>
+              </div>
+              <AutonomousGrantEnginePanel />
+            </div>
+          </div>
+        );
       case 'packager':
         return <PackagerModule />;
       case 'drive':
@@ -1882,6 +2016,14 @@ export default function App() {
         onSelectModule={handleSelectOSModule}
         activeModule={activeModule}
       />
+
+      {showTouchControllerOverlay && (
+        <Suspense fallback={null}>
+          <FloatingTouchGamepadOverlay
+            onClose={() => saveOSCustomizationProfile({ showTouchControllerOverlay: false })}
+          />
+        </Suspense>
+      )}
 
       <OfflineIndicator />
     </div>

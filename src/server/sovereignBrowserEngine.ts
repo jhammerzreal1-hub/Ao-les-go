@@ -70,9 +70,35 @@ const cookieJars = new Map<string, Map<string, CookieEntry>>();
 const liveNetworkHistory: NetworkAuditRecord[] = [];
 
 const CHROME_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const MOBILE_UA =
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
+
+function buildRealisticBrowserHeaders(
+  uaMode: string,
+  referer?: string,
+  cookieHeader?: string
+): Record<string, string> {
+  const isMobile = uaMode === 'mobile';
+  return {
+    'User-Agent': isMobile ? MOBILE_UA : CHROME_UA,
+    Accept:
+      'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    'Sec-Ch-Ua-Mobile': isMobile ? '?1' : '?0',
+    'Sec-Ch-Ua-Platform': isMobile ? '"Android"' : '"Windows"',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    ...(referer ? { Referer: referer } : {}),
+    ...(cookieHeader ? { Cookie: cookieHeader } : {})
+  };
+}
 
 function recordNetworkEvent(entry: NetworkAuditRecord) {
   liveNetworkHistory.unshift(entry);
@@ -670,109 +696,227 @@ export function rewriteHtmlForRealBrowser(
   return html;
 }
 
+function decodeBingRedirectUrl(rawHref: string): string {
+  const clean = decodeHtmlEntities(rawHref).trim();
+  if (!clean.includes('bing.com/ck/a')) return clean;
+  try {
+    const parsed = new URL(clean);
+    const uParam = parsed.searchParams.get('u');
+    if (uParam && uParam.startsWith('a1')) {
+      const b64 = uParam.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      const decoded = Buffer.from(padded, 'base64').toString('utf8');
+      if (/^https?:\/\//i.test(decoded)) return decoded;
+    }
+  } catch {
+    // keep raw if decode fails
+  }
+  return clean;
+}
+
+function stripCdata(raw: string): string {
+  return raw.replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/i, '$1').trim();
+}
+
 export async function performRealWebSearch(
   query: string,
-  options: { site?: string; maxResults?: number } = {}
+  options: { site?: string; maxResults?: number; category?: 'web' | 'news' | 'shopping' | 'tech' } = {}
 ): Promise<{
   results: SearchHit[];
   elapsedMs: number;
   enginesQueried: string[];
 }> {
   const startTime = Date.now();
-  const trimmedQuery = options.site ? `site:${options.site} ${query.trim()}` : query.trim();
-  const maxResults = options.maxResults || 16;
-  const results: SearchHit[] = [];
+  const category = options.category || 'web';
+  const baseQuery = options.site ? `site:${options.site} ${query.trim()}` : query.trim();
+  const effectiveQuery =
+    category === 'shopping' ? `${baseQuery} buy price store` : baseQuery;
+  const maxResults = options.maxResults || 20;
+
+  const bingRssHits: SearchHit[] = [];
+  const bingHtmlHits: SearchHit[] = [];
+  const newsHits: SearchHit[] = [];
+  const ddgHits: SearchHit[] = [];
+  const techHits: SearchHit[] = [];
+  const wikiHits: SearchHit[] = [];
   const enginesQueried: string[] = [];
 
-  const pushUnique = (hit: SearchHit) => {
-    if (!hit.url || !hit.title) return;
-    if (results.some((r) => r.url === hit.url)) return;
-    results.push(hit);
-  };
-
-  // Run DuckDuckGo HTML, Wikipedia OpenSearch, HackerNews Algolia, and ArXiv/GitHub in parallel for real internet results
   const tasks: Promise<void>[] = [];
 
-  // 1. DuckDuckGo HTML live full-web index
+  // 1. Primary Full Open-Internet Web Index: Bing RSS (clean direct URLs across the entire web)
+  tasks.push(
+    (async () => {
+      try {
+        enginesQueried.push('Bing-OpenWeb');
+        const rssRes = await fetch(
+          `https://www.bing.com/search?q=${encodeURIComponent(effectiveQuery)}&format=rss&count=20&setlang=en-US`,
+          {
+            headers: {
+              'User-Agent': CHROME_UA,
+              Accept: 'application/rss+xml,application/xml,text/xml,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.9'
+            },
+            signal: AbortSignal.timeout(7000)
+          }
+        );
+        if (!rssRes.ok) return;
+        const xml = await rssRes.text();
+        const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = itemRegex.exec(xml)) !== null && bingRssHits.length < 16) {
+          const block = m[1];
+          const titleM = block.match(/<title>([\s\S]*?)<\/title>/i);
+          const linkM = block.match(/<link>([\s\S]*?)<\/link>/i);
+          const descM = block.match(/<description>([\s\S]*?)<\/description>/i);
+          const pubM = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/i);
+          if (!titleM || !linkM) continue;
+          const actualUrl = decodeHtmlEntities(stripCdata(linkM[1])).trim();
+          if (!/^https?:\/\//i.test(actualUrl)) continue;
+          const title = decodeHtmlEntities(stripCdata(titleM[1]).replace(/<[^>]+>/g, '')).trim();
+          const snippet = descM
+            ? decodeHtmlEntities(stripCdata(descM[1]).replace(/<[^>]+>/g, '')).trim()
+            : '';
+          let domain = 'open-web';
+          try {
+            domain = new URL(actualUrl).hostname.replace(/^www\./, '');
+          } catch {}
+          bingRssHits.push({
+            title,
+            url: actualUrl,
+            snippet,
+            source: domain,
+            publishedAt: pubM ? stripCdata(pubM[1]) : undefined
+          });
+        }
+      } catch {
+        // non-fatal
+      }
+    })()
+  );
+
+  // 2. Primary Full Open-Internet Web Index: Bing Live HTML (extra depth & direct URLs)
+  tasks.push(
+    (async () => {
+      try {
+        enginesQueried.push('Bing-WebHTML');
+        const webRes = await fetch(
+          `https://www.bing.com/search?q=${encodeURIComponent(effectiveQuery)}&count=15&setlang=en-US`,
+          {
+            headers: buildRealisticBrowserHeaders('desktop', 'https://www.bing.com/'),
+            signal: AbortSignal.timeout(7000)
+          }
+        );
+        if (!webRes.ok) return;
+        const html = await webRes.text();
+        const algoRegex = /<li[^>]+class="[^"]*b_algo[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = algoRegex.exec(html)) !== null && bingHtmlHits.length < 12) {
+          const block = m[1];
+          const h2M = block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
+          if (!h2M) continue;
+          const hrefM = h2M[1].match(/href="([^"]+)"/i);
+          if (!hrefM) continue;
+          const actualUrl = decodeBingRedirectUrl(hrefM[1]);
+          if (!/^https?:\/\//i.test(actualUrl) || actualUrl.includes('bing.com/ck/a')) continue;
+          const title = decodeHtmlEntities(h2M[1].replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+          const pM = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+          const snippet = pM
+            ? decodeHtmlEntities(pM[1].replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim()
+            : '';
+          let domain = 'open-web';
+          try {
+            domain = new URL(actualUrl).hostname.replace(/^www\./, '');
+          } catch {}
+          bingHtmlHits.push({ title, url: actualUrl, snippet, source: domain });
+        }
+      } catch {
+        // non-fatal
+      }
+    })()
+  );
+
+  // 3. Live World News & Current Events: Google News RSS
+  tasks.push(
+    (async () => {
+      try {
+        enginesQueried.push('Google-News');
+        const gnRes = await fetch(
+          `https://news.google.com/rss/search?q=${encodeURIComponent(baseQuery)}&hl=en-US&gl=US&ceid=US:en`,
+          {
+            headers: { 'User-Agent': CHROME_UA, Accept: 'application/rss+xml,*/*' },
+            signal: AbortSignal.timeout(6000)
+          }
+        );
+        if (!gnRes.ok) return;
+        const xml = await gnRes.text();
+        const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+        let m: RegExpExecArray | null;
+        const limit = category === 'news' ? 14 : 4;
+        while ((m = itemRegex.exec(xml)) !== null && newsHits.length < limit) {
+          const block = m[1];
+          const titleM = block.match(/<title>([\s\S]*?)<\/title>/i);
+          const linkM = block.match(/<link>([\s\S]*?)<\/link>/i);
+          const sourceM = block.match(/<source[^>]*url="([^"]+)"[^>]*>([\s\S]*?)<\/source>/i);
+          const pubM = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/i);
+          if (!titleM || !linkM) continue;
+          const title = decodeHtmlEntities(stripCdata(titleM[1])).trim();
+          const link = decodeHtmlEntities(stripCdata(linkM[1])).trim();
+          const publisherName = sourceM ? decodeHtmlEntities(stripCdata(sourceM[2])).trim() : 'Google News';
+          const pubDate = pubM ? stripCdata(pubM[1]) : '';
+          newsHits.push({
+            title,
+            url: link,
+            snippet: `${publisherName}${pubDate ? ` · ${pubDate}` : ''}`,
+            source: publisherName,
+            publishedAt: pubDate || undefined
+          });
+        }
+      } catch {
+        // non-fatal
+      }
+    })()
+  );
+
+  // 4. DuckDuckGo HTML fallback (bonus open-web coverage if not challenged)
   tasks.push(
     (async () => {
       try {
         enginesQueried.push('DuckDuckGo-Web');
         const ddgRes = await fetch(
-          `https://html.duckduckgo.com/html/?q=${encodeURIComponent(trimmedQuery)}`,
+          `https://html.duckduckgo.com/html/?q=${encodeURIComponent(effectiveQuery)}`,
           {
             headers: {
               'User-Agent': CHROME_UA,
               Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
               'Accept-Language': 'en-US,en;q=0.9'
             },
-            signal: AbortSignal.timeout(7000)
+            signal: AbortSignal.timeout(5000)
           }
         );
         if (!ddgRes.ok) return;
         const html = await ddgRes.text();
-        const blockRegex = /<div[^>]+class="[^"]*result[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
-        const linkRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i;
-        const snippetRegex = /class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div|span)>/i;
-
-        let blockMatch;
-        while ((blockMatch = blockRegex.exec(html)) !== null && results.length < maxResults) {
-          const block = blockMatch[1];
-          const lm = linkRegex.exec(block);
-          if (!lm) continue;
-          let actualUrl = lm[1];
+        const simpleRegex =
+          /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = simpleRegex.exec(html)) !== null && ddgHits.length < 8) {
+          let actualUrl = m[1];
           const uddg = actualUrl.match(/uddg=([^&]+)/);
           if (uddg) {
             try {
               actualUrl = decodeURIComponent(uddg[1]);
-            } catch {
-              // keep raw
-            }
+            } catch {}
           }
           if (!/^https?:\/\//i.test(actualUrl)) continue;
-          const title = decodeHtmlEntities(lm[2].replace(/<[^>]+>/g, '')).trim();
-          const sm = snippetRegex.exec(block);
-          const snippet = sm
-            ? decodeHtmlEntities(sm[1].replace(/<[^>]+>/g, '')).trim()
-            : '';
           let domain = 'open-web';
           try {
-            domain = new URL(actualUrl).hostname;
-          } catch {
-            // ignore
-          }
-          pushUnique({ title, url: actualUrl, snippet, source: domain });
-        }
-
-        // Fallback regex if DDG markup differs slightly
-        if (results.length === 0) {
-          const simpleRegex =
-            /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
-          let m;
-          while ((m = simpleRegex.exec(html)) !== null && results.length < maxResults) {
-            let actualUrl = m[1];
-            const uddg = actualUrl.match(/uddg=([^&]+)/);
-            if (uddg) {
-              try {
-                actualUrl = decodeURIComponent(uddg[1]);
-              } catch {
-                // ignore
-              }
-            }
-            if (!/^https?:\/\//i.test(actualUrl)) continue;
-            let domain = 'open-web';
-            try {
-              domain = new URL(actualUrl).hostname;
-            } catch {
-              // ignore
-            }
-            pushUnique({
-              title: decodeHtmlEntities(m[2].replace(/<[^>]+>/g, '')).trim(),
-              url: actualUrl,
-              snippet: decodeHtmlEntities(m[3].replace(/<[^>]+>/g, '')).trim(),
-              source: domain
-            });
-          }
+            domain = new URL(actualUrl).hostname.replace(/^www\./, '');
+          } catch {}
+          ddgHits.push({
+            title: decodeHtmlEntities(m[2].replace(/<[^>]+>/g, '')).trim(),
+            url: actualUrl,
+            snippet: decodeHtmlEntities(m[3].replace(/<[^>]+>/g, '')).trim(),
+            source: domain
+          });
         }
       } catch {
         // non-fatal
@@ -780,91 +924,24 @@ export async function performRealWebSearch(
     })()
   );
 
-  // 2. Wikipedia OpenSearch
-  tasks.push(
-    (async () => {
-      try {
-        enginesQueried.push('Wikipedia');
-        const wikiRes = await fetch(
-          `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(trimmedQuery)}&limit=5&namespace=0&format=json`,
-          {
-            headers: { 'User-Agent': 'SovereignBrowser/5.0 (https://localhost)' },
-            signal: AbortSignal.timeout(5000)
-          }
-        );
-        if (!wikiRes.ok) return;
-        const data: any = await wikiRes.json();
-        const titles: string[] = data?.[1] || [];
-        const snippets: string[] = data?.[2] || [];
-        const urls: string[] = data?.[3] || [];
-        for (let i = 0; i < titles.length; i++) {
-          if (urls[i]) {
-            pushUnique({
-              title: titles[i],
-              url: urls[i],
-              snippet: snippets[i] || `Wikipedia encyclopedia reference for ${titles[i]}.`,
-              source: 'en.wikipedia.org'
-            });
-          }
-        }
-      } catch {
-        // non-fatal
-      }
-    })()
-  );
-
-  // 3. HackerNews Algolia API
-  tasks.push(
-    (async () => {
-      try {
-        enginesQueried.push('HackerNews-Algolia');
-        const hnRes = await fetch(
-          `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(trimmedQuery)}&hitsPerPage=5`,
-          { signal: AbortSignal.timeout(5000) }
-        );
-        if (!hnRes.ok) return;
-        const hnData: any = await hnRes.json();
-        if (Array.isArray(hnData?.hits)) {
-          for (const hit of hnData.hits) {
-            const hitUrl = hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`;
-            pushUnique({
-              title: hit.title || hit.story_title || 'HackerNews Thread',
-              url: hitUrl,
-              snippet: hit.comment_text
-                ? decodeHtmlEntities(hit.comment_text.replace(/<[^>]+>/g, '')).slice(0, 220)
-                : `${hit.points ?? 0} points · ${hit.num_comments ?? 0} comments by ${hit.author || 'member'}`,
-              source: 'news.ycombinator.com',
-              publishedAt: hit.created_at
-            });
-          }
-        }
-      } catch {
-        // non-fatal
-      }
-    })()
-  );
-
-  // 4. GitHub Repositories API (real open-source discovery)
-  if (!options.site || options.site.includes('github')) {
+  // 5. Tech/Dev engines (ONLY when user chooses tech tab or explicitly searches dev/code/github)
+  if (category === 'tech' || /\b(github|repo|npm|python|linux|api|code|programming|open source)\b/i.test(baseQuery)) {
     tasks.push(
       (async () => {
         try {
           enginesQueried.push('GitHub-API');
           const ghRes = await fetch(
-            `https://api.github.com/search/repositories?q=${encodeURIComponent(trimmedQuery)}&sort=stars&per_page=4`,
+            `https://api.github.com/search/repositories?q=${encodeURIComponent(baseQuery)}&sort=stars&per_page=4`,
             {
-              headers: {
-                'User-Agent': 'SovereignBrowser/5.0',
-                Accept: 'application/vnd.github+json'
-              },
-              signal: AbortSignal.timeout(5000)
+              headers: { 'User-Agent': 'SovereignBrowser/5.0', Accept: 'application/vnd.github+json' },
+              signal: AbortSignal.timeout(4500)
             }
           );
           if (!ghRes.ok) return;
           const ghData: any = await ghRes.json();
           if (Array.isArray(ghData?.items)) {
             for (const repo of ghData.items) {
-              pushUnique({
+              techHits.push({
                 title: `${repo.full_name} (★ ${repo.stargazers_count})`,
                 url: repo.html_url,
                 snippet: repo.description || `Open-source repository in ${repo.language || 'multiple languages'}.`,
@@ -873,17 +950,133 @@ export async function performRealWebSearch(
               });
             }
           }
-        } catch {
-          // non-fatal
-        }
+        } catch {}
+      })()
+    );
+    tasks.push(
+      (async () => {
+        try {
+          enginesQueried.push('HackerNews');
+          const hnRes = await fetch(
+            `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(baseQuery)}&hitsPerPage=4`,
+            { signal: AbortSignal.timeout(4500) }
+          );
+          if (!hnRes.ok) return;
+          const hnData: any = await hnRes.json();
+          if (Array.isArray(hnData?.hits)) {
+            for (const hit of hnData.hits) {
+              const hitUrl = hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`;
+              techHits.push({
+                title: hit.title || hit.story_title || 'HackerNews Thread',
+                url: hitUrl,
+                snippet: `${hit.points ?? 0} points · ${hit.num_comments ?? 0} comments`,
+                source: 'news.ycombinator.com',
+                publishedAt: hit.created_at
+              });
+            }
+          }
+        } catch {}
+      })()
+    );
+  }
+
+  // 6. Optional supplementary Wikipedia reference (max 2 results, placed AFTER real open-web results)
+  if (category === 'web') {
+    tasks.push(
+      (async () => {
+        try {
+          const wikiRes = await fetch(
+            `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(baseQuery)}&limit=2&namespace=0&format=json`,
+            {
+              headers: { 'User-Agent': 'SovereignBrowser/5.0 (https://localhost)' },
+              signal: AbortSignal.timeout(3500)
+            }
+          );
+          if (!wikiRes.ok) return;
+          const data: any = await wikiRes.json();
+          const titles: string[] = data?.[1] || [];
+          const snippets: string[] = data?.[2] || [];
+          const urls: string[] = data?.[3] || [];
+          for (let i = 0; i < titles.length; i++) {
+            if (urls[i]) {
+              wikiHits.push({
+                title: titles[i],
+                url: urls[i],
+                snippet: snippets[i] || `Wikipedia reference for ${titles[i]}.`,
+                source: 'en.wikipedia.org'
+              });
+            }
+          }
+        } catch {}
       })()
     );
   }
 
   await Promise.allSettled(tasks);
 
+  // Guard against Bing RSS occasionally truncating multi-word queries (e.g. "best pc games steam" -> "best")
+  const queryTokens = baseQuery
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 2 && !['the', 'and', 'for', 'with', 'from', 'best', 'top', 'how', 'what'].includes(w));
+
+  const relevantBingRss: SearchHit[] = [];
+  const fallbackBingRss: SearchHit[] = [];
+  for (const hit of bingRssHits) {
+    if (queryTokens.length === 0) {
+      relevantBingRss.push(hit);
+    } else {
+      const hay = `${hit.title} ${hit.snippet} ${hit.url}`.toLowerCase();
+      const matched = queryTokens.filter((t) => hay.includes(t)).length;
+      if (matched >= Math.min(2, queryTokens.length) || (queryTokens.length === 1 && matched === 1)) {
+        relevantBingRss.push(hit);
+      } else {
+        fallbackBingRss.push(hit);
+      }
+    }
+  }
+
+  // Assemble in strict open-internet priority order so real full-web results ALWAYS come first
+  const orderedBatches =
+    category === 'news'
+      ? [newsHits, bingHtmlHits, relevantBingRss]
+      : category === 'tech'
+      ? [bingHtmlHits, relevantBingRss, techHits, ddgHits]
+      : [bingHtmlHits, relevantBingRss, ddgHits, newsHits, techHits, wikiHits, fallbackBingRss];
+
+  const deduped: Array<{ hit: SearchHit; score: number; idx: number }> = [];
+  const seenUrls = new Set<string>();
+  let orderIdx = 0;
+  for (const batch of orderedBatches) {
+    for (const hit of batch) {
+      if (!hit.url || !hit.title) continue;
+      const normUrl = hit.url.replace(/\/$/, '').toLowerCase();
+      if (seenUrls.has(normUrl)) continue;
+      seenUrls.add(normUrl);
+      let score = 0;
+      if (queryTokens.length > 0) {
+        const hay = `${hit.title} ${hit.snippet} ${hit.url}`.toLowerCase();
+        score = queryTokens.filter((t) => hay.includes(t)).length;
+      }
+      deduped.push({ hit, score, idx: orderIdx++ });
+    }
+  }
+
+  // Keep engine ranking order, but always place hits that match query terms above off-topic noise
+  if (queryTokens.length > 0) {
+    deduped.sort((a, b) => {
+      const aTier = a.score >= Math.min(2, queryTokens.length) ? 2 : a.score > 0 ? 1 : 0;
+      const bTier = b.score >= Math.min(2, queryTokens.length) ? 2 : b.score > 0 ? 1 : 0;
+      if (bTier !== aTier) return bTier - aTier;
+      return a.idx - b.idx;
+    });
+  }
+
+  const results = deduped.slice(0, maxResults).map((x) => x.hit);
+
   return {
-    results: results.slice(0, maxResults),
+    results,
     elapsedMs: Date.now() - startTime,
     enginesQueried
   };
@@ -1531,7 +1724,7 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
       `);
     }
 
-    // Google or DuckDuckGo Home & Search Portal -> render interactive Google Chrome Sovereign Search Hub & Live Multi-Engine SERP
+    // Google or DuckDuckGo Home & Search Portal -> Full Open-Internet Web Search & Any-URL Portal
     const isGoogleOrDdg =
       (/^(?:www\.)?google\.com$/i.test(parsedUrl.hostname) &&
         (parsedUrl.pathname === '/' || parsedUrl.pathname === '/search' || parsedUrl.pathname === '/webhp')) ||
@@ -1539,13 +1732,18 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
 
     if (isGoogleOrDdg && req.query.raw !== '1') {
       const q = (parsedUrl.searchParams.get('q') || '').trim();
+      const catParam = String(parsedUrl.searchParams.get('cat') || 'web');
+      const searchCat = (['web', 'news', 'shopping', 'tech'].includes(catParam) ? catParam : 'web') as
+        | 'web'
+        | 'news'
+        | 'shopping'
+        | 'tech';
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.removeHeader('Content-Security-Policy');
       res.removeHeader('X-Frame-Options');
 
       if (!q) {
-        // Render fast, interactive Google Chrome Sovereign New Tab & Search Home
         recordNetworkEvent({
           id: `net-${Date.now()}`,
           url: targetUrl,
@@ -1553,48 +1751,48 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
           method: 'GET',
           status: 200,
           contentType: 'text/html',
-          bytes: 6400,
+          bytes: 6800,
           elapsedMs: Date.now() - startTime,
-          sha256: crypto.createHash('sha256').update('google-home-portal').digest('hex').slice(0, 16),
+          sha256: crypto.createHash('sha256').update('open-web-home-portal').digest('hex').slice(0, 16),
           timestamp: new Date().toISOString()
         });
         return res.send(`
           <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-          <title>Google Search & Live Web Portal | Sovereign Chrome</title>
+          <title>Full Open Internet Browser | Sovereign Chrome</title>
           <style>
             *{box-sizing:border-box}
-            body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0%,#172554 0%,#09090b 60%);color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;padding:36px 20px}
-            .logo{font-size:44px;font-weight:800;letter-spacing:-0.03em;margin:18px 0 8px;background:linear-gradient(90deg,#38bdf8,#818cf8,#34d399,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-            .sub{font-size:13px;color:#a1a1aa;margin-bottom:26px;text-align:center}
-            form{width:100%;max-width:680px;display:flex;gap:10px;margin-bottom:20px}
+            body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0%,#172554 0%,#09090b 60%);color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;padding:32px 20px}
+            .logo{font-size:40px;font-weight:800;letter-spacing:-0.03em;margin:10px 0 6px;background:linear-gradient(90deg,#38bdf8,#818cf8,#34d399,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+            .sub{font-size:13px;color:#a1a1aa;margin-bottom:22px;text-align:center;max-width:680px}
+            form{width:100%;max-width:720px;display:flex;gap:10px;margin-bottom:18px}
             input{flex:1;background:#111114;border:1px solid #3f3f46;border-radius:999px;padding:14px 22px;color:#fff;font-size:15px;outline:none;box-shadow:0 10px 30px rgba(0,0,0,0.4)}
             input:focus{border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,0.2)}
             button.go{background:#0284c7;color:#fff;border:none;border-radius:999px;padding:0 26px;font-weight:700;font-size:14px;cursor:pointer}
             button.go:hover{background:#0369a1}
-            .pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:720px;margin-bottom:32px}
+            .pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:780px;margin-bottom:28px}
             .pill{background:#18181b;border:1px solid #27272a;color:#d4d4d8;padding:6px 14px;border-radius:999px;font-size:12px;cursor:pointer}
             .pill:hover{border-color:#38bdf8;color:#fff}
-            .grid{width:100%;max-width:880px;display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:12px}
+            .grid{width:100%;max-width:960px;display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:12px}
             .tile{background:rgba(24,24,27,0.85);border:1px solid #27272a;border-radius:14px;padding:14px 16px;cursor:pointer;transition:all .15s;text-align:left}
             .tile:hover{border-color:#38bdf8;transform:translateY(-2px);background:#18181b}
             .ttitle{font-size:14px;font-weight:700;color:#fff;margin-bottom:4px}
             .tdesc{font-size:11px;color:#a1a1aa;line-height:1.4}
             .turl{font-size:10px;color:#38bdf8;font-family:monospace;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
           </style></head><body>
-            <div class="logo">Google · Sovereign Chrome</div>
-            <div class="sub">Multi-Engine Live Web Search (Google · DuckDuckGo · Wikipedia · HackerNews · GitHub · YouTube HD)</div>
+            <div class="logo">Sovereign Open Web</div>
+            <div class="sub">Unrestricted Full-Internet Browsing · Type ANY website address (e.g. tacobell.com, reddit.com, steam, cnn.com, espn.com) or search the live World Wide Web</div>
             <form onsubmit="event.preventDefault();var v=document.getElementById('gq').value.trim();if(v){if(/^https?:\\/\\//i.test(v)||(/^[a-z0-9.-]+\\.[a-z]{2,}(\\/.*)?$/i.test(v)&&v.indexOf(' ')===-1)){window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:v.indexOf('http')===0?v:'https://'+v},'*');}else{window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(v)},'*');}}">
-              <input id="gq" autofocus placeholder="Search Google or type any website URL (e.g. en.wikipedia.org, youtube.com, github.com)..." />
-              <button type="submit" class="go">Search</button>
+              <input id="gq" autofocus placeholder="Enter ANY website URL or search the open internet (shopping, news, games, food, videos)..." />
+              <button type="submit" class="go">Go / Search</button>
             </form>
             <div class="pills">
               ${[
-                'Artificial General Intelligence breakthroughs',
-                'Linux Kernel & Bare Metal Hypervisors',
-                'Bitcoin & Ethereum Live On-Chain Analytics',
-                'Steam Proton & Wine PE32 Architecture',
-                'WebGPU & Three.js Spatial Computing',
-                'JHammerZ Sovereign OS & H-FID Standard'
+                'Breaking news today',
+                'Top PC games on Steam',
+                'Live NBA & NFL scores',
+                'Weather forecast today',
+                'Best restaurants near me',
+                'Non-dilutive startup & tech grants 2026'
               ]
                 .map(
                   (topic) =>
@@ -1604,14 +1802,18 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
             </div>
             <div class="grid">
               ${[
-                { title: 'Wikipedia Encyclopedia', desc: 'Full live encyclopedia with CSS, images & deep links', url: 'https://en.wikipedia.org/wiki/Operating_system' },
-                { title: 'YouTube HD Stream Portal', desc: 'Search & watch live 1080p YouTube videos & radio streams', url: 'https://www.youtube.com' },
-                { title: 'JHammerZ Sovereign Hub', desc: 'Official JHammerZ GitHub Pages, MIT & H-FID Licenses', url: 'https://jhammerz.github.io' },
-                { title: 'Hacker News (YCombinator)', desc: 'Real-time engineering, startups & computer science news', url: 'https://news.ycombinator.com' },
-                { title: 'GitHub Explore', desc: 'Open-source repositories, releases & source code', url: 'https://github.com/explore' },
-                { title: 'Internet Archive', desc: 'Wayback Machine, books, audio & historical software', url: 'https://archive.org' },
-                { title: 'ArXiv Research Papers', desc: 'Computer Science, AI, Physics & Mathematics preprints', url: 'https://arxiv.org/list/cs.AI/recent' },
-                { title: 'MDN Web Docs', desc: 'Complete Web APIs, HTML5, CSS & JavaScript documentation', url: 'https://developer.mozilla.org/en-US/' }
+                { title: 'YouTube', desc: 'Watch & search live 1080p videos, music & streams', url: 'https://www.youtube.com' },
+                { title: 'Bing Live Web', desc: 'Direct live Microsoft Bing web, images & shopping', url: 'https://www.bing.com' },
+                { title: 'Steam Store', desc: 'PC games catalog, deals, demos & Steam Deck titles', url: 'https://store.steampowered.com' },
+                { title: 'Reddit', desc: 'Live communities, gaming, news & discussions', url: 'https://www.reddit.com' },
+                { title: 'CNN Breaking News', desc: 'Live US & world news, business & entertainment', url: 'https://www.cnn.com' },
+                { title: 'BBC World', desc: 'Global news, sports, culture & live coverage', url: 'https://www.bbc.com' },
+                { title: 'Yahoo Portal', desc: 'News, finance, sports, weather & trending topics', url: 'https://www.yahoo.com' },
+                { title: 'ESPN Sports', desc: 'Live scores, NFL, NBA, UFC & highlights', url: 'https://www.espn.com' },
+                { title: 'Twitch', desc: 'Live gaming, esports & creator broadcasts', url: 'https://www.twitch.tv' },
+                { title: 'Amazon', desc: 'Online shopping, electronics & deals', url: 'https://www.amazon.com' },
+                { title: 'Wikipedia', desc: 'Free open-web encyclopedia', url: 'https://www.wikipedia.org' },
+                { title: 'GitHub', desc: 'Code hosting, open-source software & releases', url: 'https://github.com' }
               ]
                 .map(
                   (item) => `
@@ -1628,14 +1830,14 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
               window.parent.postMessage({
                 type: 'SOVEREIGN_URL_RESOLVED',
                 url: 'https://www.google.com',
-                title: 'Google Search & Live Web Portal'
+                title: 'Sovereign Open Web'
               }, '*');
             </script>
           </body></html>
         `);
       }
 
-      const searchOut = await performRealWebSearch(q, { maxResults: 20 });
+      const searchOut = await performRealWebSearch(q, { maxResults: 20, category: searchCat });
       recordNetworkEvent({
         id: `net-${Date.now()}`,
         url: targetUrl,
@@ -1650,16 +1852,19 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
       });
       return res.send(`
         <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-        <title>${escapeHtml(q)} - Google Live Web Search | Sovereign Browser</title>
+        <title>${escapeHtml(q)} - Open Web Search | Sovereign Browser</title>
         <style>*{box-sizing:border-box}body{margin:0;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;line-height:1.55}
-        .top{position:sticky;top:0;background:#111114;border-bottom:1px solid #27272a;padding:12px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;z-index:20}
+        .top{position:sticky;top:0;background:#111114;border-bottom:1px solid #27272a;padding:12px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;z-index:20}
         form{display:flex;flex:1;min-width:220px;max-width:680px;gap:8px}
         input{flex:1;background:#09090b;border:1px solid #3f3f46;border-radius:10px;padding:9px 14px;color:#fff;font-size:14px;outline:none}
         input:focus{border-color:#38bdf8}
         button{background:#0284c7;color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13px}
         button:hover{background:#0369a1}
-        main{max-width:900px;margin:0 auto;padding:20px}
-        .meta{font-size:12px;color:#a1a1aa;margin-bottom:18px;font-family:monospace;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+        .tabs{background:#0c0c0f;border-bottom:1px solid #18181b;padding:8px 20px;display:flex;gap:8px;flex-wrap:wrap}
+        .tab{background:#18181b;border:1px solid #27272a;color:#a1a1aa;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none}
+        .tab.active,.tab:hover{background:#0284c7;border-color:#38bdf8;color:#fff}
+        main{max-width:920px;margin:0 auto;padding:20px}
+        .meta{font-size:12px;color:#a1a1aa;margin-bottom:16px;font-family:monospace;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
         .hit{padding:14px 16px;border:1px solid #27272a;background:#111114;border-radius:12px;margin-bottom:12px}
         .hit:hover{border-color:#3f3f46}
         .src{font-size:11px;color:#38bdf8;font-family:monospace;word-break:break-all}
@@ -1671,17 +1876,23 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
         .abtn:hover{color:#fff;border-color:#38bdf8}
         </style></head><body>
         <div class="top">
-          <strong style="color:#38bdf8;font-size:15px;cursor:pointer" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com'},'*')">Google Live Web</strong>
-          <form onsubmit="event.preventDefault();var v=document.getElementById('sq').value.trim();if(v){window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(v)},'*');}">
-            <input id="sq" value="${escapeHtml(q)}" placeholder="Search the live internet..." />
+          <strong style="color:#38bdf8;font-size:15px;cursor:pointer" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com'},'*')">Open Web</strong>
+          <form onsubmit="event.preventDefault();var v=document.getElementById('sq').value.trim();if(v){if(/^https?:\\/\\//i.test(v)||(/^[a-z0-9.-]+\\.[a-z]{2,}(\\/.*)?$/i.test(v)&&v.indexOf(' ')===-1)){window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:v.indexOf('http')===0?v:'https://'+v},'*');}else{window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(v)},'*');}}">
+            <input id="sq" value="${escapeHtml(q)}" placeholder="Search the entire open internet or type any URL..." />
             <button type="submit">Search</button>
           </form>
-          <button style="background:#dc2626" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.youtube.com/results?search_query='+encodeURIComponent(${JSON.stringify(q)})},'*')">▶ YouTube Videos</button>
-          <button style="background:#27272a" onclick="window.parent.postMessage({type:'SOVEREIGN_AI_SEARCH',query:${JSON.stringify(q)}},'*')">Ask AI Copilot</button>
+          <button style="background:#dc2626" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.youtube.com/results?search_query='+encodeURIComponent(${JSON.stringify(q)})},'*')">▶ YouTube</button>
+          <button style="background:#0f766e" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.bing.com/search?q='+encodeURIComponent(${JSON.stringify(q)})},'*')">Live Bing Page</button>
+        </div>
+        <div class="tabs">
+          <button class="tab ${searchCat === 'web' ? 'active' : ''}" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(${JSON.stringify(q)})+'&cat=web'},'*')">🌐 All Web</button>
+          <button class="tab ${searchCat === 'news' ? 'active' : ''}" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(${JSON.stringify(q)})+'&cat=news'},'*')">📰 Live News</button>
+          <button class="tab ${searchCat === 'shopping' ? 'active' : ''}" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(${JSON.stringify(q)})+'&cat=shopping'},'*')">🛒 Shopping</button>
+          <button class="tab ${searchCat === 'tech' ? 'active' : ''}" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(${JSON.stringify(q)})+'&cat=tech'},'*')">💻 Tech &amp; Code</button>
         </div>
         <main>
           <div class="meta">
-            <span>${searchOut.results.length} live results · ${searchOut.elapsedMs}ms · Engines: ${escapeHtml(searchOut.enginesQueried.join(', '))}</span>
+            <span>${searchOut.results.length} live open-web results · ${searchOut.elapsedMs}ms · Indexes: ${escapeHtml(searchOut.enginesQueried.join(', '))}</span>
           </div>
           ${searchOut.results
             .map(
@@ -1691,9 +1902,10 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
               <a class="title" href="${escapeHtml(r.url)}" onclick="event.preventDefault();window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:${JSON.stringify(r.url)}},'*')">${escapeHtml(r.title)}</a>
               <div class="snip">${escapeHtml(r.snippet || '')}</div>
               <div class="actions">
-                <button class="abtn" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:${JSON.stringify(r.url)}},'*')">Open Page</button>
-                <button class="abtn" onclick="window.parent.postMessage({type:'SOVEREIGN_OPEN_NEW_TAB',url:${JSON.stringify(r.url)}},'*')">Open in New Tab</button>
+                <button class="abtn" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:${JSON.stringify(r.url)}},'*')">Open Website</button>
+                <button class="abtn" onclick="window.parent.postMessage({type:'SOVEREIGN_OPEN_NEW_TAB',url:${JSON.stringify(r.url)}},'*')">New Tab</button>
                 <a class="abtn" href="/api/browser/render?url=${encodeURIComponent(r.url)}&reader=1&sid=${encodeURIComponent(sessionId)}">📖 Reader View</a>
+                <a class="abtn" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">↗ Open Native</a>
               </div>
             </div>
           `
@@ -1704,24 +1916,17 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
           window.parent.postMessage({
             type: 'SOVEREIGN_URL_RESOLVED',
             url: ${JSON.stringify(targetUrl)},
-            title: ${JSON.stringify(`${q} - Google Search`)}
+            title: ${JSON.stringify(`${q} - Open Web Search`)}
           }, '*');
         </script>
         </body></html>
       `);
     }
 
-    // Real HTTP/HTTPS Proxy Fetch across the live internet
+    // Real HTTP/HTTPS Proxy Fetch across the ENTIRE live open internet
     const cookieHeader = buildCookieHeader(sessionId, parsedUrl.hostname, parsedUrl.pathname + parsedUrl.search);
     const upstream = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': uaMode === 'mobile' ? MOBILE_UA : CHROME_UA,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Upgrade-Insecure-Requests': '1',
-        Referer: parsedUrl.origin + '/',
-        ...(cookieHeader ? { Cookie: cookieHeader } : {})
-      },
+      headers: buildRealisticBrowserHeaders(uaMode, parsedUrl.origin + '/', cookieHeader),
       redirect: 'follow',
       signal: AbortSignal.timeout(15000)
     });
@@ -1767,6 +1972,60 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
       timestamp: new Date().toISOString()
     });
 
+    // Detect cloud-IP bot-challenge / empty WAF interstitials (e.g. HTTP 202 AWS WAF / Akamai / Cloudflare)
+    const strippedBodyText = rawHtml
+      .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const isBotChallenge =
+      upstream.status === 202 ||
+      ((upstream.status === 403 || upstream.status === 503) && strippedBodyText.length < 1500) ||
+      (bytes < 20000 &&
+        strippedBodyText.length < 300 &&
+        /just a moment|checking your browser|access denied|verify you are human|aws waf|captcha/i.test(rawHtml));
+
+    if (isBotChallenge && req.query.raw !== '1') {
+      res.status(200);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.removeHeader('Content-Security-Policy');
+      res.removeHeader('X-Frame-Options');
+      return res.send(`
+        <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <title>${escapeHtml(finalParsed.hostname)} | Direct Access Required</title>
+        <style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px}
+        .card{background:#18181b;border:1px solid #3f3f46;border-radius:16px;padding:28px;max-width:580px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.5)}
+        h2{margin:0 0 10px;font-size:19px;color:#38bdf8}
+        p{color:#a1a1aa;font-size:13px;line-height:1.6;margin:0 0 16px}
+        .row{display:flex;flex-wrap:wrap;gap:10px}
+        .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;border:none}
+        .primary{background:#10b981;color:#052e16}.primary:hover{background:#34d399}
+        .sec{background:#27272a;color:#f4f4f5;border:1px solid #3f3f46}.sec:hover{background:#3f3f46}
+        .url{font-family:monospace;font-size:11px;color:#71717a;word-break:break-all;margin-bottom:16px;padding:8px 10px;background:#09090b;border-radius:8px;border:1px solid #27272a}
+        </style></head><body>
+          <div class="card">
+            <h2>Site Uses Anti-Proxy Bot Verification (HTTP ${upstream.status})</h2>
+            <p><strong>${escapeHtml(finalParsed.hostname)}</strong> detected a cloud server proxy IP and returned a bot verification screen. Open it directly with your own browser IP or search its live pages below:</p>
+            <div class="url">${escapeHtml(finalUrl)}</div>
+            <div class="row">
+              <a class="btn primary" href="${escapeHtml(finalUrl)}" target="_blank" rel="noopener noreferrer">↗ Open ${escapeHtml(finalParsed.hostname)} Directly</a>
+              <button class="btn sec" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(${JSON.stringify(finalParsed.hostname)})},'*')">🔍 Search Site Pages</button>
+              <a class="btn sec" href="/api/browser/render?url=${encodeURIComponent(finalUrl)}&raw=1&sid=${encodeURIComponent(sessionId)}">Load Raw Response</a>
+            </div>
+          </div>
+          <script>
+            window.parent.postMessage({
+              type: 'SOVEREIGN_URL_RESOLVED',
+              url: ${JSON.stringify(finalUrl)},
+              title: ${JSON.stringify(finalParsed.hostname)}
+            }, '*');
+          </script>
+        </body></html>
+      `);
+    }
+
     const rewrittenHtml = rewriteHtmlForRealBrowser(rawHtml, finalUrl, sessionId);
 
     res.status(upstream.status >= 400 && upstream.status < 500 ? 200 : upstream.status);
@@ -1791,11 +2050,16 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
       <style>body{background:#09090b;color:#f4f4f5;font-family:system-ui,sans-serif;padding:24px;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
       .card{background:#18181b;border:1px solid #27272a;border-radius:16px;padding:28px;max-width:560px;width:100%}
       h2{color:#f59e0b;margin:0 0 10px;font-size:18px}p{color:#a1a1aa;font-size:13px;line-height:1.6}
-      .btn{display:inline-block;margin-top:14px;padding:9px 14px;border-radius:10px;background:#0284c7;color:#fff;text-decoration:none;font-size:13px;font-weight:600;border:none;cursor:pointer}</style></head>
+      .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+      .btn{display:inline-block;padding:9px 14px;border-radius:10px;background:#0284c7;color:#fff;text-decoration:none;font-size:13px;font-weight:600;border:none;cursor:pointer}
+      .btn.green{background:#10b981;color:#052e16}</style></head>
       <body><div class="card">
-        <h2>Upstream Site Unreachable</h2>
-        <p><strong>${escapeHtml(queryUrl)}</strong> could not be fetched directly (${escapeHtml(error?.message || 'network timeout')}).</p>
-        <button class="btn" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(${JSON.stringify(clean)})},'*')">Search Live Web Instead</button>
+        <h2>Proxy Connection Blocked or Timed Out</h2>
+        <p><strong>${escapeHtml(queryUrl)}</strong> did not respond to the server proxy (${escapeHtml(error?.message || 'network timeout')}). You can open it directly in your browser or search for it on the open web:</p>
+        <div class="row">
+          <a class="btn green" href="${escapeHtml(normalizeTargetUrl(queryUrl))}" target="_blank" rel="noopener noreferrer">↗ Open Directly in New Window</a>
+          <button class="btn" onclick="window.parent.postMessage({type:'SOVEREIGN_NAVIGATE',url:'https://www.google.com/search?q='+encodeURIComponent(${JSON.stringify(clean)})},'*')">Search Open Web</button>
+        </div>
       </div></body></html>
     `);
   }

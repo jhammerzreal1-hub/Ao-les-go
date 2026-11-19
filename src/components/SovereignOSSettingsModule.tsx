@@ -40,6 +40,9 @@ import {
   loadOSCustomizationProfile,
   saveOSCustomizationProfile,
   pushToOSClipboardRing,
+  restoreDesktopIcon,
+  restoreAllDesktopIcons,
+  importOSCustomizationProfile,
   type SovereignOSCustomizationProfile,
   type SovereignThemeId,
   type SovereignAccentColor
@@ -746,9 +749,9 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
               <div className="space-y-3 text-xs">
                 <div>
                   <label className="block text-[11px] text-zinc-400 mb-1">
-                    Custom Desktop Wallpaper URL (4K PNG / JPG / WebP)
+                    Custom Desktop Wallpaper URL or Local File Upload (4K PNG / JPG / WebP)
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <input
                       type="text"
                       value={profile.customWallpaperUrl}
@@ -759,9 +762,103 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
                         })
                       }
                       placeholder="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1920&q=80"
-                      className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100"
+                      className="flex-1 min-w-[200px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100"
+                    />
+                    <label className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-xs font-bold cursor-pointer shrink-0">
+                      Upload Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            if (typeof reader.result === 'string') {
+                              updateProfile({
+                                customWallpaperUrl: reader.result,
+                                themeId: 'custom-wallpaper'
+                              });
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3 text-[11px] text-zinc-400">
+                    <span>Wallpaper Brightness: {profile.wallpaperOpacityPct ?? 68}%</span>
+                    <input
+                      type="range"
+                      min={15}
+                      max={95}
+                      value={profile.wallpaperOpacityPct ?? 68}
+                      onChange={(e) => updateProfile({ wallpaperOpacityPct: Number(e.target.value) })}
+                      className="flex-1 accent-amber-400"
                     />
                   </div>
+                </div>
+
+                {/* Desktop Icon Manager + Controller & Touch Toggles */}
+                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-sky-300">
+                      Desktop Icons, Real Desktop Files &amp; Universal Input
+                    </span>
+                    {(profile.hiddenDesktopIcons?.length || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setProfile(restoreAllDesktopIcons())}
+                        className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold cursor-pointer"
+                      >
+                        Restore All {profile.hiddenDesktopIcons.length} Deleted Icons
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-3 text-[11px]">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={profile.showDesktopFiles !== false}
+                        onChange={(e) => updateProfile({ showDesktopFiles: e.target.checked })}
+                        className="accent-amber-400"
+                      />
+                      <span>Show Real Desktop Files &amp; Folders</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={profile.showTouchControllerOverlay}
+                        onChange={(e) => updateProfile({ showTouchControllerOverlay: e.target.checked })}
+                        className="accent-sky-400"
+                      />
+                      <span>Multi-Touch Virtual Gamepad Overlay</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={profile.enableGamepadOsNav}
+                        onChange={(e) => updateProfile({ enableGamepadOsNav: e.target.checked })}
+                        className="accent-emerald-400"
+                      />
+                      <span>Hardware Controller OS Navigation</span>
+                    </label>
+                  </div>
+                  {(profile.hiddenDesktopIcons?.length || 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {profile.hiddenDesktopIcons.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setProfile(restoreDesktopIcon(id))}
+                          className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-[10px] text-zinc-300 hover:border-emerald-400 cursor-pointer"
+                        >
+                          + Restore {id}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1172,14 +1269,37 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
                   Capture your entire OS state (installed apps, Merkle root, daemons, themes, virtual desktops, and dotfiles) into a SHA-256 attested generation with instant rollback.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleExportDotfiles}
-                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold text-amber-300 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export Dotfiles (.json)</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <label className="px-3.5 py-2 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-xs font-bold text-sky-200 flex items-center gap-1.5 cursor-pointer">
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Import Dotfiles (.json)</span>
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === 'string') {
+                          const res = importOSCustomizationProfile(reader.result);
+                          if (res.ok && res.profile) setProfile(res.profile);
+                        }
+                      };
+                      reader.readAsText(file);
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleExportDotfiles}
+                  className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold text-amber-300 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export Dotfiles (.json)</span>
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleCreateSnapshot} className="flex flex-col sm:flex-row gap-2">

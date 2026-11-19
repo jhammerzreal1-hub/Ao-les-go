@@ -53,7 +53,8 @@ export type ModuleType =
   | 'terminal'
   | 'task-manager'
   | 'os-settings'
-  | 'crypto-wallet';
+  | 'crypto-wallet'
+  | 'grant-hunter';
 
 export type ChatModel =
   | 'gemini-4-hydrogen'

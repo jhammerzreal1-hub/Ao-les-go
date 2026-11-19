@@ -338,13 +338,44 @@ export interface PortfolioHolding {
   lastSyncedAt: string;
 }
 
+export type PayoutRailType =
+  | 'BANK_ACH'
+  | 'FEDNOW_INSTANT'
+  | 'WIRE_SWIFT'
+  | 'SEPA_INSTANT'
+  | 'CASH_APP'
+  | 'VENMO'
+  | 'PAYPAL'
+  | 'ZELLE'
+  | 'APPLE_CASH'
+  | 'WISE_REVOLUT'
+  | 'EXCHANGE_OFFRAMP';
+
+export interface SavedPayoutBeneficiary {
+  id: string;
+  label: string;
+  rail: PayoutRailType;
+  recipientName: string;
+  institutionName: string;
+  accountOrHandle: string;
+  routingOrSwift?: string;
+  currency: string;
+  createdAt: string;
+}
+
 export interface SignedCryptoTransaction {
   id: string;
   walletId: string;
   walletRole: 'PERSONAL_INVESTOR' | 'AGENTIC_AUTONOMOUS';
   timestamp: string;
-  type: 'ONCHAIN_TRANSFER' | 'MARKET_BUY' | 'MARKET_SELL' | 'AUTONOMOUS_5M_SIGNAL_EXEC' | 'DEVNET_AIRDROP';
-  chain: 'BITCOIN' | 'ETHEREUM' | 'SOLANA';
+  type:
+    | 'ONCHAIN_TRANSFER'
+    | 'MARKET_BUY'
+    | 'MARKET_SELL'
+    | 'AUTONOMOUS_5M_SIGNAL_EXEC'
+    | 'DEVNET_AIRDROP'
+    | 'BANK_OR_DIGITAL_TRANSFER';
+  chain: 'BITCOIN' | 'ETHEREUM' | 'SOLANA' | 'FIAT_RAIL';
   symbol: string;
   amountNative: number;
   priceUsdAtExec: number;
@@ -358,8 +389,27 @@ export interface SignedCryptoTransaction {
   signatureVerified?: boolean;
   triggerReason: string;
   conformalCertaintyPct: number;
-  broadcastStatus: 'SIGNED_AND_COMMITTED' | 'BROADCAST_MAINNET_RPC' | 'BROADCAST_TESTNET_RPC';
+  broadcastStatus:
+    | 'SIGNED_AND_COMMITTED'
+    | 'BROADCAST_MAINNET_RPC'
+    | 'BROADCAST_TESTNET_RPC'
+    | 'SETTLEMENT_DISPATCHED';
   explorerUrl: string;
+  railMetadata?: {
+    rail: PayoutRailType;
+    railLabel: string;
+    recipientName: string;
+    institutionName: string;
+    destinationMasked: string;
+    routingOrSwift?: string;
+    targetCurrency: string;
+    targetAmount: number;
+    feeUsd: number;
+    etaLabel: string;
+    uetrReference: string;
+    fundingSource: string;
+    memo?: string;
+  };
 }
 
 export interface AutonomousAgenticPolicy {
@@ -381,6 +431,8 @@ export interface SovereignCryptoWallet {
   role: 'PERSONAL_INVESTOR' | 'AGENTIC_AUTONOMOUS';
   createdAt: string;
   encryptionCipher: 'AES-256-GCM';
+  watchOnly?: boolean;
+  externalSource?: 'GENERATED_SELF_CUSTODY' | 'METAMASK_EVM' | 'PHANTOM_SOLANA' | 'WATCH_ONLY_ADDRESS';
   addresses: {
     ethereumEip55: string;
     bitcoinSegwit: string;
@@ -425,8 +477,10 @@ interface PersistedWalletVault {
 }
 
 interface DecryptedWalletState {
+  schemaMode?: 'REAL_ONCHAIN_PRODUCTION_V1';
   wallets: SovereignCryptoWallet[];
   transactions: SignedCryptoTransaction[];
+  beneficiaries?: SavedPayoutBeneficiary[];
 }
 
 function getMasterKey32(): Buffer {
@@ -454,14 +508,86 @@ function saveEncryptedWalletState(state: DecryptedWalletState): void {
     ciphertextHex: encrypted.toString('hex'),
     updatedAt: new Date().toISOString()
   };
-  fs.writeFileSync(WALLETS_STORE_FILE, JSON.stringify(envelope, null, 2), 'utf8');
+  const tmpFile = `${WALLETS_STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmpFile, JSON.stringify(envelope, null, 2), 'utf8');
+  fs.renameSync(tmpFile, WALLETS_STORE_FILE);
+}
+
+function buildZeroRealHoldings(role: 'PERSONAL_INVESTOR' | 'AGENTIC_AUTONOMOUS', now: string): PortfolioHolding[] {
+  return [
+    {
+      symbol: 'BTC',
+      name: role === 'PERSONAL_INVESTOR' ? 'Bitcoin (Native SegWit)' : 'Bitcoin (Agentic Treasury)',
+      chain: 'BITCOIN',
+      quantity: 0,
+      avgEntryPriceUsd: 0,
+      currentPriceUsd: 0,
+      marketValueUsd: 0,
+      unrealizedPnlUsd: 0,
+      unrealizedPnlPct: 0,
+      onChainBalanceNative: 0,
+      lastSyncedAt: now
+    },
+    {
+      symbol: 'ETH',
+      name: role === 'PERSONAL_INVESTOR' ? 'Ethereum (EIP-55 Mainnet)' : 'Ethereum (Agentic Gas & DeFi)',
+      chain: 'ETHEREUM',
+      quantity: 0,
+      avgEntryPriceUsd: 0,
+      currentPriceUsd: 0,
+      marketValueUsd: 0,
+      unrealizedPnlUsd: 0,
+      unrealizedPnlPct: 0,
+      onChainBalanceNative: 0,
+      lastSyncedAt: now
+    },
+    {
+      symbol: 'SOL',
+      name: role === 'PERSONAL_INVESTOR' ? 'Solana (Ed25519 Mainnet)' : 'Solana (Agentic High-Frequency)',
+      chain: 'SOLANA',
+      quantity: 0,
+      avgEntryPriceUsd: 0,
+      currentPriceUsd: 0,
+      marketValueUsd: 0,
+      unrealizedPnlUsd: 0,
+      unrealizedPnlPct: 0,
+      onChainBalanceNative: 0,
+      lastSyncedAt: now
+    },
+    {
+      symbol: 'XRP',
+      name: role === 'PERSONAL_INVESTOR' ? 'XRP Ledger Liquidity' : 'XRP Cross-Border Reserve',
+      chain: 'MULTI',
+      quantity: 0,
+      avgEntryPriceUsd: 0,
+      currentPriceUsd: 0,
+      marketValueUsd: 0,
+      unrealizedPnlUsd: 0,
+      unrealizedPnlPct: 0,
+      onChainBalanceNative: 0,
+      lastSyncedAt: now
+    },
+    {
+      symbol: 'DOGE',
+      name: role === 'PERSONAL_INVESTOR' ? 'Dogecoin PoW Liquidity' : 'DOGE Momentum Reserve',
+      chain: 'MULTI',
+      quantity: 0,
+      avgEntryPriceUsd: 0,
+      currentPriceUsd: 0,
+      marketValueUsd: 0,
+      unrealizedPnlUsd: 0,
+      unrealizedPnlPct: 0,
+      onChainBalanceNative: 0,
+      lastSyncedAt: now
+    }
+  ];
 }
 
 function buildFreshWallet(
   id: string,
   label: string,
   role: 'PERSONAL_INVESTOR' | 'AGENTIC_AUTONOMOUS',
-  initialUsdAllocation: number,
+  _ignoredLegacyAllocation = 0,
   customPrivKeyHex?: string
 ): SovereignCryptoWallet {
   const mnemonic12 = generateMnemonic12();
@@ -480,150 +606,15 @@ function buildFreshWallet(
 
   const now = new Date().toISOString();
 
-  // Initialize starting multi-chain holdings so both Personal & Agentic wallets can immediately invest, rebalance, or sign on-chain transfers
-  const defaultHoldings: PortfolioHolding[] =
-    role === 'PERSONAL_INVESTOR'
-      ? [
-          {
-            symbol: 'BTC',
-            name: 'Bitcoin (Native SegWit)',
-            chain: 'BITCOIN',
-            quantity: 0.15,
-            avgEntryPriceUsd: 89400,
-            currentPriceUsd: 91250,
-            marketValueUsd: 0.15 * 91250,
-            unrealizedPnlUsd: 0.15 * (91250 - 89400),
-            unrealizedPnlPct: ((91250 - 89400) / 89400) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          },
-          {
-            symbol: 'ETH',
-            name: 'Ethereum (EIP-55 Mainnet)',
-            chain: 'ETHEREUM',
-            quantity: 2.5,
-            avgEntryPriceUsd: 2980,
-            currentPriceUsd: 3110,
-            marketValueUsd: 2.5 * 3110,
-            unrealizedPnlUsd: 2.5 * (3110 - 2980),
-            unrealizedPnlPct: ((3110 - 2980) / 2980) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          },
-          {
-            symbol: 'SOL',
-            name: 'Solana (Ed25519 Mainnet)',
-            chain: 'SOLANA',
-            quantity: 35,
-            avgEntryPriceUsd: 168.5,
-            currentPriceUsd: 176.2,
-            marketValueUsd: 35 * 176.2,
-            unrealizedPnlUsd: 35 * (176.2 - 168.5),
-            unrealizedPnlPct: ((176.2 - 168.5) / 168.5) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          },
-          {
-            symbol: 'XRP',
-            name: 'XRP Ledger Liquidity',
-            chain: 'MULTI',
-            quantity: 1500,
-            avgEntryPriceUsd: 2.25,
-            currentPriceUsd: 2.41,
-            marketValueUsd: 1500 * 2.41,
-            unrealizedPnlUsd: 1500 * (2.41 - 2.25),
-            unrealizedPnlPct: ((2.41 - 2.25) / 2.25) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          },
-          {
-            symbol: 'DOGE',
-            name: 'Dogecoin PoW Liquidity',
-            chain: 'MULTI',
-            quantity: 10000,
-            avgEntryPriceUsd: 0.29,
-            currentPriceUsd: 0.315,
-            marketValueUsd: 10000 * 0.315,
-            unrealizedPnlUsd: 10000 * (0.315 - 0.29),
-            unrealizedPnlPct: ((0.315 - 0.29) / 0.29) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          }
-        ]
-      : [
-          {
-            symbol: 'BTC',
-            name: 'Bitcoin (Agentic Treasury)',
-            chain: 'BITCOIN',
-            quantity: 0.25,
-            avgEntryPriceUsd: 88900,
-            currentPriceUsd: 91250,
-            marketValueUsd: 0.25 * 91250,
-            unrealizedPnlUsd: 0.25 * (91250 - 88900),
-            unrealizedPnlPct: ((91250 - 88900) / 88900) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          },
-          {
-            symbol: 'ETH',
-            name: 'Ethereum (Agentic Gas & DeFi)',
-            chain: 'ETHEREUM',
-            quantity: 4.0,
-            avgEntryPriceUsd: 2950,
-            currentPriceUsd: 3110,
-            marketValueUsd: 4.0 * 3110,
-            unrealizedPnlUsd: 4.0 * (3110 - 2950),
-            unrealizedPnlPct: ((3110 - 2950) / 2950) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          },
-          {
-            symbol: 'SOL',
-            name: 'Solana (Agentic High-Frequency)',
-            chain: 'SOLANA',
-            quantity: 60,
-            avgEntryPriceUsd: 165.0,
-            currentPriceUsd: 176.2,
-            marketValueUsd: 60 * 176.2,
-            unrealizedPnlUsd: 60 * (176.2 - 165.0),
-            unrealizedPnlPct: ((176.2 - 165.0) / 165.0) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          },
-          {
-            symbol: 'XRP',
-            name: 'XRP Cross-Border Reserve',
-            chain: 'MULTI',
-            quantity: 2500,
-            avgEntryPriceUsd: 2.2,
-            currentPriceUsd: 2.41,
-            marketValueUsd: 2500 * 2.41,
-            unrealizedPnlUsd: 2500 * (2.41 - 2.2),
-            unrealizedPnlPct: ((2.41 - 2.2) / 2.2) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          },
-          {
-            symbol: 'DOGE',
-            name: 'DOGE Momentum Reserve',
-            chain: 'MULTI',
-            quantity: 15000,
-            avgEntryPriceUsd: 0.285,
-            currentPriceUsd: 0.315,
-            marketValueUsd: 15000 * 0.315,
-            unrealizedPnlUsd: 15000 * (0.315 - 0.285),
-            unrealizedPnlPct: ((0.315 - 0.285) / 0.285) * 100,
-            onChainBalanceNative: 0,
-            lastSyncedAt: now
-          }
-        ];
-
+  // 100% REAL ON-CHAIN PRODUCTION MODE: Strictly $0.00 / 0 coins until real on-chain funds arrive or real exchange API is connected.
   return {
     id,
     label,
     role,
     createdAt: now,
     encryptionCipher: 'AES-256-GCM',
+    watchOnly: false,
+    externalSource: 'GENERATED_SELF_CUSTODY',
     addresses: {
       ethereumEip55: ethAccount.address,
       bitcoinSegwit: btcAccount.segwitAddress,
@@ -642,19 +633,19 @@ function buildFreshWallet(
       solanaSecretKeyBase58: solAccount.secretKeyBase58,
       solanaPrivateKeyPem: solAccount.privateKeyPem
     },
-    cashReserveUsd: initialUsdAllocation,
-    holdings: defaultHoldings,
+    cashReserveUsd: 0,
+    holdings: buildZeroRealHoldings(role, now),
     onChainLiveTelemetry: {
       ethMainnetBalanceEth: 0,
-      ethGasGwei: 12.4,
-      ethBlockNumber: 21245800,
+      ethGasGwei: 0,
+      ethBlockNumber: 0,
       btcConfirmedSats: 0,
       btcUnconfirmedSats: 0,
-      btcFastestFeeSatVb: 8,
+      btcFastestFeeSatVb: 0,
       solMainnetBalanceSol: 0,
       solDevnetBalanceSol: 0,
-      solSlot: 304910200,
-      lastRpcPollAt: now
+      solSlot: 0,
+      lastRpcPollAt: new Date(0).toISOString()
     },
     agenticPolicy:
       role === 'AGENTIC_AUTONOMOUS'
@@ -681,6 +672,34 @@ function buildFreshWallet(
 
 let cachedWalletState: DecryptedWalletState | null = null;
 
+function sanitizeWalletToStrictRealOnChain(w: SovereignCryptoWallet): SovereignCryptoWallet {
+  const now = new Date().toISOString();
+  const ethBal = Number(w.onChainLiveTelemetry?.ethMainnetBalanceEth || 0);
+  const btcBal = Number(((w.onChainLiveTelemetry?.btcConfirmedSats || 0) / 1e8).toFixed(8));
+  const solBal = Number(w.onChainLiveTelemetry?.solMainnetBalanceSol || 0);
+  const cleanHoldings = buildZeroRealHoldings(w.role, now).map((h) => {
+    const liveNative = h.symbol === 'ETH' ? ethBal : h.symbol === 'BTC' ? btcBal : h.symbol === 'SOL' ? solBal : 0;
+    return {
+      ...h,
+      quantity: liveNative,
+      onChainBalanceNative: liveNative
+    };
+  });
+  return {
+    ...w,
+    externalSource: w.externalSource || 'GENERATED_SELF_CUSTODY',
+    cashReserveUsd: 0,
+    holdings: cleanHoldings,
+    agenticPolicy: w.agenticPolicy
+      ? {
+          ...w.agenticPolicy,
+          totalAutonomousTradesExecuted: 0,
+          cumulativeAutonomousProfitUsd: 0
+        }
+      : undefined
+  };
+}
+
 export function loadWalletState(): DecryptedWalletState {
   if (cachedWalletState) return cachedWalletState;
 
@@ -696,60 +715,62 @@ export function loadWalletState(): DecryptedWalletState {
       const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
       const parsed = JSON.parse(decrypted) as DecryptedWalletState;
       if (Array.isArray(parsed.wallets) && parsed.wallets.length >= 2) {
+        // Automatic 1-time migration: purge any legacy simulated paper balances & fake trades while keeping real cryptographic keypairs intact
+        if (parsed.schemaMode !== 'REAL_ONCHAIN_PRODUCTION_V1') {
+          const migrated: DecryptedWalletState = {
+            schemaMode: 'REAL_ONCHAIN_PRODUCTION_V1',
+            wallets: parsed.wallets.map(sanitizeWalletToStrictRealOnChain),
+            transactions: [],
+            beneficiaries: Array.isArray(parsed.beneficiaries) ? parsed.beneficiaries : []
+          };
+          cachedWalletState = migrated;
+          saveEncryptedWalletState(migrated);
+          return migrated;
+        }
         cachedWalletState = parsed;
         return parsed;
       }
     }
   } catch {}
 
-  // Seed default Personal Investor Vault + Autonomous Agentic Treasury Vault
+  // Create real self-custody Personal Vault + Autonomous Agentic Treasury starting strictly at $0.00 / 0 on-chain
   const personalWallet = buildFreshWallet(
     'personal-sovereign-vault',
     'Personal Investor Multi-Chain Vault (JHammerZ)',
     'PERSONAL_INVESTOR',
-    25000
+    0
   );
   const agenticWallet = buildFreshWallet(
     'agentic-uid0-treasury',
     'Lysander UID 0 Autonomous Agentic Treasury',
     'AGENTIC_AUTONOMOUS',
-    50000
+    0
   );
 
-  // Create initial genesis cryptographic signature proofs
-  const initialTxs: SignedCryptoTransaction[] = [
-    createSignedTransactionRecord(
-      personalWallet,
-      'MARKET_BUY',
-      'BITCOIN',
-      'BTC',
-      0.15,
-      89400,
-      personalWallet.addresses.bitcoinSegwit,
-      personalWallet.addresses.bitcoinSegwit,
-      'Genesis Personal Investor Vault BTC Allocation (secp256k1 SegWit attested)',
-      99.8
-    ),
-    createSignedTransactionRecord(
-      agenticWallet,
-      'AUTONOMOUS_5M_SIGNAL_EXEC',
-      'SOLANA',
-      'SOL',
-      60,
-      165.0,
-      agenticWallet.addresses.solanaBase58,
-      agenticWallet.addresses.solanaBase58,
-      'Genesis Agentic Treasury Laplace-14 (h=2s) 99.8% Conformal Entry',
-      99.8
-    )
-  ];
-
   cachedWalletState = {
+    schemaMode: 'REAL_ONCHAIN_PRODUCTION_V1',
     wallets: [personalWallet, agenticWallet],
-    transactions: initialTxs
+    transactions: [],
+    beneficiaries: []
   };
   saveEncryptedWalletState(cachedWalletState);
   return cachedWalletState;
+}
+
+export async function purgeSimulatedDataAndResyncReal(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const state = loadWalletState();
+  state.schemaMode = 'REAL_ONCHAIN_PRODUCTION_V1';
+  state.wallets = state.wallets.map(sanitizeWalletToStrictRealOnChain);
+  state.transactions = [];
+  saveEncryptedWalletState(state);
+  await syncLiveOnChainAndMarketPrices(true);
+  return {
+    success: true,
+    message: 'Purged all simulated balances and history. All vaults are now strictly synced 100% to live mainnet blockchain balances.'
+  };
 }
 
 function createSignedTransactionRecord(
@@ -890,182 +911,250 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 3500
   }
 }
 
-export async function syncLiveOnChainAndMarketPrices(forceRpcPoll = false): Promise<{
-  wallets: SovereignCryptoWallet[];
-  transactions: SignedCryptoTransaction[];
-  livePrices: Record<string, { price: number; changePct: number; forecast5mPct: number; conformal99Pct: number }>;
-}> {
-  const state = loadWalletState();
+let inFlightRpcPoll: Promise<void> | null = null;
+let lastKnownLivePrices: Record<
+  string,
+  { price: number; changePct: number; forecast5mPct: number; conformal99Pct: number }
+> = {
+  BTC: { price: 91250, changePct: 0, forecast5mPct: 0.12, conformal99Pct: 99.8 },
+  ETH: { price: 3110, changePct: 0, forecast5mPct: 0.09, conformal99Pct: 99.8 },
+  SOL: { price: 176.2, changePct: 0, forecast5mPct: 0.18, conformal99Pct: 99.8 },
+  XRP: { price: 2.41, changePct: 0, forecast5mPct: 0.05, conformal99Pct: 99.8 },
+  DOGE: { price: 0.315, changePct: 0, forecast5mPct: 0.04, conformal99Pct: 99.8 }
+};
 
-  // 1. Pull live crypto prices & 5-minute Laplace-14 (h=2s) forecasts from MacroTelemetryService
-  const macroSnap = await collectLiveMacroTelemetry(false);
-  const symbolMap: Record<string, string> = {
-    BTC: 'BTC-USD',
-    ETH: 'ETH-USD',
-    SOL: 'SOL-USD',
-    XRP: 'XRP-USD',
-    DOGE: 'DOGE-USD'
-  };
+async function pollOnChainRpcsInBackground(state: DecryptedWalletState): Promise<void> {
+  if (inFlightRpcPoll) return inFlightRpcPoll;
+  inFlightRpcPoll = (async () => {
+    const now = new Date().toISOString();
+    const isHex = (v: unknown): v is string => typeof v === 'string' && /^0x[0-9a-f]+$/i.test(v);
 
-  const livePrices: Record<
-    string,
-    { price: number; changePct: number; forecast5mPct: number; conformal99Pct: number }
-  > = {};
-
-  for (const [shortSym, ticker] of Object.entries(symbolMap)) {
-    const foundQuote = macroSnap.quotes.find((m) => m.symbol === ticker);
-    const found5m = macroSnap.multiKernelTelemetry?.fiveMinPredictions?.find((p) => p.symbol === ticker);
-    if (foundQuote) {
-      livePrices[shortSym] = {
-        price: foundQuote.price,
-        changePct: foundQuote.changePct,
-        forecast5mPct: found5m?.predicted5mMovePct || 0,
-        conformal99Pct: Number((found5m?.conformal99CoveragePct || 99.8).toFixed(2))
-      };
-    }
-  }
-
-  // Update mark-to-market portfolio valuations across all wallets
-  const now = new Date().toISOString();
-  for (const w of state.wallets) {
-    for (const h of w.holdings) {
-      const lp = livePrices[h.symbol]?.price;
-      if (lp && lp > 0) {
-        h.currentPriceUsd = lp;
-        h.marketValueUsd = Number((h.quantity * lp).toFixed(2));
-        h.unrealizedPnlUsd = Number((h.quantity * (lp - h.avgEntryPriceUsd)).toFixed(2));
-        h.unrealizedPnlPct = Number(
-          (((lp - h.avgEntryPriceUsd) / Math.max(0.0001, h.avgEntryPriceUsd)) * 100).toFixed(2)
-        );
-        h.lastSyncedAt = now;
-      }
-    }
-  }
-
-  // 2. Poll real public Blockchain RPCs if requested or if > 25 seconds since last poll
-  const primaryWallet = state.wallets[0];
-  const elapsedSincePoll =
-    Date.now() - new Date(primaryWallet?.onChainLiveTelemetry?.lastRpcPollAt || 0).getTime();
-
-  if (forceRpcPoll || elapsedSincePoll > 25000) {
     await Promise.allSettled(
       state.wallets.map(async (w) => {
-        // Ethereum Mainnet JSON-RPC
-        try {
-          const ethRpcRes = await fetchWithTimeout('https://ethereum-rpc.publicnode.com', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify([
-              {
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'eth_getBalance',
-                params: [w.addresses.ethereumEip55, 'latest']
-              },
-              { jsonrpc: '2.0', id: 2, method: 'eth_gasPrice', params: [] },
-              { jsonrpc: '2.0', id: 3, method: 'eth_blockNumber', params: [] }
-            ])
-          });
-          if (ethRpcRes.ok) {
-            const batch = (await ethRpcRes.json()) as any[];
-            if (Array.isArray(batch)) {
-              const balHex = batch.find((b) => b.id === 1)?.result;
-              const gasHex = batch.find((b) => b.id === 2)?.result;
-              const blkHex = batch.find((b) => b.id === 3)?.result;
-              if (balHex) {
-                w.onChainLiveTelemetry.ethMainnetBalanceEth =
-                  Number(BigInt(balHex)) / 1e18;
-              }
-              if (gasHex) {
-                w.onChainLiveTelemetry.ethGasGwei = Number(
-                  (Number(BigInt(gasHex)) / 1e9).toFixed(2)
-                );
-              }
-              if (blkHex) {
-                w.onChainLiveTelemetry.ethBlockNumber = Number(BigInt(blkHex));
+        // Ethereum Mainnet JSON-RPC (skip if watch-only without ETH address)
+        if (w.addresses.ethereumEip55 && /^0x[0-9a-fA-F]{40}$/.test(w.addresses.ethereumEip55)) {
+          try {
+            const ethRpcRes = await fetchWithTimeout('https://ethereum-rpc.publicnode.com', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify([
+                {
+                  jsonrpc: '2.0',
+                  id: 1,
+                  method: 'eth_getBalance',
+                  params: [w.addresses.ethereumEip55, 'latest']
+                },
+                { jsonrpc: '2.0', id: 2, method: 'eth_gasPrice', params: [] },
+                { jsonrpc: '2.0', id: 3, method: 'eth_blockNumber', params: [] }
+              ])
+            }, 3000);
+            if (ethRpcRes.ok) {
+              const batch = (await ethRpcRes.json()) as any[];
+              if (Array.isArray(batch)) {
+                const balHex = batch.find((b) => b.id === 1)?.result;
+                const gasHex = batch.find((b) => b.id === 2)?.result;
+                const blkHex = batch.find((b) => b.id === 3)?.result;
+                if (isHex(balHex)) {
+                  w.onChainLiveTelemetry.ethMainnetBalanceEth = Number(BigInt(balHex)) / 1e18;
+                }
+                if (isHex(gasHex)) {
+                  w.onChainLiveTelemetry.ethGasGwei = Number((Number(BigInt(gasHex)) / 1e9).toFixed(2));
+                }
+                if (isHex(blkHex)) {
+                  w.onChainLiveTelemetry.ethBlockNumber = Number(BigInt(blkHex));
+                }
               }
             }
-          }
-        } catch {}
+          } catch {}
+        }
 
-        // Bitcoin Mainnet Mempool.space REST API
-        try {
-          const [addrRes, feeRes] = await Promise.all([
-            fetchWithTimeout(
-              `https://mempool.space/api/address/${w.addresses.bitcoinSegwit}`,
-              { method: 'GET' }
-            ),
-            fetchWithTimeout('https://mempool.space/api/v1/fees/recommended', {
-              method: 'GET'
-            })
-          ]);
-          if (addrRes.ok) {
-            const addrJson: any = await addrRes.json();
-            const funded = addrJson?.chain_stats?.funded_txo_sum || 0;
-            const spent = addrJson?.chain_stats?.spent_txo_sum || 0;
-            const memFunded = addrJson?.mempool_stats?.funded_txo_sum || 0;
-            const memSpent = addrJson?.mempool_stats?.spent_txo_sum || 0;
-            w.onChainLiveTelemetry.btcConfirmedSats = Math.max(0, funded - spent);
-            w.onChainLiveTelemetry.btcUnconfirmedSats = memFunded - memSpent;
-          }
-          if (feeRes.ok) {
-            const feeJson: any = await feeRes.json();
-            if (feeJson?.fastestFee) {
-              w.onChainLiveTelemetry.btcFastestFeeSatVb = Number(feeJson.fastestFee);
+        // Bitcoin Mainnet Mempool.space REST API (SegWit + Legacy)
+        if (w.addresses.bitcoinSegwit && /^(bc1|[13])[a-zA-Z0-9]{20,62}$/.test(w.addresses.bitcoinSegwit)) {
+          try {
+            const [addrRes, feeRes] = await Promise.all([
+              fetchWithTimeout(`https://mempool.space/api/address/${w.addresses.bitcoinSegwit}`, { method: 'GET' }, 3000),
+              fetchWithTimeout('https://mempool.space/api/v1/fees/recommended', { method: 'GET' }, 3000)
+            ]);
+            if (addrRes.ok) {
+              const addrJson: any = await addrRes.json();
+              const funded = addrJson?.chain_stats?.funded_txo_sum || 0;
+              const spent = addrJson?.chain_stats?.spent_txo_sum || 0;
+              const memFunded = addrJson?.mempool_stats?.funded_txo_sum || 0;
+              const memSpent = addrJson?.mempool_stats?.spent_txo_sum || 0;
+              w.onChainLiveTelemetry.btcConfirmedSats = Math.max(0, funded - spent);
+              w.onChainLiveTelemetry.btcUnconfirmedSats = memFunded - memSpent;
             }
-          }
-        } catch {}
+            if (feeRes.ok) {
+              const feeJson: any = await feeRes.json();
+              if (feeJson?.fastestFee) {
+                w.onChainLiveTelemetry.btcFastestFeeSatVb = Number(feeJson.fastestFee);
+              }
+            }
+          } catch {}
+        }
 
         // Solana Mainnet & Devnet JSON-RPC
-        try {
-          const [solMainRes, solDevRes] = await Promise.all([
-            fetchWithTimeout('https://solana-rpc.publicnode.com', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'getBalance',
-                params: [w.addresses.solanaBase58]
-              })
-            }),
-            fetchWithTimeout('https://api.devnet.solana.com', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'getBalance',
-                params: [w.addresses.solanaBase58]
-              })
-            })
-          ]);
-          if (solMainRes.ok) {
-            const mainJson: any = await solMainRes.json();
-            if (typeof mainJson?.result?.value === 'number') {
-              w.onChainLiveTelemetry.solMainnetBalanceSol = mainJson.result.value / 1e9;
+        if (w.addresses.solanaBase58 && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w.addresses.solanaBase58)) {
+          try {
+            const [solMainRes, solDevRes] = await Promise.all([
+              fetchWithTimeout('https://solana-rpc.publicnode.com', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 1,
+                  method: 'getBalance',
+                  params: [w.addresses.solanaBase58]
+                })
+              }, 3000),
+              fetchWithTimeout('https://api.devnet.solana.com', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 1,
+                  method: 'getBalance',
+                  params: [w.addresses.solanaBase58]
+                })
+              }, 3000)
+            ]);
+            if (solMainRes.ok) {
+              const mainJson: any = await solMainRes.json();
+              if (typeof mainJson?.result?.value === 'number') {
+                w.onChainLiveTelemetry.solMainnetBalanceSol = mainJson.result.value / 1e9;
+              }
+              if (typeof mainJson?.result?.context?.slot === 'number') {
+                w.onChainLiveTelemetry.solSlot = mainJson.result.context.slot;
+              }
             }
-            if (typeof mainJson?.result?.context?.slot === 'number') {
-              w.onChainLiveTelemetry.solSlot = mainJson.result.context.slot;
+            if (solDevRes.ok) {
+              const devJson: any = await solDevRes.json();
+              if (typeof devJson?.result?.value === 'number') {
+                w.onChainLiveTelemetry.solDevnetBalanceSol = devJson.result.value / 1e9;
+              }
             }
+          } catch {}
+        }
+
+        // Bind holdings strictly to LIVE verified on-chain mainnet balances (ZERO simulated balances!)
+        for (const h of w.holdings) {
+          if (h.symbol === 'ETH') {
+            h.onChainBalanceNative = Number(w.onChainLiveTelemetry.ethMainnetBalanceEth.toFixed(8));
+            h.quantity = h.onChainBalanceNative;
+          } else if (h.symbol === 'BTC') {
+            h.onChainBalanceNative = Number((w.onChainLiveTelemetry.btcConfirmedSats / 1e8).toFixed(8));
+            h.quantity = h.onChainBalanceNative;
+          } else if (h.symbol === 'SOL') {
+            h.onChainBalanceNative = Number(w.onChainLiveTelemetry.solMainnetBalanceSol.toFixed(8));
+            h.quantity = h.onChainBalanceNative;
+          } else {
+            h.onChainBalanceNative = 0;
+            h.quantity = 0;
           }
-          if (solDevRes.ok) {
-            const devJson: any = await solDevRes.json();
-            if (typeof devJson?.result?.value === 'number') {
-              w.onChainLiveTelemetry.solDevnetBalanceSol = devJson.result.value / 1e9;
-            }
-          }
-        } catch {}
+        }
 
         w.onChainLiveTelemetry.lastRpcPollAt = now;
       })
     );
-    saveEncryptedWalletState(state);
+    try {
+      saveEncryptedWalletState(state);
+    } catch {}
+  })().finally(() => {
+    inFlightRpcPoll = null;
+  });
+
+  return inFlightRpcPoll;
+}
+
+export async function syncLiveOnChainAndMarketPrices(forceRpcPoll = false): Promise<{
+  wallets: SovereignCryptoWallet[];
+  transactions: SignedCryptoTransaction[];
+  beneficiaries: SavedPayoutBeneficiary[];
+  livePrices: Record<string, { price: number; changePct: number; forecast5mPct: number; conformal99Pct: number }>;
+}> {
+  const state = loadWalletState();
+  if (!Array.isArray(state.beneficiaries)) state.beneficiaries = [];
+
+  // 1. Pull live crypto prices & 5-minute Laplace-14 (h=2s) forecasts with timeout fallback
+  const livePrices: Record<
+    string,
+    { price: number; changePct: number; forecast5mPct: number; conformal99Pct: number }
+  > = { ...lastKnownLivePrices };
+
+  try {
+    const macroSnap = await Promise.race([
+      collectLiveMacroTelemetry(false),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500))
+    ]);
+
+    if (macroSnap && Array.isArray(macroSnap.quotes)) {
+      const symbolMap: Record<string, string> = {
+        BTC: 'BTC-USD',
+        ETH: 'ETH-USD',
+        SOL: 'SOL-USD',
+        XRP: 'XRP-USD',
+        DOGE: 'DOGE-USD'
+      };
+      for (const [shortSym, ticker] of Object.entries(symbolMap)) {
+        const foundQuote = macroSnap.quotes.find((m) => m.symbol === ticker);
+        const found5m = macroSnap.multiKernelTelemetry?.fiveMinPredictions?.find((p) => p.symbol === ticker);
+        if (foundQuote && foundQuote.price > 0) {
+          livePrices[shortSym] = {
+            price: foundQuote.price,
+            changePct: foundQuote.changePct,
+            forecast5mPct: found5m?.predicted5mMovePct || 0,
+            conformal99Pct: Number((found5m?.conformal99CoveragePct || 99.8).toFixed(2))
+          };
+        }
+      }
+      lastKnownLivePrices = { ...livePrices };
+    }
+  } catch {}
+
+  // 2. Poll real public Blockchain RPCs: await on explicit Sync button, run non-blockingly in background on passive GET polls
+  const primaryWallet = state.wallets[0];
+  const elapsedSincePoll =
+    Date.now() - new Date(primaryWallet?.onChainLiveTelemetry?.lastRpcPollAt || 0).getTime();
+
+  if (forceRpcPoll) {
+    await Promise.race([
+      pollOnChainRpcsInBackground(state),
+      new Promise<void>((resolve) => setTimeout(resolve, 4200))
+    ]);
+  } else if (elapsedSincePoll > 30000) {
+    pollOnChainRpcsInBackground(state).catch(() => {});
+  }
+
+  // 3. Strictly compute mark-to-market valuations ONLY from live verified on-chain quantities
+  const now = new Date().toISOString();
+  for (const w of state.wallets) {
+    for (const h of w.holdings) {
+      const lp = livePrices[h.symbol]?.price || 0;
+      const realQty =
+        h.symbol === 'ETH'
+          ? Number((w.onChainLiveTelemetry?.ethMainnetBalanceEth || 0).toFixed(8))
+          : h.symbol === 'BTC'
+          ? Number(((w.onChainLiveTelemetry?.btcConfirmedSats || 0) / 1e8).toFixed(8))
+          : h.symbol === 'SOL'
+          ? Number((w.onChainLiveTelemetry?.solMainnetBalanceSol || 0).toFixed(8))
+          : 0;
+      h.onChainBalanceNative = realQty;
+      h.quantity = realQty;
+      h.currentPriceUsd = lp;
+      h.marketValueUsd = Number((realQty * lp).toFixed(2));
+      h.unrealizedPnlUsd = realQty > 0 && h.avgEntryPriceUsd > 0 ? Number((realQty * (lp - h.avgEntryPriceUsd)).toFixed(2)) : 0;
+      h.unrealizedPnlPct =
+        realQty > 0 && h.avgEntryPriceUsd > 0
+          ? Number((((lp - h.avgEntryPriceUsd) / h.avgEntryPriceUsd) * 100).toFixed(2))
+          : 0;
+      h.lastSyncedAt = now;
+    }
   }
 
   return {
     wallets: state.wallets,
     transactions: state.transactions,
+    beneficiaries: state.beneficiaries,
     livePrices
   };
 }
@@ -1133,6 +1222,19 @@ export async function executeWalletTradeOrTransfer(params: {
     wallet.holdings.push(holding);
   }
 
+  const hasLiveExchangeConnector = Boolean(
+    process.env.CDP_API_KEY_NAME ||
+      process.env.COINBASE_API_KEY ||
+      process.env.KRAKEN_API_KEY
+  );
+
+  if (wallet.watchOnly) {
+    return {
+      success: false,
+      message: 'This wallet is linked in Watch-Only mode (public address only). Sign transactions directly in MetaMask/Phantom or import a funded execution key/API.'
+    };
+  }
+
   if (params.action === 'BUY') {
     const usdToSpend =
       params.amountUsd && params.amountUsd > 0
@@ -1142,43 +1244,21 @@ export async function executeWalletTradeOrTransfer(params: {
     if (usdToSpend <= 0) {
       return { success: false, message: 'Specify a valid USD amount or token quantity to buy.' };
     }
-    if (usdToSpend > wallet.cashReserveUsd) {
+    if (wallet.cashReserveUsd < usdToSpend) {
       return {
         success: false,
-        message: `Insufficient USD cash reserve ($${wallet.cashReserveUsd.toFixed(2)} available, tried to spend $${usdToSpend.toFixed(2)}).`
+        message: `Real Verified Balance is $${wallet.cashReserveUsd.toFixed(2)} USD. Zero simulated funds allowed — deposit real crypto on-chain or connect a funded Coinbase CDP / Kraken API key in API Secrets Manager.`
       };
     }
-
-    const qtyBought = usdToSpend / livePrice;
-    const totalCostBefore = holding.quantity * holding.avgEntryPriceUsd;
-    const newQty = holding.quantity + qtyBought;
-    holding.avgEntryPriceUsd = Number(((totalCostBefore + usdToSpend) / newQty).toFixed(4));
-    holding.quantity = Number(newQty.toFixed(6));
-    holding.currentPriceUsd = livePrice;
-    holding.marketValueUsd = Number((holding.quantity * livePrice).toFixed(2));
-    wallet.cashReserveUsd = Number((wallet.cashReserveUsd - usdToSpend).toFixed(2));
-
-    const tx = createSignedTransactionRecord(
-      wallet,
-      wallet.role === 'AGENTIC_AUTONOMOUS' ? 'AUTONOMOUS_5M_SIGNAL_EXEC' : 'MARKET_BUY',
-      chain,
-      params.symbol,
-      qtyBought,
-      livePrice,
-      fromAddr,
-      fromAddr,
-      params.triggerReason ||
-        `Bought ${qtyBought.toFixed(5)} ${params.symbol} @ $${livePrice.toLocaleString()} (${priceInfo.conformal99Pct}% Conformal Certainty)`,
-      priceInfo.conformal99Pct
-    );
-
-    transactions.unshift(tx);
-    saveEncryptedWalletState({ wallets, transactions: transactions.slice(0, 120) });
+    if (!hasLiveExchangeConnector) {
+      return {
+        success: false,
+        message: 'No live Exchange/DEX execution API key configured (CDP_API_KEY_NAME, COINBASE_API_KEY, or KRAKEN_API_KEY). Refusing to fabricate a simulated BUY fill.'
+      };
+    }
     return {
-      success: true,
-      message: `Executed & cryptographically signed BUY of ${qtyBought.toFixed(5)} ${params.symbol} ($${usdToSpend.toFixed(2)}) @ $${livePrice.toLocaleString()}.`,
-      transaction: tx,
-      wallet
+      success: false,
+      message: 'Exchange API order routing requires a verified funded exchange session. Open the Agentic Grants & Real Capital tab to complete live venue linking.'
     };
   }
 
@@ -1188,89 +1268,42 @@ export async function executeWalletTradeOrTransfer(params: {
         ? params.quantityNative
         : (params.amountUsd || 0) / livePrice;
 
-    if (qtyToSell <= 0 || qtyToSell > holding.quantity) {
+    if (qtyToSell <= 0 || qtyToSell > holding.onChainBalanceNative) {
       return {
         success: false,
-        message: `Insufficient ${params.symbol} balance (${holding.quantity.toFixed(5)} ${params.symbol} held).`
+        message: `Insufficient REAL on-chain ${params.symbol} balance (${holding.onChainBalanceNative.toFixed(6)} ${params.symbol} verified on mainnet).`
       };
     }
-
-    const usdProceeds = qtyToSell * livePrice;
-    const realizedPnl = qtyToSell * (livePrice - holding.avgEntryPriceUsd);
-    holding.quantity = Number(Math.max(0, holding.quantity - qtyToSell).toFixed(6));
-    holding.marketValueUsd = Number((holding.quantity * livePrice).toFixed(2));
-    wallet.cashReserveUsd = Number((wallet.cashReserveUsd + usdProceeds).toFixed(2));
-
-    if (wallet.agenticPolicy) {
-      wallet.agenticPolicy.totalAutonomousTradesExecuted += 1;
-      wallet.agenticPolicy.cumulativeAutonomousProfitUsd = Number(
-        (wallet.agenticPolicy.cumulativeAutonomousProfitUsd + realizedPnl).toFixed(2)
-      );
+    if (!hasLiveExchangeConnector) {
+      return {
+        success: false,
+        message: `Verified ${holding.onChainBalanceNative.toFixed(6)} ${params.symbol} on-chain, but no live exchange/DEX swap API (Coinbase CDP / Kraken / 0x / Jupiter) is configured. Refusing to fabricate a simulated SELL fill.`
+      };
     }
-
-    const tx = createSignedTransactionRecord(
-      wallet,
-      wallet.role === 'AGENTIC_AUTONOMOUS' ? 'AUTONOMOUS_5M_SIGNAL_EXEC' : 'MARKET_SELL',
-      chain,
-      params.symbol,
-      qtyToSell,
-      livePrice,
-      fromAddr,
-      fromAddr,
-      params.triggerReason ||
-        `Sold ${qtyToSell.toFixed(5)} ${params.symbol} @ $${livePrice.toLocaleString()} (Realized PnL: ${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(2)})`,
-      priceInfo.conformal99Pct
-    );
-
-    transactions.unshift(tx);
-    saveEncryptedWalletState({ wallets, transactions: transactions.slice(0, 120) });
     return {
-      success: true,
-      message: `Executed & cryptographically signed SELL of ${qtyToSell.toFixed(5)} ${params.symbol} ($${usdProceeds.toFixed(2)} proceeds, Realized PnL: ${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(2)}).`,
-      transaction: tx,
-      wallet
+      success: false,
+      message: 'Live DEX/Exchange order broadcast requires signing confirmation via your connected execution venue.'
     };
   }
 
   // ONCHAIN_TRANSFER
   const qtyTransfer = params.quantityNative || 0;
   const recipient = (params.toAddress || '').trim();
-  if (!recipient || qtyTransfer <= 0 || qtyTransfer > holding.quantity) {
+  if (!recipient || qtyTransfer <= 0 || qtyTransfer > holding.onChainBalanceNative) {
     return {
       success: false,
-      message: `Provide a valid recipient address and amount <= ${holding.quantity} ${params.symbol}.`
+      message: `Insufficient REAL on-chain ${params.symbol} balance (${holding.onChainBalanceNative.toFixed(6)} ${params.symbol} verified on mainnet). Fund your address on-chain before broadcasting.`
     };
   }
 
-  holding.quantity = Number(Math.max(0, holding.quantity - qtyTransfer).toFixed(6));
-  holding.marketValueUsd = Number((holding.quantity * livePrice).toFixed(2));
-
-  const tx = createSignedTransactionRecord(
-    wallet,
-    'ONCHAIN_TRANSFER',
-    chain,
-    params.symbol,
-    qtyTransfer,
-    livePrice,
-    fromAddr,
-    recipient,
-    params.triggerReason || `Signed On-Chain Transfer of ${qtyTransfer} ${params.symbol} to ${recipient}`,
-    priceInfo.conformal99Pct,
-    'SIGNED_AND_COMMITTED'
-  );
-
-  transactions.unshift(tx);
-  saveEncryptedWalletState({ wallets, transactions: transactions.slice(0, 120) });
   return {
-    success: true,
-    message: `Cryptographically signed transfer of ${qtyTransfer} ${params.symbol} to ${recipient} (TxHash: ${tx.txHash.slice(0, 18)}...).`,
-    transaction: tx,
-    wallet
+    success: false,
+    message: `On-chain balance verified (${holding.onChainBalanceNative.toFixed(6)} ${params.symbol}). Mainnet raw transaction broadcasting requires explicit gas fee approval + connected signing RPC or MetaMask/Phantom confirmation.`
   };
 }
 
 // ============================================================================
-// AUTONOMOUS AGENTIC 5-MINUTE EARLY-WARNING EXECUTION CYCLE
+// AUTONOMOUS AGENTIC 5-MINUTE EARLY-WARNING EXECUTION CYCLE (100% REAL ONLY)
 // ============================================================================
 
 export async function runAutonomousAgenticCryptoCycle(): Promise<{
@@ -1280,7 +1313,7 @@ export async function runAutonomousAgenticCryptoCycle(): Promise<{
   transactionsAdded: SignedCryptoTransaction[];
   agenticWallet?: SovereignCryptoWallet;
 }> {
-  const { wallets } = await syncLiveOnChainAndMarketPrices(false);
+  const { wallets } = await syncLiveOnChainAndMarketPrices(true);
   const agenticWallet = wallets.find((w) => w.role === 'AGENTIC_AUTONOMOUS');
   if (!agenticWallet || !agenticWallet.agenticPolicy) {
     return { success: false, executedCount: 0, actionsLog: ['Agentic wallet not initialized.'], transactionsAdded: [] };
@@ -1291,104 +1324,55 @@ export async function runAutonomousAgenticCryptoCycle(): Promise<{
     ['BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD'].includes(a.symbol)
   );
 
-  const actionsLog: string[] = [];
-  const transactionsAdded: SignedCryptoTransaction[] = [];
   const policy = agenticWallet.agenticPolicy;
   policy.lastAutonomousScanAt = new Date().toISOString();
 
-  for (const alert of cryptoAlerts) {
-    const shortSym = alert.symbol.replace('-USD', '') as 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'DOGE';
-    const tradeUsd = Math.min(policy.maxSingleTradeUsd, Math.max(250, agenticWallet.cashReserveUsd * 0.08));
+  const totalRealOnChainUsd =
+    agenticWallet.cashReserveUsd +
+    agenticWallet.holdings.reduce((sum, h) => sum + h.marketValueUsd, 0);
 
-    if (
-      (alert.actionSignal === 'STRONG_BUY' || alert.actionSignal === 'BUY_ACCUMULATE') &&
-      agenticWallet.cashReserveUsd >= tradeUsd
-    ) {
-      const res = await executeWalletTradeOrTransfer({
-        walletId: agenticWallet.id,
-        action: 'BUY',
-        symbol: shortSym,
-        amountUsd: Number(tradeUsd.toFixed(2)),
-        triggerReason: `[UID 0 AUTONOMOUS 5M EARLY-WARNING · ${alert.actionSignal}] ${alert.headlineTrigger} (5m Expected: +${alert.predicted5mMovePct.toFixed(2)}%, Conformal 99% Cert: ${alert.conformal99CoveragePct.toFixed(1)}%)`
-      });
-      if (res.success && res.transaction) {
-        actionsLog.push(res.message);
-        transactionsAdded.push(res.transaction);
-      }
-    } else if (
-      alert.actionSignal === 'TAKE_PROFIT_SELL' ||
-      alert.actionSignal === 'URGENT_STOP_LOSS_SELL'
-    ) {
-      const holding = agenticWallet.holdings.find((h) => h.symbol === shortSym);
-      if (holding && holding.quantity > 0) {
-        const sellQty = Number((holding.quantity * 0.2).toFixed(5));
-        if (sellQty > 0) {
-          const res = await executeWalletTradeOrTransfer({
-            walletId: agenticWallet.id,
-            action: 'SELL',
-            symbol: shortSym,
-            quantityNative: sellQty,
-            triggerReason: `[UID 0 AUTONOMOUS 5M PROTECTION · ${alert.actionSignal}] ${alert.headlineTrigger} (5m Expected: ${alert.predicted5mMovePct.toFixed(2)}%, Conformal 99% Cert: ${alert.conformal99CoveragePct.toFixed(1)}%)`
-          });
-          if (res.success && res.transaction) {
-            actionsLog.push(res.message);
-            transactionsAdded.push(res.transaction);
-          }
-        }
-      }
-    }
+  const hasLiveVenue = Boolean(
+    process.env.CDP_API_KEY_NAME ||
+      process.env.COINBASE_API_KEY ||
+      process.env.KRAKEN_API_KEY
+  );
+
+  saveEncryptedWalletState(loadWalletState());
+
+  if (totalRealOnChainUsd <= 0) {
+    return {
+      success: true,
+      executedCount: 0,
+      actionsLog: [
+        `[100% REAL MODE · STANDBY] Scanned ${cryptoAlerts.length} live 5-minute conformal signals. Agentic Treasury has $0.00 real verified on-chain funds (0 BTC, 0 ETH, 0 SOL).`,
+        'Zero simulated trades executed. Fund the Agentic Treasury address (via Agentic Grants, Coinbase CDP AgentKit, or on-chain transfer) to activate live autonomous trading.'
+      ],
+      transactionsAdded: [],
+      agenticWallet
+    };
   }
 
-  // If no extreme 5m alert triggered, execute a high-certainty Laplace-14 momentum allocation on the strongest positive 5m forecast crypto asset
-  if (transactionsAdded.length === 0) {
-    const cryptoPredictions = (macroSnap.multiKernelTelemetry?.fiveMinPredictions || [])
-      .filter((m) => ['BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD'].includes(m.symbol))
-      .sort((a, b) => (b.predicted5mMovePct || 0) - (a.predicted5mMovePct || 0));
-
-    const topCrypto = cryptoPredictions[0];
-    if (topCrypto) {
-      const shortSym = topCrypto.symbol.replace('-USD', '') as 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'DOGE';
-      const isPositive = (topCrypto.predicted5mMovePct || 0) >= 0;
-      if (isPositive && agenticWallet.cashReserveUsd >= 500) {
-        const allocUsd = Math.min(policy.maxSingleTradeUsd, 1000);
-        const res = await executeWalletTradeOrTransfer({
-          walletId: agenticWallet.id,
-          action: 'BUY',
-          symbol: shortSym,
-          amountUsd: allocUsd,
-          triggerReason: `[UID 0 LAPLACE-14 (h=2s) AUTONOMOUS ALLOCATION] Top 5m relative strength on ${topCrypto.symbol} (+${(topCrypto.predicted5mMovePct || 0).toFixed(2)}% 5m trajectory)`
-        });
-        if (res.success && res.transaction) {
-          actionsLog.push(res.message);
-          transactionsAdded.push(res.transaction);
-        }
-      } else {
-        const holding = agenticWallet.holdings.find((h) => h.symbol === shortSym);
-        if (holding && holding.quantity > 0) {
-          const trimQty = Number((holding.quantity * 0.1).toFixed(5));
-          const res = await executeWalletTradeOrTransfer({
-            walletId: agenticWallet.id,
-            action: 'SELL',
-            symbol: shortSym,
-            quantityNative: trimQty,
-            triggerReason: `[UID 0 LAPLACE-14 (h=2s) RISK HEDGE] Defensive rebalance on ${topCrypto.symbol} (${(topCrypto.predicted5mMovePct || 0).toFixed(2)}% 5m trajectory)`
-          });
-          if (res.success && res.transaction) {
-            actionsLog.push(res.message);
-            transactionsAdded.push(res.transaction);
-          }
-        }
-      }
-    }
+  if (!hasLiveVenue) {
+    return {
+      success: true,
+      executedCount: 0,
+      actionsLog: [
+        `[100% REAL MODE · REAL BALANCE DETECTED: $${totalRealOnChainUsd.toFixed(2)}] Scanned ${cryptoAlerts.length} live 5-minute conformal signals.`,
+        'Connect Coinbase CDP AgentKit (CDP_API_KEY_NAME / CDP_API_KEY_PRIVATE_KEY) or Kraken/Coinbase Exchange API keys in API Secrets Manager to authorize real autonomous execution.'
+      ],
+      transactionsAdded: [],
+      agenticWallet
+    };
   }
 
-  const refreshed = loadWalletState();
   return {
     success: true,
-    executedCount: transactionsAdded.length,
-    actionsLog,
-    transactionsAdded,
-    agenticWallet: refreshed.wallets.find((w) => w.role === 'AGENTIC_AUTONOMOUS')
+    executedCount: 0,
+    actionsLog: [
+      `[100% REAL MODE · ARMED] Real Treasury: $${totalRealOnChainUsd.toFixed(2)} | Live venue key detected | ${cryptoAlerts.length} conformal signals evaluated.`
+    ],
+    transactionsAdded: [],
+    agenticWallet
   };
 }
 
@@ -1400,16 +1384,97 @@ export function createOrImportCustomWallet(params: {
 }): SovereignCryptoWallet {
   const state = loadWalletState();
   const id = `${params.role.toLowerCase().replace('_', '-')}-${crypto.randomBytes(3).toString('hex')}`;
+  // Always strictly 0 real starting balance (never fabricate fake cash!)
   const newWallet = buildFreshWallet(
     id,
     params.label || 'Sovereign Multi-Chain Vault',
     params.role,
-    typeof params.initialCashUsd === 'number' ? params.initialCashUsd : 10000,
+    0,
     params.importPrivateKeyHex
   );
   state.wallets.push(newWallet);
   saveEncryptedWalletState(state);
   return newWallet;
+}
+
+export async function linkExternalOrWatchOnlyWallet(params: {
+  label: string;
+  source: 'METAMASK_EVM' | 'PHANTOM_SOLANA' | 'WATCH_ONLY_ADDRESS';
+  ethereumAddress?: string;
+  bitcoinAddress?: string;
+  solanaAddress?: string;
+}): Promise<{ success: boolean; message: string; wallet?: SovereignCryptoWallet }> {
+  const eth = (params.ethereumAddress || '').trim();
+  const btc = (params.bitcoinAddress || '').trim();
+  const sol = (params.solanaAddress || '').trim();
+
+  if (eth && !/^0x[0-9a-fA-F]{40}$/.test(eth)) {
+    return { success: false, message: 'Invalid Ethereum address format (must be 0x + 40 hex characters).' };
+  }
+  if (btc && !/^(bc1|[13])[a-zA-Z0-9]{20,62}$/.test(btc)) {
+    return { success: false, message: 'Invalid Bitcoin mainnet address format (must start with bc1, 1, or 3).' };
+  }
+  if (sol && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(sol)) {
+    return { success: false, message: 'Invalid Solana mainnet Base58 address format.' };
+  }
+  if (!eth && !btc && !sol) {
+    return { success: false, message: 'Provide at least one real Ethereum, Bitcoin, or Solana mainnet address.' };
+  }
+
+  const state = loadWalletState();
+  const now = new Date().toISOString();
+  const id = `linked-${crypto.randomBytes(4).toString('hex')}`;
+  const linkedWallet: SovereignCryptoWallet = {
+    id,
+    label: params.label.trim() || `Connected Real Wallet (${params.source.replace(/_/g, ' ')})`,
+    role: 'PERSONAL_INVESTOR',
+    createdAt: now,
+    encryptionCipher: 'AES-256-GCM',
+    watchOnly: true,
+    externalSource: params.source,
+    addresses: {
+      ethereumEip55: eth ? toEip55Address(eth) : '',
+      bitcoinSegwit: btc || '',
+      bitcoinLegacy: btc || '',
+      solanaBase58: sol || ''
+    },
+    publicKeys: {
+      ethereumUncompressedHex: '',
+      bitcoinCompressedHex: '',
+      solanaHex: ''
+    },
+    secrets: {
+      mnemonic12: '',
+      ethereumPrivateKeyHex: '',
+      bitcoinWifPrivateKey: '',
+      solanaSecretKeyBase58: '',
+      solanaPrivateKeyPem: ''
+    },
+    cashReserveUsd: 0,
+    holdings: buildZeroRealHoldings('PERSONAL_INVESTOR', now),
+    onChainLiveTelemetry: {
+      ethMainnetBalanceEth: 0,
+      ethGasGwei: 0,
+      ethBlockNumber: 0,
+      btcConfirmedSats: 0,
+      btcUnconfirmedSats: 0,
+      btcFastestFeeSatVb: 0,
+      solMainnetBalanceSol: 0,
+      solDevnetBalanceSol: 0,
+      solSlot: 0,
+      lastRpcPollAt: new Date(0).toISOString()
+    }
+  };
+
+  state.wallets.push(linkedWallet);
+  saveEncryptedWalletState(state);
+  await syncLiveOnChainAndMarketPrices(true);
+  const refreshed = loadWalletState().wallets.find((w) => w.id === id) || linkedWallet;
+  return {
+    success: true,
+    message: `Linked real external wallet "${refreshed.label}" and synced live mainnet balances from blockchain RPCs.`,
+    wallet: refreshed
+  };
 }
 
 export function updateAgenticWalletPolicy(
@@ -1487,3 +1552,652 @@ export async function requestSolanaDevnetAirdrop(walletId: string): Promise<{
     };
   }
 }
+
+// ============================================================================
+// EASY BANK & DIGITAL EQUIVALENT CURRENCY TRANSFERS (ACH / FEDNOW / WIRE /
+// SEPA / CASH APP / VENMO / PAYPAL / ZELLE / APPLE CASH / WISE / EXCHANGES)
+// ============================================================================
+
+const RAIL_CONFIG: Record<
+  PayoutRailType,
+  { label: string; feeUsd: number; eta: string; defaultInstitution: string }
+> = {
+  BANK_ACH: { label: 'US Bank ACH Direct Deposit', feeUsd: 0, eta: 'Same-Day / 1 Business Day', defaultInstitution: 'US Checking / Savings Bank' },
+  FEDNOW_INSTANT: { label: 'FedNow / RTP Instant Bank Rail', feeUsd: 0.5, eta: 'Instant (< 15 seconds)', defaultInstitution: 'FedNow Participating Bank' },
+  WIRE_SWIFT: { label: 'Domestic Wire / International SWIFT', feeUsd: 12.0, eta: '1–4 Hours (Same Business Day)', defaultInstitution: 'SWIFT / Fedwire Bank' },
+  SEPA_INSTANT: { label: 'SEPA Instant (EUR IBAN)', feeUsd: 0.25, eta: 'Instant (< 10 seconds)', defaultInstitution: 'SEPA European Bank' },
+  CASH_APP: { label: 'Cash App ($Cashtag)', feeUsd: 0, eta: 'Instant', defaultInstitution: 'Block / Cash App' },
+  VENMO: { label: 'Venmo (@Handle)', feeUsd: 0, eta: 'Instant', defaultInstitution: 'PayPal / Venmo' },
+  PAYPAL: { label: 'PayPal (Email / PayPal.me)', feeUsd: 0, eta: 'Instant', defaultInstitution: 'PayPal Holdings' },
+  ZELLE: { label: 'Zelle (Email / Mobile)', feeUsd: 0, eta: 'Instant (< 60 seconds)', defaultInstitution: 'Early Warning / Zelle Network' },
+  APPLE_CASH: { label: 'Apple Cash / Apple Pay', feeUsd: 0, eta: 'Instant', defaultInstitution: 'Apple Cash (Green Dot)' },
+  WISE_REVOLUT: { label: 'Wise / Revolut Multi-Currency', feeUsd: 0.95, eta: 'Instant – 5 Minutes', defaultInstitution: 'Wise / Revolut' },
+  EXCHANGE_OFFRAMP: { label: 'Coinbase / Kraken / Robinhood / Strike', feeUsd: 0, eta: 'Instant – 2 Minutes', defaultInstitution: 'Digital Exchange Account' }
+};
+
+const FX_ESTIMATE_RATES: Record<string, number> = {
+  USD: 1.0,
+  EUR: 0.92,
+  GBP: 0.79,
+  CAD: 1.38,
+  AUD: 1.53,
+  JPY: 154.2,
+  MXN: 20.15,
+  CHF: 0.88
+};
+
+function maskDestination(raw: string): string {
+  const clean = raw.trim();
+  if (clean.length <= 4) return clean;
+  if (clean.includes('@') || clean.startsWith('$')) return clean;
+  return `${'•'.repeat(Math.max(4, clean.length - 4))}${clean.slice(-4)}`;
+}
+
+export function savePayoutBeneficiary(input: {
+  label: string;
+  rail: PayoutRailType;
+  recipientName: string;
+  institutionName: string;
+  accountOrHandle: string;
+  routingOrSwift?: string;
+  currency?: string;
+}): SavedPayoutBeneficiary {
+  const state = loadWalletState();
+  if (!Array.isArray(state.beneficiaries)) state.beneficiaries = [];
+  const record: SavedPayoutBeneficiary = {
+    id: 'ben-' + crypto.randomBytes(5).toString('hex'),
+    label: input.label.trim() || `${input.recipientName.trim()} (${RAIL_CONFIG[input.rail]?.label || input.rail})`,
+    rail: input.rail,
+    recipientName: input.recipientName.trim(),
+    institutionName: input.institutionName.trim() || RAIL_CONFIG[input.rail]?.defaultInstitution || 'Financial Institution',
+    accountOrHandle: input.accountOrHandle.trim(),
+    routingOrSwift: input.routingOrSwift?.trim() || undefined,
+    currency: (input.currency || 'USD').toUpperCase(),
+    createdAt: new Date().toISOString()
+  };
+  state.beneficiaries.unshift(record);
+  state.beneficiaries = state.beneficiaries.slice(0, 30);
+  saveEncryptedWalletState(state);
+  return record;
+}
+
+export function deletePayoutBeneficiary(beneficiaryId: string): boolean {
+  const state = loadWalletState();
+  if (!Array.isArray(state.beneficiaries)) return false;
+  const before = state.beneficiaries.length;
+  state.beneficiaries = state.beneficiaries.filter((b) => b.id !== beneficiaryId);
+  if (state.beneficiaries.length !== before) {
+    saveEncryptedWalletState(state);
+    return true;
+  }
+  return false;
+}
+
+export async function executeBankOrDigitalTransfer(params: {
+  walletId: string;
+  rail: PayoutRailType;
+  fundingSource: 'USD_CASH' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'DOGE';
+  amountUsd: number;
+  targetCurrency?: string;
+  recipientName: string;
+  institutionName?: string;
+  accountOrHandle: string;
+  routingOrSwift?: string;
+  memo?: string;
+  saveBeneficiary?: boolean;
+  beneficiaryLabel?: string;
+}): Promise<{
+  success: boolean;
+  message: string;
+  transaction?: SignedCryptoTransaction;
+}> {
+  const { wallets, livePrices } = await syncLiveOnChainAndMarketPrices(false);
+  const state = loadWalletState();
+  const wallet = wallets.find((w) => w.id === params.walletId) || state.wallets.find((w) => w.id === params.walletId);
+  if (!wallet) return { success: false, message: 'Source wallet not found.' };
+
+  const railCfg = RAIL_CONFIG[params.rail] || RAIL_CONFIG.BANK_ACH;
+  const amountUsd = Number(params.amountUsd);
+  if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+    return { success: false, message: 'Enter a valid transfer amount greater than $0.00.' };
+  }
+  if (!params.recipientName?.trim() || !params.accountOrHandle?.trim()) {
+    return { success: false, message: 'Recipient name and destination account number, IBAN, or digital handle are required.' };
+  }
+  if (
+    (params.rail === 'BANK_ACH' || params.rail === 'FEDNOW_INSTANT') &&
+    params.routingOrSwift &&
+    !/^\d{9}$/.test(params.routingOrSwift.replace(/\s+/g, ''))
+  ) {
+    return { success: false, message: 'US Bank routing number must be 9 digits.' };
+  }
+
+  const totalDebitUsd = Number((amountUsd + railCfg.feeUsd).toFixed(2));
+  const hasRealFiatRailConnector = Boolean(
+    process.env.STRIPE_SECRET_KEY ||
+      process.env.COINBASE_CDP_API_KEY ||
+      process.env.CDP_API_KEY_NAME ||
+      process.env.PLAID_CLIENT_ID
+  );
+
+  if (params.fundingSource === 'USD_CASH') {
+    if (wallet.cashReserveUsd < totalDebitUsd) {
+      return {
+        success: false,
+        message: `Real verified USD balance is $${wallet.cashReserveUsd.toFixed(2)} (need $${totalDebitUsd.toFixed(2)}). Zero simulated balances exist — deposit real funds or connect a funded fiat off-ramp API.`
+      };
+    }
+  } else {
+    const holding = wallet.holdings.find((h) => h.symbol === params.fundingSource);
+    const spotPrice = livePrices[params.fundingSource]?.price || holding?.currentPriceUsd || 1;
+    const neededQty = totalDebitUsd / Math.max(0.0001, spotPrice);
+    if (!holding || holding.onChainBalanceNative < neededQty) {
+      return {
+        success: false,
+        message: `Insufficient REAL on-chain ${params.fundingSource} balance (need ${neededQty.toFixed(6)} ${params.fundingSource}, have ${(holding?.onChainBalanceNative || 0).toFixed(6)} verified on mainnet).`
+      };
+    }
+  }
+
+  if (params.saveBeneficiary) {
+    if (!Array.isArray(state.beneficiaries)) state.beneficiaries = [];
+    const targetCurrency = (params.targetCurrency || (params.rail === 'SEPA_INSTANT' ? 'EUR' : 'USD')).toUpperCase();
+    const institutionName = params.institutionName?.trim() || railCfg.defaultInstitution;
+    const exists = state.beneficiaries.some(
+      (b) => b.rail === params.rail && b.accountOrHandle.toLowerCase() === params.accountOrHandle.trim().toLowerCase()
+    );
+    if (!exists) {
+      state.beneficiaries.unshift({
+        id: 'ben-' + crypto.randomBytes(5).toString('hex'),
+        label: params.beneficiaryLabel?.trim() || `${params.recipientName.trim()} · ${institutionName}`,
+        rail: params.rail,
+        recipientName: params.recipientName.trim(),
+        institutionName,
+        accountOrHandle: params.accountOrHandle.trim(),
+        routingOrSwift: params.routingOrSwift?.trim() || undefined,
+        currency: targetCurrency,
+        createdAt: new Date().toISOString()
+      });
+      saveEncryptedWalletState(state);
+    }
+  }
+
+  if (!hasRealFiatRailConnector) {
+    return {
+      success: false,
+      message: `No live licensed banking/fiat payout processor configured (STRIPE_SECRET_KEY, CDP_API_KEY_NAME, or PLAID_CLIENT_ID). Refusing to fabricate a fake ${railCfg.label} transfer. Save your beneficiary and connect a live payout processor in API Secrets Manager.`
+    };
+  }
+
+  return {
+    success: false,
+    message: `Live ${railCfg.label} payout processor detected — complete live OAuth/KYC funding authorization with your provider before dispatching bank payouts.`
+  };
+}
+
+export interface RealCapitalBootstrapProgram {
+  id: string;
+  category: 'AGENTIC_GRANTS' | 'EXCHANGE_BONUSES' | 'ZERO_CAPITAL_EARN' | 'TESTNET_DEV';
+  name: string;
+  provider: string;
+  potentialValue: string;
+  realMainnetValue: boolean;
+  kycOrApprovalRequired: string;
+  summary: string;
+  officialUrl: string;
+}
+
+export function getRealBootstrapAndConnectorStatus(): {
+  productionMode: 'REAL_ONCHAIN_ONLY';
+  connectors: {
+    id: string;
+    name: string;
+    envKeys: string[];
+    connected: boolean;
+    purpose: string;
+  }[];
+  programs: RealCapitalBootstrapProgram[];
+} {
+  const connectors = [
+    {
+      id: 'mainnet-rpcs',
+      name: 'Ethereum + Bitcoin + Solana Mainnet RPCs',
+      envKeys: ['Public Mainnet RPCs (Built-in)'],
+      connected: true,
+      purpose: 'Live real-time balance verification for ETH, BTC, and SOL mainnet addresses'
+    },
+    {
+      id: 'coinbase-cdp',
+      name: 'Coinbase Developer Platform (CDP) AgentKit',
+      envKeys: ['CDP_API_KEY_NAME', 'CDP_API_KEY_PRIVATE_KEY'],
+      connected: Boolean(process.env.CDP_API_KEY_NAME && process.env.CDP_API_KEY_PRIVATE_KEY),
+      purpose: 'Autonomous MPC Agentic Wallets, x402 payments, Base DEX swaps & Coinbase Off-Ramp'
+    },
+    {
+      id: 'coinbase-exchange',
+      name: 'Coinbase Advanced Trade API',
+      envKeys: ['COINBASE_API_KEY', 'COINBASE_API_SECRET'],
+      connected: Boolean(process.env.COINBASE_API_KEY && process.env.COINBASE_API_SECRET),
+      purpose: 'Live spot BTC/ETH/SOL order execution & real USD bank ACH withdrawals'
+    },
+    {
+      id: 'kraken-exchange',
+      name: 'Kraken Pro REST Trading API',
+      envKeys: ['KRAKEN_API_KEY', 'KRAKEN_API_SECRET'],
+      connected: Boolean(process.env.KRAKEN_API_KEY && process.env.KRAKEN_API_SECRET),
+      purpose: 'Low-fee automated spot trading & regulated ACH / FedNow / Wire bank rails'
+    },
+    {
+      id: 'stripe-treasury',
+      name: 'Stripe / Plaid Fiat Payout Rail',
+      envKeys: ['STRIPE_SECRET_KEY', 'PLAID_CLIENT_ID'],
+      connected: Boolean(process.env.STRIPE_SECRET_KEY || process.env.PLAID_CLIENT_ID),
+      purpose: 'Regulated real-money bank ACH, instant card, and digital wallet payouts'
+    }
+  ];
+
+  const programs: RealCapitalBootstrapProgram[] = [
+    {
+      id: 'cdp-agentkit-grants',
+      category: 'AGENTIC_GRANTS',
+      name: 'Coinbase CDP AgentKit & Builder Grants',
+      provider: 'Coinbase Developer Platform',
+      potentialValue: 'Up to ~$3,000/team (from $30k cohorts) + Gasless Base Credits',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'Builder project application / hackathon cohort selection',
+      summary: 'Official Agentic Wallets SDK (x402 autonomous payments & on-chain trading). Recurring Builder Grant cohorts fund autonomous AI-agent projects directly in real crypto + cloud credits.',
+      officialUrl: 'https://docs.cdp.coinbase.com/'
+    },
+    {
+      id: 'base-builder-grants',
+      category: 'AGENTIC_GRANTS',
+      name: 'Base Builder Grants & Onchain Rounds',
+      provider: 'Base (Coinbase L2)',
+      potentialValue: '1–5 ETH in real mainnet Base ETH / USDC',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'Shipped open-source app or autonomous agent on Base',
+      summary: 'Retroactive and milestone grants paid directly in real Base ETH/USDC to builders shipping live autonomous on-chain tools and apps.',
+      officialUrl: 'https://www.base.org/builders'
+    },
+    {
+      id: 'solana-ai-grants',
+      category: 'AGENTIC_GRANTS',
+      name: 'Solana Foundation AI & Agent Grants',
+      provider: 'Solana Foundation',
+      potentialValue: 'Non-dilutive USDC / SOL milestone grants',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'Grant proposal & milestone review',
+      summary: 'Funds open-source AI agents, autonomous trading infrastructure, and Solana Agent Kit integrations directly in real SOL/USDC.',
+      officialUrl: 'https://solana.org/grants-funding'
+    },
+    {
+      id: 'coinbase-wallet-quests',
+      category: 'ZERO_CAPITAL_EARN',
+      name: 'Coinbase Wallet On-Chain Quests',
+      provider: 'Coinbase Wallet (Self-Custody)',
+      potentialValue: 'Small real crypto / token rewards per quest',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'Self-custody Coinbase Wallet app (classic quiz Learn & Earn was discontinued)',
+      summary: 'Complete verified on-chain tasks inside Coinbase Wallet to earn real tokens directly into self-custody (which can then be transferred to your Agentic Treasury).',
+      officialUrl: 'https://www.coinbase.com/wallet'
+    },
+    {
+      id: 'brave-rewards-bat',
+      category: 'ZERO_CAPITAL_EARN',
+      name: 'Brave Rewards (BAT to Self-Custody Solana)',
+      provider: 'Brave Software',
+      potentialValue: 'Zero-capital recurring real BAT tokens',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'No deposit needed; optional Solana self-custody payout',
+      summary: 'Earn real Basic Attention Token (BAT) organically while browsing with $0 upfront capital, withdrawable directly to a self-custody Solana wallet address.',
+      officialUrl: 'https://brave.com/brave-rewards/'
+    },
+    {
+      id: 'kraken-signup-promo',
+      category: 'EXCHANGE_BONUSES',
+      name: 'Kraken New Account & Referral BTC Bonus',
+      provider: 'Kraken Exchange',
+      potentialValue: 'Promotional BTC bonus on qualifying deposit/trade',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'Government ID (KYC) + qualifying first trade; US/regional rules apply',
+      summary: 'Regulated exchange with native REST trading APIs and low spot fees. After KYC + qualifying trade, link KRAKEN_API_KEY in API Secrets Manager for live autonomous execution.',
+      officialUrl: 'https://www.kraken.com/'
+    },
+    {
+      id: 'gemini-referral-card',
+      category: 'EXCHANGE_BONUSES',
+      name: 'Gemini Referral Bonus & Crypto Rewards Card',
+      provider: 'Gemini Trust Company',
+      potentialValue: 'Referral crypto bonus + up to 4% crypto back (BTC/SOL/XRP)',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'Government ID (KYC) + qualifying $100+ trade (or card approval)',
+      summary: 'Earn real crypto bonuses on qualifying trades or accumulate BTC/SOL/XRP automatically via everyday card spending, then route to self-custody.',
+      officialUrl: 'https://www.gemini.com/'
+    },
+    {
+      id: 'superteam-earn-bounties',
+      category: 'AGENTIC_GRANTS',
+      name: 'Superteam Earn (Solana Bounties & AI Tasks)',
+      provider: 'Superteam / Solana Ecosystem',
+      potentialValue: '$100–$5,000+ USDC/SOL per completed bounty',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'Human submission & sponsor review (open globally, no upfront deposit)',
+      summary: 'Legitimate global bounty marketplace paying real USDC/SOL directly to self-custody wallets for shipping code, research, and AI/Solana tools—ideal for accelerating real work with your agents.',
+      officialUrl: 'https://earn.superteam.fun/'
+    },
+    {
+      id: 'immunefi-bug-bounties',
+      category: 'AGENTIC_GRANTS',
+      name: 'Immunefi & Code4rena Smart-Contract Audits',
+      provider: 'Immunefi / Code4rena',
+      potentialValue: '$500–$100,000+ USDC/ETH per verified vulnerability',
+      realMainnetValue: true,
+      kycOrApprovalRequired: 'Verified vulnerability report & payout KYC',
+      summary: 'Use your forensic audit & code-analysis agents legitimately to review open-source smart contracts and submit real security findings for direct on-chain payouts.',
+      officialUrl: 'https://immunefi.com/'
+    },
+    {
+      id: 'devnet-faucet-test',
+      category: 'TESTNET_DEV',
+      name: 'Solana Devnet & Sepolia ETH Faucets (TESTNET ONLY)',
+      provider: 'Solana / Ethereum Testnets',
+      potentialValue: '$0.00 Real Value (Free Test Tokens Only)',
+      realMainnetValue: false,
+      kycOrApprovalRequired: 'None — instant developer test tokens',
+      summary: 'Strictly $0 real-world value. Use ONLY to verify your real cryptographic Ed25519/secp256k1 signing and RPC broadcast pipeline before funding mainnet.',
+      officialUrl: 'https://faucet.solana.com/'
+    }
+  ];
+
+  return {
+    productionMode: 'REAL_ONCHAIN_ONLY',
+    connectors,
+    programs
+  };
+}
+
+// ============================================================================
+// REAL KRAKEN PRO SPOT API EXECUTION CONNECTOR (HMAC-SHA512 LIVE ORDERS)
+// ============================================================================
+
+const KRAKEN_PAIR_MAP: Record<string, string> = {
+  BTC: 'XBTUSD',
+  ETH: 'ETHUSD',
+  SOL: 'SOLUSD',
+  XRP: 'XRPUSD',
+  DOGE: 'XDGUSD'
+};
+
+async function krakenPrivateRequest(
+  endpointPath: string,
+  params: Record<string, string> = {}
+): Promise<{ ok: boolean; result?: any; error?: string }> {
+  const apiKey = (process.env.KRAKEN_API_KEY || '').trim();
+  const apiSecret = (process.env.KRAKEN_API_SECRET || '').trim();
+  if (!apiKey || !apiSecret) {
+    return { ok: false, error: 'KRAKEN_API_KEY / KRAKEN_API_SECRET not configured' };
+  }
+  try {
+    const nonce = String(Date.now() * 1000);
+    const bodyParams = new URLSearchParams({ nonce, ...params }).toString();
+    const sha256Hash = crypto.createHash('sha256').update(nonce + bodyParams).digest();
+    const secretBuf = Buffer.from(apiSecret, 'base64');
+    const hmac = crypto
+      .createHmac('sha512', secretBuf)
+      .update(Buffer.concat([Buffer.from(endpointPath, 'utf8'), sha256Hash]))
+      .digest('base64');
+
+    const res = await fetchWithTimeout(
+      `https://api.kraken.com${endpointPath}`,
+      {
+        method: 'POST',
+        headers: {
+          'API-Key': apiKey,
+          'API-Sign': hmac,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: bodyParams
+      },
+      7000
+    );
+    const json: any = await res.json();
+    if (Array.isArray(json?.error) && json.error.length > 0) {
+      return { ok: false, error: json.error.join('; ') };
+    }
+    return { ok: true, result: json?.result };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Kraken API request failed' };
+  }
+}
+
+export async function fetchLiveKrakenExchangeBalances(): Promise<{
+  connected: boolean;
+  usdAvailable: number;
+  assets: Record<string, number>;
+  error?: string;
+}> {
+  const resp = await krakenPrivateRequest('/0/private/Balance');
+  if (!resp.ok || !resp.result) {
+    return { connected: false, usdAvailable: 0, assets: {}, error: resp.error };
+  }
+  const r = resp.result as Record<string, string>;
+  const usdAvailable = Number(r.ZUSD || r.USD || 0);
+  const assets: Record<string, number> = {
+    BTC: Number(r.XXBT || r.XBT || 0),
+    ETH: Number(r.XETH || r.ETH || 0),
+    SOL: Number(r.SOL || 0),
+    XRP: Number(r.XXRP || r.XRP || 0),
+    DOGE: Number(r.XXDG || r.XDG || 0)
+  };
+  return { connected: true, usdAvailable, assets };
+}
+
+// ============================================================================
+// 100% AUTONOMOUS MACRO-TELEMETRY WALLET DAEMON (ZERO FAKE TRADES)
+// ============================================================================
+
+export interface AutonomousWalletDaemonLogEntry {
+  timestamp: string;
+  phase: 'SCAN' | 'EXECUTION' | 'STANDBY_ZERO_CAPITAL' | 'VENUE_REQUIRED' | 'ERROR';
+  message: string;
+}
+
+const autonomousDaemonState = {
+  enabled: true,
+  fullAutonomyAllWallets: true,
+  intervalMs: 60000,
+  totalScans: 0,
+  totalLiveOrdersExecuted: 0,
+  lastScanAt: '' as string,
+  status: 'ARMED_STANDBY_AWAITING_REAL_CAPITAL' as
+    | 'ARMED_STANDBY_AWAITING_REAL_CAPITAL'
+    | 'ARMED_AWAITING_EXCHANGE_API'
+    | 'LIVE_AUTONOMOUS_TRADING'
+    | 'PAUSED',
+  lastSignalsSummary: [] as Array<{
+    symbol: string;
+    actionSignal: string;
+    predicted5mMovePct: number;
+    conformal99CoveragePct: number;
+  }>,
+  liveExchangeUsdDetected: 0,
+  liveOnChainUsdDetected: 0,
+  logs: [] as AutonomousWalletDaemonLogEntry[]
+};
+
+let autonomousDaemonTimer: NodeJS.Timeout | null = null;
+let daemonCycleRunning = false;
+
+function pushDaemonLog(phase: AutonomousWalletDaemonLogEntry['phase'], message: string) {
+  autonomousDaemonState.logs.unshift({
+    timestamp: new Date().toISOString(),
+    phase,
+    message
+  });
+  if (autonomousDaemonState.logs.length > 40) {
+    autonomousDaemonState.logs.length = 40;
+  }
+}
+
+export async function executeAutonomousDaemonTick(): Promise<typeof autonomousDaemonState> {
+  if (daemonCycleRunning) return autonomousDaemonState;
+  if (!autonomousDaemonState.enabled) {
+    autonomousDaemonState.status = 'PAUSED';
+    return autonomousDaemonState;
+  }
+  daemonCycleRunning = true;
+  try {
+    autonomousDaemonState.totalScans += 1;
+    autonomousDaemonState.lastScanAt = new Date().toISOString();
+
+    const { wallets, livePrices } = await syncLiveOnChainAndMarketPrices(false);
+    const totalOnChainUsd = wallets.reduce(
+      (sum, w) => sum + w.cashReserveUsd + w.holdings.reduce((hSum, h) => hSum + h.marketValueUsd, 0),
+      0
+    );
+    autonomousDaemonState.liveOnChainUsdDetected = Number(totalOnChainUsd.toFixed(2));
+
+    // Check real Kraken exchange balance if configured
+    const krakenBal = await fetchLiveKrakenExchangeBalances();
+    autonomousDaemonState.liveExchangeUsdDetected = krakenBal.connected
+      ? Number(
+          (
+            krakenBal.usdAvailable +
+            Object.entries(krakenBal.assets).reduce(
+              (acc, [sym, qty]) => acc + qty * (livePrices[sym]?.price || 0),
+              0
+            )
+          ).toFixed(2)
+        )
+      : 0;
+
+    // Pull live Macro Telemetry 5-minute conformal signals
+    const macroSnap = await Promise.race([
+      collectLiveMacroTelemetry(false),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
+    ]);
+    const cryptoAlerts = (macroSnap?.multiKernelTelemetry?.autonomousAlerts || []).filter((a) =>
+      ['BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD'].includes(a.symbol)
+    );
+    autonomousDaemonState.lastSignalsSummary = cryptoAlerts.slice(0, 5).map((a) => ({
+      symbol: a.symbol,
+      actionSignal: a.actionSignal,
+      predicted5mMovePct: Number((a.predicted5mMovePct || 0).toFixed(3)),
+      conformal99CoveragePct: Number((a.conformal99CoveragePct || 0).toFixed(2))
+    }));
+
+    const totalRealCapitalUsd = autonomousDaemonState.liveOnChainUsdDetected + autonomousDaemonState.liveExchangeUsdDetected;
+
+    if (totalRealCapitalUsd <= 0) {
+      autonomousDaemonState.status = 'ARMED_STANDBY_AWAITING_REAL_CAPITAL';
+      pushDaemonLog(
+        'STANDBY_ZERO_CAPITAL',
+        `Macro Telemetry live scan #${autonomousDaemonState.totalScans}: ${cryptoAlerts.length} 5m conformal signals analyzed. Real capital = $0.00 (on-chain $0.00, exchange $0.00). Standing by for real seed crypto deposit or grant.`
+      );
+      return autonomousDaemonState;
+    }
+
+    if (!krakenBal.connected) {
+      autonomousDaemonState.status = 'ARMED_AWAITING_EXCHANGE_API';
+      pushDaemonLog(
+        'VENUE_REQUIRED',
+        `Detected $${totalRealCapitalUsd.toFixed(2)} real on-chain capital. Connect KRAKEN_API_KEY + KRAKEN_API_SECRET or Coinbase CDP AgentKit keys in API Secrets Manager to execute live orders.`
+      );
+      return autonomousDaemonState;
+    }
+
+    autonomousDaemonState.status = 'LIVE_AUTONOMOUS_TRADING';
+    // Execute live Kraken spot order ONLY on high-certainty conformal signals with real exchange funds
+    const agenticWallet = wallets.find((w) => w.role === 'AGENTIC_AUTONOMOUS') || wallets[0];
+    const maxUsd = agenticWallet?.agenticPolicy?.maxSingleTradeUsd || 250;
+    const minCert = agenticWallet?.agenticPolicy?.minConformalCertaintyPct || 99.0;
+
+    for (const alert of cryptoAlerts) {
+      if ((alert.conformal99CoveragePct || 0) < minCert) continue;
+      const shortSym = alert.symbol.replace('-USD', '');
+      const pair = KRAKEN_PAIR_MAP[shortSym];
+      const spot = livePrices[shortSym]?.price || 0;
+      if (!pair || spot <= 0) continue;
+
+      if (alert.actionSignal === 'STRONG_BUY' && krakenBal.usdAvailable >= 15) {
+        const orderUsd = Math.min(maxUsd, krakenBal.usdAvailable * 0.25);
+        const vol = (orderUsd / spot).toFixed(6);
+        const orderRes = await krakenPrivateRequest('/0/private/AddOrder', {
+          pair,
+          type: 'buy',
+          ordertype: 'market',
+          volume: vol
+        });
+        if (orderRes.ok) {
+          autonomousDaemonState.totalLiveOrdersExecuted += 1;
+          pushDaemonLog(
+            'EXECUTION',
+            `LIVE KRAKEN BUY executed: ${vol} ${shortSym} (~$${orderUsd.toFixed(2)}) via Macro Telemetry ${alert.actionSignal} (${alert.conformal99CoveragePct.toFixed(1)}% conformal). TxID: ${JSON.stringify(orderRes.result?.txid || [])}`
+          );
+        } else {
+          pushDaemonLog('ERROR', `Kraken BUY ${shortSym} rejected: ${orderRes.error}`);
+        }
+        break;
+      }
+
+      if (
+        (alert.actionSignal === 'URGENT_STOP_LOSS_SELL' || alert.actionSignal === 'TAKE_PROFIT_SELL') &&
+        (krakenBal.assets[shortSym] || 0) * spot >= 15
+      ) {
+        const sellVol = ((krakenBal.assets[shortSym] || 0) * 0.5).toFixed(6);
+        const orderRes = await krakenPrivateRequest('/0/private/AddOrder', {
+          pair,
+          type: 'sell',
+          ordertype: 'market',
+          volume: sellVol
+        });
+        if (orderRes.ok) {
+          autonomousDaemonState.totalLiveOrdersExecuted += 1;
+          pushDaemonLog(
+            'EXECUTION',
+            `LIVE KRAKEN SELL executed: ${sellVol} ${shortSym} via Macro Telemetry ${alert.actionSignal}. TxID: ${JSON.stringify(orderRes.result?.txid || [])}`
+          );
+        } else {
+          pushDaemonLog('ERROR', `Kraken SELL ${shortSym} rejected: ${orderRes.error}`);
+        }
+        break;
+      }
+    }
+  } catch (err: any) {
+    pushDaemonLog('ERROR', `Autonomous scan error: ${err?.message || 'unknown'}`);
+  } finally {
+    daemonCycleRunning = false;
+  }
+  return autonomousDaemonState;
+}
+
+export function startAutonomousWalletDaemon() {
+  if (autonomousDaemonTimer) return;
+  // Initial scan 4s after boot, then continuously every 60s
+  setTimeout(() => {
+    executeAutonomousDaemonTick().catch(() => {});
+  }, 4000);
+  autonomousDaemonTimer = setInterval(() => {
+    executeAutonomousDaemonTick().catch(() => {});
+  }, autonomousDaemonState.intervalMs);
+}
+
+export function getAutonomousWalletDaemonStatus() {
+  return { ...autonomousDaemonState };
+}
+
+export function setAutonomousWalletDaemonConfig(patch: {
+  enabled?: boolean;
+  fullAutonomyAllWallets?: boolean;
+}) {
+  if (typeof patch.enabled === 'boolean') autonomousDaemonState.enabled = patch.enabled;
+  if (typeof patch.fullAutonomyAllWallets === 'boolean') {
+    autonomousDaemonState.fullAutonomyAllWallets = patch.fullAutonomyAllWallets;
+  }
+  if (!autonomousDaemonState.enabled) {
+    autonomousDaemonState.status = 'PAUSED';
+  }
+  return getAutonomousWalletDaemonStatus();
+}
+
+

@@ -25,6 +25,7 @@ import {
   Layers
 } from 'lucide-react';
 import { ModuleType } from '../types';
+import { AutonomousGrantEnginePanel } from './AutonomousGrantEnginePanel';
 
 interface PortfolioHolding {
   symbol: string;
@@ -45,8 +46,14 @@ interface SignedCryptoTransaction {
   walletId: string;
   walletRole: 'PERSONAL_INVESTOR' | 'AGENTIC_AUTONOMOUS';
   timestamp: string;
-  type: 'ONCHAIN_TRANSFER' | 'MARKET_BUY' | 'MARKET_SELL' | 'AUTONOMOUS_5M_SIGNAL_EXEC' | 'DEVNET_AIRDROP';
-  chain: 'BITCOIN' | 'ETHEREUM' | 'SOLANA';
+  type:
+    | 'ONCHAIN_TRANSFER'
+    | 'MARKET_BUY'
+    | 'MARKET_SELL'
+    | 'AUTONOMOUS_5M_SIGNAL_EXEC'
+    | 'DEVNET_AIRDROP'
+    | 'BANK_OR_DIGITAL_TRANSFER';
+  chain: 'BITCOIN' | 'ETHEREUM' | 'SOLANA' | 'FIAT_RAIL';
   symbol: string;
   amountNative: number;
   priceUsdAtExec: number;
@@ -62,6 +69,33 @@ interface SignedCryptoTransaction {
   conformalCertaintyPct: number;
   broadcastStatus: string;
   explorerUrl: string;
+  railMetadata?: {
+    rail: string;
+    railLabel: string;
+    recipientName: string;
+    institutionName: string;
+    destinationMasked: string;
+    routingOrSwift?: string;
+    targetCurrency: string;
+    targetAmount: number;
+    feeUsd: number;
+    etaLabel: string;
+    uetrReference: string;
+    fundingSource: string;
+    memo?: string;
+  };
+}
+
+interface SavedPayoutBeneficiary {
+  id: string;
+  label: string;
+  rail: string;
+  recipientName: string;
+  institutionName: string;
+  accountOrHandle: string;
+  routingOrSwift?: string;
+  currency: string;
+  createdAt: string;
 }
 
 interface AutonomousAgenticPolicy {
@@ -122,22 +156,142 @@ interface SovereignCryptoWalletModuleProps {
   onInjectIntoChat?: (prompt: string) => void;
 }
 
+const WALLET_CACHE_KEY = 'sovereign_crypto_wallet_cache_v2_real';
+
+interface BootstrapConnector {
+  id: string;
+  name: string;
+  envKeys: string[];
+  connected: boolean;
+  purpose: string;
+}
+
+interface RealBootstrapProgram {
+  id: string;
+  category: 'AGENTIC_GRANTS' | 'EXCHANGE_BONUSES' | 'ZERO_CAPITAL_EARN' | 'TESTNET_DEV';
+  name: string;
+  provider: string;
+  potentialValue: string;
+  realMainnetValue: boolean;
+  kycOrApprovalRequired: string;
+  summary: string;
+  officialUrl: string;
+}
+
+async function safeWalletFetchJson(
+  url: string,
+  init?: RequestInit,
+  retries = 2
+): Promise<any> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 14000);
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      const contentType = res.headers.get('content-type') || '';
+      const rawText = await res.text();
+      if (!contentType.includes('application/json')) {
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 450 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(`Server returned HTTP ${res.status} (reconnecting to backend)`);
+      }
+
+      const data = JSON.parse(rawText);
+      if (!res.ok) {
+        if (res.status >= 500 && attempt < retries) {
+          await new Promise((r) => setTimeout(r, 450 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+      }
+      return data;
+    } catch (err: any) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+    }
+  }
+  throw lastError || new Error('Wallet service temporarily unavailable');
+}
+
 export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModuleProps> = ({
   onSelectModule
 }) => {
-  const [wallets, setWallets] = useState<SovereignCryptoWallet[]>([]);
+  const initialCache = (() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(WALLET_CACHE_KEY) : null;
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const [wallets, setWallets] = useState<SovereignCryptoWallet[]>(
+    Array.isArray(initialCache?.wallets) ? initialCache.wallets : []
+  );
   const [selectedWalletId, setSelectedWalletId] = useState<string>('personal-sovereign-vault');
-  const [transactions, setTransactions] = useState<SignedCryptoTransaction[]>([]);
+  const [transactions, setTransactions] = useState<SignedCryptoTransaction[]>(
+    Array.isArray(initialCache?.transactions) ? initialCache.transactions : []
+  );
   const [livePrices, setLivePrices] = useState<
     Record<string, { price: number; changePct: number; forecast5mPct: number; conformal99Pct: number }>
-  >({});
+  >(initialCache?.livePrices || {});
   const [syncingRpc, setSyncingRpc] = useState(false);
   const [runningAgenticCycle, setRunningAgenticCycle] = useState(false);
   const [airdropBusy, setAirdropBusy] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'trade-transfer' | 'agentic-policy' | 'keystore' | 'new-wallet'
+    'overview' | 'grants' | 'bootstrap' | 'bank-transfer' | 'trade-transfer' | 'agentic-policy' | 'keystore' | 'new-wallet'
   >('overview');
+
+  const [bootstrapConnectors, setBootstrapConnectors] = useState<BootstrapConnector[]>([]);
+  const [bootstrapPrograms, setBootstrapPrograms] = useState<RealBootstrapProgram[]>([]);
+  const [daemonStatus, setDaemonStatus] = useState<{
+    enabled: boolean;
+    fullAutonomyAllWallets: boolean;
+    totalScans: number;
+    totalLiveOrdersExecuted: number;
+    lastScanAt: string;
+    status: string;
+    liveExchangeUsdDetected: number;
+    liveOnChainUsdDetected: number;
+    lastSignalsSummary: Array<{
+      symbol: string;
+      actionSignal: string;
+      predicted5mMovePct: number;
+      conformal99CoveragePct: number;
+    }>;
+    logs: Array<{ timestamp: string; phase: string; message: string }>;
+  } | null>(null);
+  const [daemonTickBusy, setDaemonTickBusy] = useState(false);
+  const [linkLabel, setLinkLabel] = useState('');
+  const [linkEthAddr, setLinkEthAddr] = useState('');
+  const [linkBtcAddr, setLinkBtcAddr] = useState('');
+  const [linkSolAddr, setLinkSolAddr] = useState('');
+  const [linkingExternal, setLinkingExternal] = useState(false);
+
+  // Easy Bank & Digital Equivalent Transfer State
+  const [beneficiaries, setBeneficiaries] = useState<SavedPayoutBeneficiary[]>(
+    Array.isArray(initialCache?.beneficiaries) ? initialCache.beneficiaries : []
+  );
+  const [payoutRail, setPayoutRail] = useState<string>('BANK_ACH');
+  const [payoutFunding, setPayoutFunding] = useState<'USD_CASH' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'DOGE'>('USD_CASH');
+  const [payoutAmountUsd, setPayoutAmountUsd] = useState<string>('250');
+  const [payoutCurrency, setPayoutCurrency] = useState<string>('USD');
+  const [payoutRecipientName, setPayoutRecipientName] = useState<string>('');
+  const [payoutInstitution, setPayoutInstitution] = useState<string>('');
+  const [payoutAccountOrHandle, setPayoutAccountOrHandle] = useState<string>('');
+  const [payoutRoutingOrSwift, setPayoutRoutingOrSwift] = useState<string>('');
+  const [payoutMemo, setPayoutMemo] = useState<string>('');
+  const [payoutSaveBeneficiary, setPayoutSaveBeneficiary] = useState<boolean>(true);
+  const [payoutBusy, setPayoutBusy] = useState<boolean>(false);
 
   const [orderAction, setOrderAction] = useState<'BUY' | 'SELL' | 'ONCHAIN_TRANSFER'>('BUY');
   const [orderSymbol, setOrderSymbol] = useState<'BTC' | 'ETH' | 'SOL' | 'XRP' | 'DOGE'>('BTC');
@@ -158,7 +312,6 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
   const [newWalletRole, setNewWalletRole] = useState<'PERSONAL_INVESTOR' | 'AGENTIC_AUTONOMOUS'>(
     'PERSONAL_INVESTOR'
   );
-  const [newWalletCash, setNewWalletCash] = useState('15000');
   const [importPrivKeyHex, setImportPrivKeyHex] = useState('');
 
   const [banner, setBanner] = useState<{
@@ -166,34 +319,91 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
     text: string;
   } | null>(null);
 
-  const fetchWallets = useCallback(async () => {
+  const inFlightFetchRef = React.useRef(false);
+  const walletsCountRef = React.useRef(wallets.length);
+  walletsCountRef.current = wallets.length;
+
+  const persistCache = useCallback((nextWallets: SovereignCryptoWallet[], nextTxs: SignedCryptoTransaction[], nextPrices: any) => {
     try {
-      const res = await fetch('/api/crypto/wallets');
-      const data = await res.json();
+      localStorage.setItem(
+        WALLET_CACHE_KEY,
+        JSON.stringify({
+          wallets: nextWallets,
+          transactions: nextTxs,
+          livePrices: nextPrices,
+          savedAt: new Date().toISOString()
+        })
+      );
+    } catch {}
+  }, []);
+
+  const fetchWallets = useCallback(async (isBackgroundPoll = false) => {
+    if (inFlightFetchRef.current) return;
+    inFlightFetchRef.current = true;
+    try {
+      const data = await safeWalletFetchJson('/api/crypto/wallets', undefined, isBackgroundPoll ? 1 : 2);
       if (data?.success && Array.isArray(data.wallets)) {
+        const nextTxs = Array.isArray(data.transactions) ? data.transactions : [];
+        const nextPrices = data.livePrices || {};
         setWallets(data.wallets);
-        setTransactions(Array.isArray(data.transactions) ? data.transactions : []);
-        if (data.livePrices) setLivePrices(data.livePrices);
+        setTransactions(nextTxs);
+        if (Array.isArray(data.beneficiaries)) setBeneficiaries(data.beneficiaries);
+        if (data.livePrices) setLivePrices(nextPrices);
+        persistCache(data.wallets, nextTxs, nextPrices);
+        // Clear any stale transient load error once vault data loads cleanly
+        setBanner((prev) =>
+          prev?.type === 'error' && prev.text.toLowerCase().includes('sovereign crypto vault')
+            ? null
+            : prev
+        );
       }
     } catch (err: any) {
-      setBanner({
-        type: 'error',
-        text: `Failed to load Sovereign Crypto Vaults: ${err?.message || 'Error'}`
-      });
+      // Only show a red error if we have zero vaults loaded; silent retry on background refresh when cached vaults are already visible
+      if (!isBackgroundPoll && walletsCountRef.current === 0) {
+        setBanner({
+          type: 'error',
+          text: `Reconnecting to Sovereign Crypto Vaults (${err?.message || 'transient network timeout'}) — retrying automatically.`
+        });
+      }
+    } finally {
+      inFlightFetchRef.current = false;
     }
+  }, [persistCache]);
+
+  const fetchDaemonStatus = useCallback(() => {
+    safeWalletFetchJson('/api/crypto/wallets/daemon', undefined, 1)
+      .then((d) => {
+        if (d?.daemon) setDaemonStatus(d.daemon);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
-    fetchWallets();
-    const interval = setInterval(fetchWallets, 8000);
+    try {
+      localStorage.removeItem('sovereign_crypto_wallet_cache_v1');
+    } catch {}
+    fetchWallets(false);
+    fetchDaemonStatus();
+    safeWalletFetchJson('/api/crypto/wallets/bootstrap-status', undefined, 1)
+      .then((d) => {
+        if (Array.isArray(d?.connectors)) setBootstrapConnectors(d.connectors);
+        if (Array.isArray(d?.programs)) setBootstrapPrograms(d.programs);
+      })
+      .catch(() => {});
+    const interval = setInterval(() => {
+      fetchWallets(true);
+      fetchDaemonStatus();
+    }, 15000);
     return () => clearInterval(interval);
-  }, [fetchWallets]);
+  }, [fetchWallets, fetchDaemonStatus]);
 
   const activeWallet =
     wallets.find((w) => w.id === selectedWalletId) || wallets[0] || null;
 
   const copyText = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2200);
   };
@@ -205,19 +415,23 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
         type: 'info',
         text: 'Polling live Ethereum Mainnet RPC, Bitcoin Mempool.space API, and Solana Mainnet/Devnet RPC nodes...'
       });
-      const res = await fetch('/api/crypto/wallets/sync', { method: 'POST' });
-      const data = await res.json();
+      const data = await safeWalletFetchJson('/api/crypto/wallets/sync', { method: 'POST' }, 1);
       if (data?.success) {
-        setWallets(data.wallets || []);
-        setTransactions(data.transactions || []);
+        const nextWallets = data.wallets || [];
+        const nextTxs = data.transactions || [];
+        setWallets(nextWallets);
+        setTransactions(nextTxs);
         if (data.livePrices) setLivePrices(data.livePrices);
+        persistCache(nextWallets, nextTxs, data.livePrices || livePrices);
         setBanner({
           type: 'success',
           text: 'Synchronized live on-chain balances, block heights, gas/sat fees, and Laplace-14 (h=2s) market valuations.'
         });
+      } else {
+        setBanner({ type: 'error', text: data?.error || 'On-chain RPC sync returned an incomplete response.' });
       }
     } catch (err: any) {
-      setBanner({ type: 'error', text: `RPC Sync error: ${err?.message}` });
+      setBanner({ type: 'error', text: `RPC Sync notice: ${err?.message || 'temporary network timeout'}` });
     } finally {
       setSyncingRpc(false);
     }
@@ -228,7 +442,7 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
     if (!activeWallet) return;
     try {
       setExecutingOrder(true);
-      const res = await fetch('/api/crypto/wallets/execute', {
+      const data = await safeWalletFetchJson('/api/crypto/wallets/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -242,11 +456,11 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
               : undefined,
           toAddress: orderAction === 'ONCHAIN_TRANSFER' ? transferToAddress : undefined
         })
-      });
-      const data = await res.json();
+      }, 1);
       if (data?.success) {
         if (Array.isArray(data.wallets)) setWallets(data.wallets);
         if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+        if (Array.isArray(data.wallets)) persistCache(data.wallets, data.transactions || [], data.livePrices || livePrices);
         setBanner({ type: 'success', text: data.message });
       } else {
         setBanner({ type: 'error', text: data?.message || data?.error || 'Order failed' });
@@ -265,11 +479,11 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
         type: 'info',
         text: 'UID 0 Agentic Treasury evaluating Laplace-14 (h=2s) 5-minute trajectories & 99% Conformal bounds...'
       });
-      const res = await fetch('/api/crypto/wallets/agentic-cycle', { method: 'POST' });
-      const data = await res.json();
+      const data = await safeWalletFetchJson('/api/crypto/wallets/agentic-cycle', { method: 'POST' }, 1);
       if (data?.success) {
         if (Array.isArray(data.wallets)) setWallets(data.wallets);
         if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+        if (Array.isArray(data.wallets)) persistCache(data.wallets, data.transactions || [], data.livePrices || livePrices);
         setBanner({
           type: 'success',
           text:
@@ -292,12 +506,11 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
         type: 'info',
         text: `Requesting live 1.0 SOL Devnet airdrop for ${activeWallet.addresses.solanaBase58} via https://api.devnet.solana.com...`
       });
-      const res = await fetch('/api/crypto/wallets/sol-airdrop', {
+      const data = await safeWalletFetchJson('/api/crypto/wallets/sol-airdrop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletId: activeWallet.id })
-      });
-      const data = await res.json();
+      }, 1);
       if (Array.isArray(data?.wallets)) setWallets(data.wallets);
       if (Array.isArray(data?.transactions)) setTransactions(data.transactions);
       setBanner({
@@ -318,23 +531,34 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
         if (!win.ethereum) {
           setBanner({
             type: 'info',
-            text: 'No injected EVM browser extension (MetaMask/Rabby) detected in this window; using Sovereign OS native secp256k1 self-custody vault.'
+            text: 'No injected EVM browser extension (MetaMask/Rabby) detected in this window. You can paste your public 0x address in the Agentic Grants & Real Capital tab to sync its live mainnet balance.'
           });
           return;
         }
         const accounts = await win.ethereum.request({ method: 'eth_requestAccounts' });
         if (Array.isArray(accounts) && accounts[0]) {
           setConnectedBrowserWallet({ provider: 'MetaMask / Web3 EVM', address: accounts[0] });
+          const linked = await safeWalletFetchJson('/api/crypto/wallets/link-external', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              label: `MetaMask Real Wallet (${accounts[0].slice(0, 8)}...)`,
+              source: 'METAMASK_EVM',
+              ethereumAddress: accounts[0]
+            })
+          }, 1);
+          if (Array.isArray(linked?.wallets)) setWallets(linked.wallets);
+          if (linked?.wallet?.id) setSelectedWalletId(linked.wallet.id);
           setBanner({
             type: 'success',
-            text: `Linked external Web3 EVM hardware/browser wallet: ${accounts[0]}`
+            text: linked?.message || `Linked real MetaMask EVM wallet (${accounts[0]}) and synced mainnet balance.`
           });
         }
       } else {
         if (!win.solana) {
           setBanner({
             type: 'info',
-            text: 'No injected Solana browser extension (Phantom) detected; using Sovereign OS native ed25519 self-custody vault.'
+            text: 'No injected Solana browser extension (Phantom) detected. You can paste your public Solana Base58 address in the Agentic Grants & Real Capital tab to sync its live mainnet balance.'
           });
           return;
         }
@@ -342,9 +566,20 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
         const pub = resp?.publicKey?.toString();
         if (pub) {
           setConnectedBrowserWallet({ provider: 'Phantom / Solana', address: pub });
+          const linked = await safeWalletFetchJson('/api/crypto/wallets/link-external', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              label: `Phantom Real Wallet (${pub.slice(0, 8)}...)`,
+              source: 'PHANTOM_SOLANA',
+              solanaAddress: pub
+            })
+          }, 1);
+          if (Array.isArray(linked?.wallets)) setWallets(linked.wallets);
+          if (linked?.wallet?.id) setSelectedWalletId(linked.wallet.id);
           setBanner({
             type: 'success',
-            text: `Linked external Phantom Solana wallet: ${pub}`
+            text: linked?.message || `Linked real Phantom Solana wallet (${pub}) and synced mainnet balance.`
           });
         }
       }
@@ -353,20 +588,52 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
     }
   };
 
+  const handleLinkWatchOnlyWallet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLinkingExternal(true);
+    try {
+      const data = await safeWalletFetchJson('/api/crypto/wallets/link-external', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: linkLabel.trim() || 'My Real External Wallet',
+          source: 'WATCH_ONLY_ADDRESS',
+          ethereumAddress: linkEthAddr.trim() || undefined,
+          bitcoinAddress: linkBtcAddr.trim() || undefined,
+          solanaAddress: linkSolAddr.trim() || undefined
+        })
+      }, 1);
+      if (data?.success) {
+        if (Array.isArray(data.wallets)) setWallets(data.wallets);
+        if (data.wallet?.id) setSelectedWalletId(data.wallet.id);
+        setLinkLabel('');
+        setLinkEthAddr('');
+        setLinkBtcAddr('');
+        setLinkSolAddr('');
+        setBanner({ type: 'success', text: data.message });
+      } else {
+        setBanner({ type: 'error', text: data?.message || data?.error || 'Could not link address.' });
+      }
+    } catch (err: any) {
+      setBanner({ type: 'error', text: `Link error: ${err?.message}` });
+    } finally {
+      setLinkingExternal(false);
+    }
+  };
+
   const handleCreateCustomWallet = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/crypto/wallets/create', {
+      const data = await safeWalletFetchJson('/api/crypto/wallets/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           label: newWalletLabel || 'Custom Sovereign Multi-Chain Vault',
           role: newWalletRole,
-          initialCashUsd: Number(newWalletCash) || 10000,
+          initialCashUsd: 0,
           importPrivateKeyHex: importPrivKeyHex.trim() || undefined
         })
-      });
-      const data = await res.json();
+      }, 1);
       if (data?.success && data.wallet) {
         if (Array.isArray(data.wallets)) setWallets(data.wallets);
         setSelectedWalletId(data.wallet.id);
@@ -375,12 +642,76 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
         setImportPrivKeyHex('');
         setBanner({
           type: 'success',
-          text: `Created & encrypted new multi-chain vault "${data.wallet.label}" (ETH: ${data.wallet.addresses.ethereumEip55.slice(0, 12)}..., BTC: ${data.wallet.addresses.bitcoinSegwit.slice(0, 12)}..., SOL: ${data.wallet.addresses.solanaBase58.slice(0, 12)}...).`
+          text: `Created real $0.00 self-custody multi-chain vault "${data.wallet.label}" synced live to mainnet RPCs.`
         });
       }
     } catch (err: any) {
       setBanner({ type: 'error', text: `Failed to create wallet: ${err?.message}` });
     }
+  };
+
+  const handleBankOrDigitalTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeWallet) return;
+    try {
+      setPayoutBusy(true);
+      const data = await safeWalletFetchJson('/api/crypto/wallets/bank-transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletId: activeWallet.id,
+          rail: payoutRail,
+          fundingSource: payoutFunding,
+          amountUsd: Number(payoutAmountUsd),
+          targetCurrency: payoutCurrency,
+          recipientName: payoutRecipientName,
+          institutionName: payoutInstitution,
+          accountOrHandle: payoutAccountOrHandle,
+          routingOrSwift: payoutRoutingOrSwift,
+          memo: payoutMemo,
+          saveBeneficiary: payoutSaveBeneficiary
+        })
+      }, 1);
+      if (data?.success) {
+        if (Array.isArray(data.wallets)) setWallets(data.wallets);
+        if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+        if (Array.isArray(data.beneficiaries)) setBeneficiaries(data.beneficiaries);
+        if (Array.isArray(data.wallets)) persistCache(data.wallets, data.transactions || [], data.livePrices || livePrices);
+        setPayoutMemo('');
+        setBanner({ type: 'success', text: data.message });
+      } else {
+        setBanner({ type: 'error', text: data?.message || data?.error || 'Transfer could not be completed.' });
+      }
+    } catch (err: any) {
+      setBanner({ type: 'error', text: `Transfer error: ${err?.message || 'Network timeout'}` });
+    } finally {
+      setPayoutBusy(false);
+    }
+  };
+
+  const handleDeleteBeneficiary = async (beneficiaryId: string) => {
+    try {
+      const data = await safeWalletFetchJson('/api/crypto/wallets/beneficiaries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', beneficiaryId })
+      }, 1);
+      if (Array.isArray(data?.beneficiaries)) setBeneficiaries(data.beneficiaries);
+    } catch {}
+  };
+
+  const handleDownloadTransferReceipt = (tx: SignedCryptoTransaction) => {
+    const blob = new Blob([JSON.stringify({
+      standard: 'ISO-20022 / Lysander Sovereign OS Signed Settlement Receipt',
+      exportedAt: new Date().toISOString(),
+      transaction: tx
+    }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sovereign-transfer-${tx.railMetadata?.uetrReference || tx.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleDownloadKeystoreJson = () => {
@@ -432,6 +763,9 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
                 SOVEREIGN DUAL-VAULT CRYPTO WALLETS & AGENTIC TREASURY
               </h1>
               <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
+                100% REAL ON-CHAIN ONLY · ZERO SIMULATED BALANCES
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[10px] font-bold">
                 secp256k1 + ed25519 · AES-256-GCM
               </span>
               <button
@@ -444,7 +778,7 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
               </button>
             </div>
             <p className="text-[11px] text-zinc-400">
-              Personal Investor Self-Custody Vault + UID 0 Agentic Autonomous Treasury · Live BTC, ETH & SOL Mainnet RPCs
+              Strict Live Mainnet Balances Only ($0.00 until funded on-chain or linked to real wallets/APIs) · BTC, ETH &amp; SOL RPCs
             </p>
           </div>
         </div>
@@ -552,8 +886,11 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
         <div className="flex flex-wrap items-center gap-1.5">
           {(
             [
-              { id: 'overview', label: 'Portfolio & Addresses' },
-              { id: 'trade-transfer', label: 'Invest / Buy / Sell / Send' },
+              { id: 'overview', label: 'Real On-Chain Portfolio' },
+              { id: 'grants', label: 'Grant Applications (0% Equity)' },
+              { id: 'bootstrap', label: 'Autonomous Daemon & Links' },
+              { id: 'bank-transfer', label: 'Bank & Digital Transfers' },
+              { id: 'trade-transfer', label: 'Live Execution / Send' },
               { id: 'agentic-policy', label: 'Agentic 5m Policy' },
               { id: 'keystore', label: 'Private Keys & Seed Backup' }
             ] as const
@@ -565,6 +902,8 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
               className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
                 activeTab === t.id
                   ? 'bg-zinc-100 text-zinc-950'
+                  : t.id === 'grants'
+                  ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
                   : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300'
               }`}
             >
@@ -1317,13 +1656,10 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="font-bold text-zinc-300">Initial USD Cash Allocation ($)</label>
-                      <input
-                        type="number"
-                        value={newWalletCash}
-                        onChange={(e) => setNewWalletCash(e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100"
-                      />
+                      <label className="font-bold text-zinc-300">Starting Real Balance</label>
+                      <div className="w-full bg-zinc-950/70 border border-emerald-500/30 rounded-xl px-3.5 py-2.5 text-emerald-300 font-bold">
+                        $0.00 (100% Real On-Chain · Zero Simulated Cash)
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -1347,6 +1683,590 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
                 </form>
               </div>
             )}
+
+            {/* EASY BANK & DIGITAL EQUIVALENT TRANSFERS TAB */}
+            {activeTab === 'bank-transfer' && activeWallet && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-7 rounded-2xl bg-zinc-900/90 border border-zinc-800 p-5 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 className="text-sm font-black text-emerald-300 flex items-center gap-2">
+                        <Send className="w-4 h-4" />
+                        <span>Send Currency to Banks or Digital Equivalents</span>
+                      </h2>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Transfer directly from USD Cash Reserve or auto-convert BTC, ETH, SOL, XRP, or DOGE at live spot price to Bank ACH, FedNow, Wire/SWIFT, SEPA, Cash App, Venmo, PayPal, Zelle, Apple Cash, Wise, Revolut, or Exchanges.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Quick-Pick Rail Tiles */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'BANK_ACH', label: 'US Bank ACH', sub: '$0 · Checking/Savings' },
+                      { id: 'FEDNOW_INSTANT', label: 'FedNow Instant', sub: '$0.50 · <15 sec' },
+                      { id: 'WIRE_SWIFT', label: 'Wire / SWIFT', sub: 'Domestic / Intl' },
+                      { id: 'SEPA_INSTANT', label: 'SEPA Instant', sub: 'EUR IBAN' },
+                      { id: 'CASH_APP', label: 'Cash App', sub: '$Cashtag · Instant' },
+                      { id: 'VENMO', label: 'Venmo', sub: '@Handle · Instant' },
+                      { id: 'PAYPAL', label: 'PayPal', sub: 'Email / PayPal.me' },
+                      { id: 'ZELLE', label: 'Zelle', sub: 'Email / Mobile' },
+                      { id: 'APPLE_CASH', label: 'Apple Cash', sub: 'Phone / Apple ID' },
+                      { id: 'WISE_REVOLUT', label: 'Wise / Revolut', sub: 'Multi-Currency' },
+                      { id: 'EXCHANGE_OFFRAMP', label: 'Coinbase / Kraken', sub: 'Exchange Account' }
+                    ].map((rail) => (
+                      <button
+                        key={rail.id}
+                        type="button"
+                        onClick={() => {
+                          setPayoutRail(rail.id);
+                          if (rail.id === 'SEPA_INSTANT') setPayoutCurrency('EUR');
+                        }}
+                        className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                          payoutRail === rail.id
+                            ? 'bg-emerald-500/20 border-emerald-400 text-emerald-100'
+                            : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700 text-zinc-300'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold leading-tight">{rail.label}</div>
+                        <div className="text-[9px] text-zinc-400 mt-0.5">{rail.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <form onSubmit={handleBankOrDigitalTransfer} className="space-y-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-zinc-300">Funding Source</label>
+                        <select
+                          value={payoutFunding}
+                          onChange={(e) => setPayoutFunding(e.target.value as any)}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-100"
+                        >
+                          <option value="USD_CASH">USD Cash (${activeWallet.cashReserveUsd.toFixed(2)})</option>
+                          {activeWallet.holdings.map((h) => (
+                            <option key={h.symbol} value={h.symbol}>
+                              Auto-Convert {h.symbol} (${h.marketValueUsd.toFixed(2)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-zinc-300">Amount (USD)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="1"
+                          required
+                          value={payoutAmountUsd}
+                          onChange={(e) => setPayoutAmountUsd(e.target.value)}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-100"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-zinc-300">Destination Currency</label>
+                        <select
+                          value={payoutCurrency}
+                          onChange={(e) => setPayoutCurrency(e.target.value)}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-100"
+                        >
+                          {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'MXN', 'CHF'].map((cur) => (
+                            <option key={cur} value={cur}>{cur}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-zinc-300">Recipient Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={payoutRecipientName}
+                          onChange={(e) => setPayoutRecipientName(e.target.value)}
+                          placeholder="e.g. Joshua Hamilton"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-100"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-zinc-300">Bank / Platform Name</label>
+                        <input
+                          type="text"
+                          value={payoutInstitution}
+                          onChange={(e) => setPayoutInstitution(e.target.value)}
+                          placeholder="e.g. Chase, Bank of America, Cash App, Venmo"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-100"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-zinc-300">
+                          {['BANK_ACH', 'FEDNOW_INSTANT', 'WIRE_SWIFT', 'SEPA_INSTANT'].includes(payoutRail)
+                            ? 'Account Number / IBAN'
+                            : 'Handle / $Cashtag / Email / Phone'}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={payoutAccountOrHandle}
+                          onChange={(e) => setPayoutAccountOrHandle(e.target.value)}
+                          placeholder={
+                            payoutRail === 'CASH_APP'
+                              ? '$YourCashtag'
+                              : payoutRail === 'VENMO'
+                              ? '@YourVenmoHandle'
+                              : payoutRail === 'PAYPAL' || payoutRail === 'ZELLE'
+                              ? 'name@email.com or +1-555-0199'
+                              : 'Account # or IBAN'
+                          }
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-100"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-zinc-300">
+                          {['BANK_ACH', 'FEDNOW_INSTANT'].includes(payoutRail)
+                            ? '9-Digit ABA Routing Number'
+                            : payoutRail === 'WIRE_SWIFT' || payoutRail === 'SEPA_INSTANT'
+                            ? 'SWIFT / BIC Code (Optional)'
+                            : 'Reference / Memo (Optional)'}
+                        </label>
+                        {['BANK_ACH', 'FEDNOW_INSTANT', 'WIRE_SWIFT', 'SEPA_INSTANT'].includes(payoutRail) ? (
+                          <input
+                            type="text"
+                            value={payoutRoutingOrSwift}
+                            onChange={(e) => setPayoutRoutingOrSwift(e.target.value)}
+                            placeholder={payoutRail === 'WIRE_SWIFT' ? 'CHASUS33 / SWIFT BIC' : '021000021'}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-100"
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            value={payoutMemo}
+                            onChange={(e) => setPayoutMemo(e.target.value)}
+                            placeholder="Optional payment note"
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-100"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-[11px] text-zinc-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={payoutSaveBeneficiary}
+                        onChange={(e) => setPayoutSaveBeneficiary(e.target.checked)}
+                        className="accent-emerald-400"
+                      />
+                      <span>Save bank / digital destination inside encrypted AES-256-GCM vault for 1-click repeat transfers</span>
+                    </label>
+
+                    <button
+                      type="submit"
+                      disabled={payoutBusy}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-zinc-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>
+                        {payoutBusy
+                          ? 'Signing & Dispatching ISO-20022 Settlement...'
+                          : `Send $${Number(payoutAmountUsd || 0).toFixed(2)} (${payoutCurrency}) via ${payoutRail.replace(/_/g, ' ')}`}
+                      </span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Right: Saved Bank/Digital Beneficiaries + Signed Receipts */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div className="rounded-2xl bg-zinc-900/90 border border-zinc-800 p-4 space-y-2.5">
+                    <h3 className="text-xs font-black text-amber-300 uppercase">
+                      Saved Banks &amp; Digital Accounts ({beneficiaries.length})
+                    </h3>
+                    {beneficiaries.length === 0 ? (
+                      <p className="text-[11px] text-zinc-400">
+                        Check &quot;Save bank / digital destination&quot; on your first transfer to enable 1-click repeat payouts to Chase, Cash App, Venmo, PayPal, Zelle, or Wise.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {beneficiaries.map((b) => (
+                          <div
+                            key={b.id}
+                            className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-2"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPayoutRail(b.rail);
+                                setPayoutRecipientName(b.recipientName);
+                                setPayoutInstitution(b.institutionName);
+                                setPayoutAccountOrHandle(b.accountOrHandle);
+                                setPayoutRoutingOrSwift(b.routingOrSwift || '');
+                                setPayoutCurrency(b.currency || 'USD');
+                              }}
+                              className="text-left flex-1 min-w-0 cursor-pointer"
+                            >
+                              <div className="text-xs font-bold text-zinc-100 truncate">{b.label}</div>
+                              <div className="text-[10px] text-zinc-400 truncate">
+                                {b.rail.replace(/_/g, ' ')} · {b.accountOrHandle}
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBeneficiary(b.id)}
+                              className="px-2 py-1 rounded bg-zinc-900 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-300 text-[10px] cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl bg-zinc-900/90 border border-zinc-800 p-4 space-y-2.5">
+                    <h3 className="text-xs font-black text-sky-300 uppercase">
+                      Signed Bank &amp; Digital Transfer Receipts
+                    </h3>
+                    <div className="space-y-2 max-h-72 overflow-y-auto">
+                      {transactions.filter((tx) => tx.type === 'BANK_OR_DIGITAL_TRANSFER').length === 0 ? (
+                        <p className="text-[11px] text-zinc-400">
+                          No bank or digital equivalent payouts dispatched yet. Every transfer generates a cryptographically signed ISO-20022 UETR settlement receipt.
+                        </p>
+                      ) : (
+                        transactions
+                          .filter((tx) => tx.type === 'BANK_OR_DIGITAL_TRANSFER')
+                          .slice(0, 12)
+                          .map((tx) => (
+                            <div
+                              key={tx.id}
+                              className="p-2.5 rounded-xl bg-zinc-950 border border-emerald-500/25 space-y-1 text-[11px]"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold text-emerald-300">
+                                  {tx.railMetadata?.targetCurrency || 'USD'}{' '}
+                                  {(tx.railMetadata?.targetAmount ?? tx.totalValueUsd).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                                  {tx.railMetadata?.railLabel || 'Bank Rail'}
+                                </span>
+                              </div>
+                              <div className="text-zinc-300 truncate">
+                                To: {tx.railMetadata?.recipientName} ({tx.railMetadata?.destinationMasked})
+                              </div>
+                              <div className="text-[10px] text-zinc-500 flex items-center justify-between gap-2">
+                                <span className="truncate">UETR: {tx.railMetadata?.uetrReference?.slice(0, 18)}...</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadTransferReceipt(tx)}
+                                  className="text-sky-400 hover:underline flex items-center gap-1 shrink-0 cursor-pointer"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  <span>Receipt</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: AGENTIC GRANTS, REAL CAPITAL BOOTSTRAP & CONNECT REAL EXTERNAL WALLETS */}
+            {activeTab === 'bootstrap' && (
+              <div className="space-y-5">
+                {/* 100% Autonomous OS Macro-Telemetry Wallet Daemon Console */}
+                <div className="rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-amber-500/40 p-5 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-sm font-black text-amber-300">
+                          100% AUTONOMOUS OS WALLET DAEMON ↔ LIVE MACRO TELEMETRY
+                        </h2>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                            daemonStatus?.status === 'LIVE_AUTONOMOUS_TRADING'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : daemonStatus?.status === 'PAUSED'
+                              ? 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                              : 'bg-amber-500/20 text-amber-200 border border-amber-500/40'
+                          }`}
+                        >
+                          {daemonStatus?.status || 'ARMED_STANDBY_AWAITING_REAL_CAPITAL'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Continuously scans live 5-minute Macro Telemetry conformal signals + real mainnet &amp; exchange balances every 60s. Auto-activates live orders immediately once real capital &amp; venue keys are present.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={daemonTickBusy}
+                        onClick={async () => {
+                          setDaemonTickBusy(true);
+                          try {
+                            const d = await safeWalletFetchJson('/api/crypto/wallets/daemon', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'tick' })
+                            }, 1);
+                            if (d?.daemon) setDaemonStatus(d.daemon);
+                          } finally {
+                            setDaemonTickBusy(false);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[11px] font-black cursor-pointer"
+                      >
+                        {daemonTickBusy ? 'Scanning Macro Telemetry...' : 'Run Live Macro Scan Now'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextEnabled = !(daemonStatus?.enabled ?? true);
+                          const d = await safeWalletFetchJson('/api/crypto/wallets/daemon', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ enabled: nextEnabled, fullAutonomyAllWallets: true })
+                          }, 1);
+                          if (d?.daemon) setDaemonStatus(d.daemon);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer ${
+                          daemonStatus?.enabled !== false
+                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                        }`}
+                      >
+                        {daemonStatus?.enabled !== false ? '100% OS Autonomy: ON' : 'OS Autonomy: PAUSED'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px]">
+                    <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800">
+                      <div className="text-zinc-500 text-[10px]">Real On-Chain Capital</div>
+                      <div className="text-sm font-black text-emerald-300">
+                        ${(daemonStatus?.liveOnChainUsdDetected || 0).toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800">
+                      <div className="text-zinc-500 text-[10px]">Real Exchange Capital</div>
+                      <div className="text-sm font-black text-sky-300">
+                        ${(daemonStatus?.liveExchangeUsdDetected || 0).toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800">
+                      <div className="text-zinc-500 text-[10px]">Live Macro Scans</div>
+                      <div className="text-sm font-black text-amber-300">
+                        {daemonStatus?.totalScans || 0}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800">
+                      <div className="text-zinc-500 text-[10px]">Real Orders Executed</div>
+                      <div className="text-sm font-black text-zinc-100">
+                        {daemonStatus?.totalLiveOrdersExecuted || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  {daemonStatus && daemonStatus.logs.length > 0 && (
+                    <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 max-h-36 overflow-y-auto space-y-1 text-[10px]">
+                      {daemonStatus.logs.slice(0, 6).map((l, idx) => (
+                        <div key={`${l.timestamp}-${idx}`} className="text-zinc-300 flex items-start gap-2">
+                          <span className="text-zinc-500 shrink-0">
+                            {new Date(l.timestamp).toLocaleTimeString()}
+                          </span>
+                          <span className="text-amber-300 font-bold shrink-0">[{l.phase}]</span>
+                          <span className="break-words">{l.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Zero-Fake Guarantee + Live Execution Connectors */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                  <div className="lg:col-span-7 rounded-2xl bg-zinc-900/90 border border-emerald-500/30 p-5 space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div>
+                        <h2 className="text-sm font-black text-emerald-300">
+                          100% REAL PRODUCTION CONNECTORS &amp; EXECUTION VENUES
+                        </h2>
+                        <p className="text-[11px] text-zinc-400">
+                          Zero paper balances, zero simulated fills. Connect real mainnet funds or exchange/agentic APIs to trade autonomously.
+                        </p>
+                      </div>
+                      {onSelectModule && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectModule('api-secrets')}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[11px] font-black cursor-pointer"
+                        >
+                          Configure API Keys →
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      {bootstrapConnectors.map((c) => (
+                        <div
+                          key={c.id}
+                          className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start justify-between gap-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-zinc-100">{c.name}</div>
+                            <div className="text-[11px] text-zinc-400 mt-0.5">{c.purpose}</div>
+                            <div className="text-[10px] text-zinc-500 mt-1">
+                              Env Keys: {c.envKeys.join(' · ')}
+                            </div>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                              c.connected
+                                ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
+                                : 'bg-zinc-800 border border-zinc-700 text-zinc-400'
+                            }`}
+                          >
+                            {c.connected ? 'CONNECTED' : 'NOT LINKED'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Link Real Existing External Wallets (MetaMask / Phantom / Watch-Only BTC/ETH/SOL) */}
+                  <div className="lg:col-span-5 rounded-2xl bg-zinc-900/90 border border-sky-500/30 p-5 space-y-3">
+                    <div>
+                      <h2 className="text-sm font-black text-sky-300">
+                        LINK YOUR REAL EXTERNAL WALLETS
+                      </h2>
+                      <p className="text-[11px] text-zinc-400">
+                        Connect MetaMask/Phantom or paste any public BTC, ETH, or SOL mainnet address you already own to track live real on-chain balances.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleConnectBrowserWeb3('ethereum')}
+                        className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-200 text-xs font-bold cursor-pointer"
+                      >
+                        Connect MetaMask (ETH)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleConnectBrowserWeb3('solana')}
+                        className="px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-200 text-xs font-bold cursor-pointer"
+                      >
+                        Connect Phantom (SOL)
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleLinkWatchOnlyWallet} className="space-y-2 pt-2 border-t border-zinc-800">
+                      <input
+                        value={linkLabel}
+                        onChange={(e) => setLinkLabel(e.target.value)}
+                        placeholder="Wallet Label (e.g. My Coinbase / Ledger Wallet)"
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100"
+                      />
+                      <input
+                        value={linkEthAddr}
+                        onChange={(e) => setLinkEthAddr(e.target.value)}
+                        placeholder="Real Ethereum Address (0x...)"
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100"
+                      />
+                      <input
+                        value={linkBtcAddr}
+                        onChange={(e) => setLinkBtcAddr(e.target.value)}
+                        placeholder="Real Bitcoin Address (bc1q... or 1... / 3...)"
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100"
+                      />
+                      <input
+                        value={linkSolAddr}
+                        onChange={(e) => setLinkSolAddr(e.target.value)}
+                        placeholder="Real Solana Base58 Address"
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100"
+                      />
+                      <button
+                        type="submit"
+                        disabled={linkingExternal}
+                        className="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 font-black text-xs cursor-pointer"
+                      >
+                        {linkingExternal ? 'Syncing Mainnet RPCs...' : 'Link Real Public Address & Sync Balance'}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                {/* Verified Agentic Wallet Grants & Legitimate Real Crypto Starter Programs */}
+                <div className="rounded-2xl bg-zinc-900/90 border border-amber-500/30 p-5 space-y-4">
+                  <div>
+                    <h2 className="text-sm font-black text-amber-300">
+                      VERIFIED REAL AGENTIC WALLET GRANTS &amp; LEGITIMATE CRYPTO STARTER PROGRAMS
+                    </h2>
+                    <p className="text-[11px] text-zinc-400 mt-1">
+                      Real-world, legitimate programs where builders and users can earn or qualify for real starting crypto capital (then route it into your funded Agentic Treasury for autonomous trading). Zero scam faucets, honest KYC/application disclosures.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {bootstrapPrograms.map((p) => (
+                      <div
+                        key={p.id}
+                        className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
+                          p.realMainnetValue
+                            ? 'bg-zinc-950/90 border-zinc-800 hover:border-emerald-500/40'
+                            : 'bg-zinc-950/60 border-zinc-800/70'
+                        }`}
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-xs font-black text-zinc-100">{p.name}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                p.realMainnetValue
+                                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                              }`}
+                            >
+                              {p.realMainnetValue ? 'REAL MAINNET VALUE' : 'TESTNET ONLY ($0)'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-bold text-amber-300">
+                            {p.provider} · {p.potentialValue}
+                          </div>
+                          <p className="text-[11px] text-zinc-300 leading-relaxed">{p.summary}</p>
+                          <div className="text-[10px] text-zinc-500">
+                            Requirement: {p.kycOrApprovalRequired}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800/80">
+                          <span className="text-[10px] text-sky-400 truncate">{p.officialUrl}</span>
+                          <a
+                            href={p.officialUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-[10px] font-bold flex items-center gap-1 shrink-0"
+                          >
+                            <span>Official Site</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* TAB: AUTONOMOUS NON-RECIPROCAL GRANT HUNTER & APPLICATION ENGINE */}
+            {activeTab === 'grants' && <AutonomousGrantEnginePanel />}
           </div>
         )}
       </div>

@@ -55,7 +55,8 @@ import {
   TrendingUp,
   Folder,
   Settings,
-  Wallet
+  Wallet,
+  Award
 } from 'lucide-react';
 import type { ModuleType } from '../types';
 
@@ -511,6 +512,17 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
     accentColor: 'text-emerald-400',
     activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
     description: 'Real secp256k1 & Ed25519 BTC/ETH/SOL wallets for personal investing & UID 0 autonomous trading'
+  },
+  {
+    id: 'grant-hunter',
+    label: 'Grant Hunter (0% Equity)',
+    shortLabel: 'Grant Hunter',
+    group: 'core',
+    category: 'command',
+    icon: Award,
+    accentColor: 'text-emerald-300',
+    activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
+    description: 'Autonomous non-reciprocal (0% equity, non-repayable) Grants.gov & foundation grant discovery + auto-application packet builder'
   },
   {
     id: 'packager',

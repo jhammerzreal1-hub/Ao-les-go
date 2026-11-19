@@ -27,9 +27,23 @@ export interface ClipboardRingEntry {
   pinned?: boolean;
 }
 
+export interface CustomDesktopShortcut {
+  id: string;
+  label: string;
+  subtitle: string;
+  kind: 'url' | 'steam' | 'command' | 'module';
+  target: string;
+  accent: string;
+  badge?: string;
+}
+
+export type ControllerGlyphFamily = 'auto' | 'xbox' | 'playstation' | 'nintendo' | 'steam';
+
 export interface SovereignOSCustomizationProfile {
   themeId: SovereignThemeId;
   customWallpaperUrl: string;
+  wallpaperOpacityPct: number;
+  wallpaperBlurPx: number;
   accentColor: SovereignAccentColor;
   windowBlurPx: number;
   windowOpacityPct: number;
@@ -39,6 +53,14 @@ export interface SovereignOSCustomizationProfile {
   fontScalePct: number;
   showTacticalGrid: boolean;
   showCrtScanlines: boolean;
+  showDesktopFiles: boolean;
+  hiddenDesktopIcons: string[];
+  customIconLabels: Record<string, string>;
+  customDesktopShortcuts: CustomDesktopShortcut[];
+  desktopIconOrder: string[];
+  enableGamepadOsNav: boolean;
+  showTouchControllerOverlay: boolean;
+  controllerGlyphStyle: ControllerGlyphFamily;
   activeWorkspace: 1 | 2 | 3 | 4;
   workspaceNames: [string, string, string, string];
   desktopWidgets: {
@@ -199,6 +221,8 @@ const STORAGE_KEY = 'sovereign_os_customization_profile_v1';
 export const DEFAULT_CUSTOMIZATION_PROFILE: SovereignOSCustomizationProfile = {
   themeId: 'aurelius-gold',
   customWallpaperUrl: '',
+  wallpaperOpacityPct: 68,
+  wallpaperBlurPx: 0,
   accentColor: 'amber',
   windowBlurPx: 18,
   windowOpacityPct: 95,
@@ -208,6 +232,14 @@ export const DEFAULT_CUSTOMIZATION_PROFILE: SovereignOSCustomizationProfile = {
   fontScalePct: 100,
   showTacticalGrid: true,
   showCrtScanlines: false,
+  showDesktopFiles: true,
+  hiddenDesktopIcons: [],
+  customIconLabels: {},
+  customDesktopShortcuts: [],
+  desktopIconOrder: [],
+  enableGamepadOsNav: true,
+  showTouchControllerOverlay: false,
+  controllerGlyphStyle: 'auto',
   activeWorkspace: 1,
   workspaceNames: [
     '1: Command & AI',
@@ -271,6 +303,19 @@ export function loadOSCustomizationProfile(): SovereignOSCustomizationProfile {
         ...DEFAULT_CUSTOMIZATION_PROFILE.hotkeys,
         ...(parsed.hotkeys || {})
       },
+      hiddenDesktopIcons: Array.isArray(parsed.hiddenDesktopIcons)
+        ? parsed.hiddenDesktopIcons
+        : [],
+      customIconLabels:
+        parsed.customIconLabels && typeof parsed.customIconLabels === 'object'
+          ? parsed.customIconLabels
+          : {},
+      customDesktopShortcuts: Array.isArray(parsed.customDesktopShortcuts)
+        ? parsed.customDesktopShortcuts
+        : [],
+      desktopIconOrder: Array.isArray(parsed.desktopIconOrder)
+        ? parsed.desktopIconOrder
+        : [],
       workspaceNames:
         Array.isArray(parsed.workspaceNames) && parsed.workspaceNames.length === 4
           ? (parsed.workspaceNames as [string, string, string, string])
@@ -315,7 +360,11 @@ export function saveOSCustomizationProfile(
     hotkeys: {
       ...current.hotkeys,
       ...(next.hotkeys || {})
-    }
+    },
+    customIconLabels: next.customIconLabels ?? current.customIconLabels,
+    hiddenDesktopIcons: next.hiddenDesktopIcons ?? current.hiddenDesktopIcons,
+    customDesktopShortcuts: next.customDesktopShortcuts ?? current.customDesktopShortcuts,
+    desktopIconOrder: next.desktopIconOrder ?? current.desktopIconOrder
   };
   if (typeof window !== 'undefined') {
     try {
@@ -327,6 +376,82 @@ export function saveOSCustomizationProfile(
     );
   }
   return merged;
+}
+
+export function hideDesktopIcon(iconId: string): SovereignOSCustomizationProfile {
+  const cur = loadOSCustomizationProfile();
+  const set = new Set(cur.hiddenDesktopIcons || []);
+  set.add(iconId);
+  return saveOSCustomizationProfile({ hiddenDesktopIcons: Array.from(set) });
+}
+
+export function restoreDesktopIcon(iconId: string): SovereignOSCustomizationProfile {
+  const cur = loadOSCustomizationProfile();
+  return saveOSCustomizationProfile({
+    hiddenDesktopIcons: (cur.hiddenDesktopIcons || []).filter((id) => id !== iconId)
+  });
+}
+
+export function restoreAllDesktopIcons(): SovereignOSCustomizationProfile {
+  return saveOSCustomizationProfile({ hiddenDesktopIcons: [], customIconLabels: {} });
+}
+
+export function renameDesktopIcon(iconId: string, newLabel: string): SovereignOSCustomizationProfile {
+  const cur = loadOSCustomizationProfile();
+  const nextLabels = { ...(cur.customIconLabels || {}) };
+  if (newLabel.trim()) {
+    nextLabels[iconId] = newLabel.trim();
+  } else {
+    delete nextLabels[iconId];
+  }
+  return saveOSCustomizationProfile({ customIconLabels: nextLabels });
+}
+
+export function addCustomDesktopShortcut(
+  shortcut: Omit<CustomDesktopShortcut, 'id'> & { id?: string }
+): SovereignOSCustomizationProfile {
+  const cur = loadOSCustomizationProfile();
+  const id = shortcut.id || `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const filtered = (cur.customDesktopShortcuts || []).filter((s) => s.id !== id);
+  return saveOSCustomizationProfile({
+    customDesktopShortcuts: [...filtered, { ...shortcut, id }]
+  });
+}
+
+export function removeCustomDesktopShortcut(shortcutId: string): SovereignOSCustomizationProfile {
+  const cur = loadOSCustomizationProfile();
+  return saveOSCustomizationProfile({
+    customDesktopShortcuts: (cur.customDesktopShortcuts || []).filter((s) => s.id !== shortcutId)
+  });
+}
+
+export function pinSteamGameToDesktop(appId: number, gameName: string): SovereignOSCustomizationProfile {
+  return addCustomDesktopShortcut({
+    id: `steam-game-${appId}`,
+    label: gameName.slice(0, 26),
+    subtitle: `Steam #${appId}`,
+    kind: 'steam',
+    target: String(appId),
+    accent: 'text-sky-400',
+    badge: 'STEAM'
+  });
+}
+
+export function importOSCustomizationProfile(rawJson: string): {
+  ok: boolean;
+  profile?: SovereignOSCustomizationProfile;
+  error?: string;
+} {
+  try {
+    const parsed = JSON.parse(rawJson);
+    if (!parsed || typeof parsed !== 'object') {
+      return { ok: false, error: 'Invalid JSON profile object.' };
+    }
+    const saved = saveOSCustomizationProfile(parsed as Partial<SovereignOSCustomizationProfile>);
+    return { ok: true, profile: saved };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Failed to parse customization JSON.' };
+  }
 }
 
 export function pushToOSClipboardRing(text: string, label = 'OS Clipboard'): SovereignOSCustomizationProfile {
@@ -349,8 +474,10 @@ export function pushToOSClipboardRing(text: string, label = 'OS Clipboard'): Sov
 
 export function getActiveThemeWallpaperStyle(profile: SovereignOSCustomizationProfile): React.CSSProperties {
   if (profile.themeId === 'custom-wallpaper' && profile.customWallpaperUrl.trim()) {
+    const darkAlphaTop = Math.max(0.05, Math.min(0.92, (100 - (profile.wallpaperOpacityPct ?? 68)) / 100));
+    const darkAlphaBot = Math.min(0.95, darkAlphaTop + 0.18);
     return {
-      backgroundImage: `linear-gradient(rgba(5,7,11,0.55), rgba(5,7,11,0.75)), url("${profile.customWallpaperUrl.trim()}")`,
+      backgroundImage: `linear-gradient(rgba(5,7,11,${darkAlphaTop.toFixed(2)}), rgba(5,7,11,${darkAlphaBot.toFixed(2)})), url("${profile.customWallpaperUrl.trim()}")`,
       backgroundSize: 'cover',
       backgroundPosition: 'center'
     };

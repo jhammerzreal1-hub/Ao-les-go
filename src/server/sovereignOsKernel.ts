@@ -1577,6 +1577,80 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    if (pathname === '/host/steam/games' && req.method === 'GET') {
+      const candidates = [
+        path.join(os.homedir(), '.steam', 'steam', 'steamapps'),
+        path.join(os.homedir(), '.local', 'share', 'Steam', 'steamapps'),
+        path.join(os.homedir(), 'Library', 'Application Support', 'Steam', 'steamapps'),
+        'C:\\\\Program Files (x86)\\\\Steam\\\\steamapps',
+        'C:\\\\Program Files\\\\Steam\\\\steamapps',
+        'D:\\\\SteamLibrary\\\\steamapps',
+        'E:\\\\SteamLibrary\\\\steamapps'
+      ];
+      const customPath = (parsed.searchParams.get('path') || '').trim();
+      if (customPath) candidates.unshift(resolvePath(customPath));
+      const dirs = new Set();
+      for (const c of candidates) {
+        if (fs.existsSync(c)) dirs.add(c);
+        const vdf = path.join(c, 'libraryfolders.vdf');
+        if (fs.existsSync(vdf)) {
+          try {
+            const raw = fs.readFileSync(vdf, 'utf8');
+            const matches = raw.matchAll(/"path"\\s+"([^"]+)"/g);
+            for (const m of matches) {
+              const p = path.join(m[1].replace(/\\\\\\\\/g, '\\\\'), 'steamapps');
+              if (fs.existsSync(p)) dirs.add(p);
+            }
+          } catch {}
+        }
+      }
+      const games = [];
+      for (const dir of dirs) {
+        try {
+          for (const f of fs.readdirSync(dir)) {
+            if (!/^appmanifest_\\d+\\.acf$/i.test(f)) continue;
+            const raw = fs.readFileSync(path.join(dir, f), 'utf8');
+            const appid = Number((raw.match(/"appid"\\s+"(\\d+)"/i) || [])[1] || 0);
+            const name = (raw.match(/"name"\\s+"([^"]+)"/i) || [])[1] || ('Steam App ' + appid);
+            const installdir = (raw.match(/"installdir"\\s+"([^"]+)"/i) || [])[1] || '';
+            const sizeOnDisk = Number((raw.match(/"SizeOnDisk"\\s+"(\\d+)"/i) || [])[1] || 0);
+            if (appid) games.push({ appid, name, installdir, sizeOnDisk, libraryPath: dir });
+          }
+        } catch {}
+      }
+      return sendJson(res, 200, { success: true, scannedLibraries: Array.from(dirs), games });
+    }
+
+    if (pathname === '/host/steam/launch' && req.method === 'POST') {
+      const body = await readJsonBody(req);
+      const appId = Number(body.appId || 0);
+      const extraArgs = String(body.launchOptions || '').trim();
+      if (!appId) return sendJson(res, 400, { success: false, error: 'appId required' });
+      const plat = os.platform();
+      const uri = 'steam://rungameid/' + appId;
+      let launched = false;
+      let method = uri;
+      try {
+        if (plat === 'win32') {
+          spawn('cmd.exe', ['/c', 'start', '', uri], { detached: true, stdio: 'ignore' }).unref();
+          launched = true;
+          method = 'Windows native steam:// protocol (' + uri + ')';
+        } else if (plat === 'darwin') {
+          spawn('open', [uri], { detached: true, stdio: 'ignore' }).unref();
+          launched = true;
+          method = 'macOS open ' + uri;
+        } else {
+          const args = ['-applaunch', String(appId), ...(extraArgs ? extraArgs.split(/\\s+/) : [])];
+          spawn('steam', args, { detached: true, stdio: 'ignore' }).unref();
+          launched = true;
+          method = 'Linux steam ' + args.join(' ');
+        }
+      } catch (err) {
+        return sendJson(res, 200, { success: false, launched: false, error: err?.message || String(err), uri });
+      }
+      return sendJson(res, 200, { success: true, launched, appId, method, uri });
+    }
+
     return sendJson(res, 404, { success: false, error: 'Unknown Host Bridge route: ' + pathname });
   } catch (err) {
     return sendJson(res, 400, { success: false, error: err?.message || String(err) });
@@ -1596,4 +1670,455 @@ server.listen(PORT, HOST, () => {
     content: daemonSource
   };
 }
+
+// ============================================================================
+// REAL SOVEREIGN DESKTOP FILESYSTEM, STEAM LOCAL LIBRARY & UNIVERSAL COMPAT
+// ============================================================================
+
+export function getSovereignDesktopDirectory(): string {
+  const desktopDir = path.join(process.cwd(), 'data', 'desktop');
+  try {
+    if (!fs.existsSync(desktopDir)) {
+      fs.mkdirSync(desktopDir, { recursive: true });
+    }
+  } catch {}
+  return desktopDir;
+}
+
+export function listSovereignDesktopEntries() {
+  const desktopDir = getSovereignDesktopDirectory();
+  const listing = listRealDirectory(desktopDir);
+  return {
+    desktopPath: desktopDir,
+    entries: listing.entries,
+    totalEntries: listing.count
+  };
+}
+
+function safeExecSync(cmd: string, timeoutMs = 1500): string {
+  try {
+    return execSync(cmd, {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+  } catch {
+    return '';
+  }
+}
+
+export interface LocalSteamGameEntry {
+  appid: number;
+  name: string;
+  installdir: string;
+  sizeOnDisk: number;
+  libraryPath: string;
+  manifestPath: string;
+  lastUpdated?: string;
+}
+
+export function scanLocalSteamLibraries(customLibraryPath?: string): {
+  scannedPaths: string[];
+  existingLibraries: string[];
+  games: LocalSteamGameEntry[];
+  steamBinaryAvailable: boolean;
+  steamCmdAvailable: boolean;
+  protonVersions: string[];
+} {
+  const home = os.homedir();
+  const candidatePaths = [
+    customLibraryPath ? resolveSafeHostPath(customLibraryPath) : '',
+    path.join(home, '.steam', 'steam', 'steamapps'),
+    path.join(home, '.local', 'share', 'Steam', 'steamapps'),
+    path.join(home, '.var', 'app', 'com.valvesoftware.Steam', '.local', 'share', 'Steam', 'steamapps'),
+    path.join(home, 'Library', 'Application Support', 'Steam', 'steamapps'),
+    '/mnt/c/Program Files (x86)/Steam/steamapps',
+    '/mnt/c/Program Files/Steam/steamapps',
+    '/mnt/d/SteamLibrary/steamapps',
+    path.join(process.cwd(), 'data', 'steamapps')
+  ].filter(Boolean);
+
+  const discoveredDirs = new Set<string>();
+  const protonVersions = new Set<string>();
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+        discoveredDirs.add(candidate);
+        const vdfPath = path.join(candidate, 'libraryfolders.vdf');
+        if (fs.existsSync(vdfPath)) {
+          const rawVdf = fs.readFileSync(vdfPath, 'utf8');
+          const matches = rawVdf.matchAll(/"path"\s+"([^"]+)"/g);
+          for (const m of matches) {
+            const normalized = m[1].replace(/\\\\/g, '/');
+            const sub = path.join(normalized, 'steamapps');
+            if (fs.existsSync(sub)) discoveredDirs.add(sub);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Also scan Proton / GE-Proton compatibilitytools.d
+  const compatToolDirs = [
+    path.join(home, '.steam', 'root', 'compatibilitytools.d'),
+    path.join(home, '.local', 'share', 'Steam', 'compatibilitytools.d'),
+    '/usr/share/steam/compatibilitytools.d'
+  ];
+  for (const ctDir of compatToolDirs) {
+    try {
+      if (fs.existsSync(ctDir)) {
+        for (const item of fs.readdirSync(ctDir)) {
+          protonVersions.add(item);
+        }
+      }
+    } catch {}
+  }
+
+  const games: LocalSteamGameEntry[] = [];
+  const seenAppIds = new Set<number>();
+
+  for (const dir of discoveredDirs) {
+    try {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        if (!/^appmanifest_\d+\.acf$/i.test(file)) continue;
+        const manifestPath = path.join(dir, file);
+        const raw = fs.readFileSync(manifestPath, 'utf8');
+        const appid = Number((raw.match(/"appid"\s+"(\d+)"/i) || [])[1] || 0);
+        const name = (raw.match(/"name"\s+"([^"]+)"/i) || [])[1] || `Steam App ${appid}`;
+        const installdir = (raw.match(/"installdir"\s+"([^"]+)"/i) || [])[1] || '';
+        const sizeOnDisk = Number((raw.match(/"SizeOnDisk"\s+"(\d+)"/i) || [])[1] || 0);
+        const lastUpdatedSec = Number((raw.match(/"LastUpdated"\s+"(\d+)"/i) || [])[1] || 0);
+
+        if (name.toLowerCase().includes('proton')) {
+          protonVersions.add(name);
+        }
+        if (appid && !seenAppIds.has(appid)) {
+          seenAppIds.add(appid);
+          games.push({
+            appid,
+            name,
+            installdir,
+            sizeOnDisk,
+            libraryPath: dir,
+            manifestPath,
+            lastUpdated: lastUpdatedSec > 0 ? new Date(lastUpdatedSec * 1000).toISOString() : undefined
+          });
+        }
+      }
+    } catch {}
+  }
+
+  const hasBin = (bin: string) => Boolean(safeExecSync(`command -v ${bin} 2>/dev/null`, 1200).trim());
+
+  return {
+    scannedPaths: candidatePaths,
+    existingLibraries: Array.from(discoveredDirs),
+    games: games.sort((a, b) => a.name.localeCompare(b.name)),
+    steamBinaryAvailable: hasBin('steam'),
+    steamCmdAvailable: hasBin('steamcmd'),
+    protonVersions: Array.from(protonVersions)
+  };
+}
+
+export async function launchSteamGameUniversal(opts: {
+  appId: number;
+  gameName?: string;
+  runner?: 'native-steam' | 'proton-ge' | 'gamescope-hdr' | 'wine-dxvk' | 'steamcmd-install';
+  enableControllerInput?: boolean;
+  enableMangoHud?: boolean;
+  enableGamemode?: boolean;
+  extraArgs?: string;
+}) {
+  const appId = Number(opts.appId);
+  const gameName = (opts.gameName || `Steam App ${appId}`).trim();
+  const runner = opts.runner || 'native-steam';
+  const launchersDir = path.join(process.cwd(), 'data', 'steam-launchers');
+  fs.mkdirSync(launchersDir, { recursive: true });
+
+  const envParts: string[] = [
+    'SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1',
+    'PROTON_ENABLE_NVAPI=1',
+    'PROTON_HIDE_NVIDIA_GPU=0',
+    'DXVK_ASYNC=1',
+    'VKD3D_CONFIG=dxr11,dxr'
+  ];
+  if (opts.enableControllerInput !== false) {
+    envParts.push('SDL_JOYSTICK_HIDAPI=1', 'SDL_JOYSTICK_HIDAPI_PS5=1', 'SDL_JOYSTICK_HIDAPI_SWITCH=1', 'SDL_JOYSTICK_HIDAPI_XBOX=1');
+  }
+  const wrapperChain: string[] = [];
+  if (opts.enableGamemode) wrapperChain.push('gamemoderun');
+  if (opts.enableMangoHud) wrapperChain.push('mangohud');
+  if (runner === 'gamescope-hdr') wrapperChain.push('gamescope -W 1920 -H 1080 -f --');
+
+  const launchCommand =
+    runner === 'steamcmd-install'
+      ? `steamcmd +login anonymous +app_update ${appId} validate +quit`
+      : `${envParts.join(' ')} ${wrapperChain.join(' ')} steam -applaunch ${appId} ${opts.extraArgs || ''}`.replace(/\s+/g, ' ').trim();
+
+  const scriptPath = path.join(launchersDir, `launch-steam-${appId}.sh`);
+  const scriptContent = [
+    '#!/usr/bin/env bash',
+    `# Lysander Sovereign OS — Universal Steam Game Launcher (${gameName} · AppID ${appId})`,
+    `# Controller Stack: Xbox XInput + DualSense PS5 + Nintendo Switch/Joy-Con + Steam Input + KB/M`,
+    'set -e',
+    ...envParts.map((kv) => `export ${kv}`),
+    `echo "[Lysander Steam Runner] Launching ${gameName} (AppID ${appId}) via ${runner}..."`,
+    `if command -v steam >/dev/null 2>&1; then`,
+    `  exec ${wrapperChain.join(' ')} steam -applaunch ${appId} ${opts.extraArgs || ''}`,
+    `elif command -v xdg-open >/dev/null 2>&1; then`,
+    `  exec xdg-open "steam://rungameid/${appId}"`,
+    `else`,
+    `  echo "Steam desktop binary not installed on this container host. Use Physical Host Bridge (127.0.0.1:4747) or run on your desktop."`,
+    `  exit 0`,
+    `fi`,
+    ''
+  ].join('\n');
+  fs.writeFileSync(scriptPath, scriptContent, { encoding: 'utf8', mode: 0o755 });
+
+  const hasSteam = Boolean(safeExecSync('command -v steam 2>/dev/null', 1200).trim());
+  const hasSteamCmd = Boolean(safeExecSync('command -v steamcmd 2>/dev/null', 1200).trim());
+  let nativeAttempted = false;
+  let executionNote = '';
+
+  if (runner === 'steamcmd-install' && hasSteamCmd) {
+    nativeAttempted = true;
+    executionNote = `steamcmd detected locally. Generated launcher script at ${scriptPath}.`;
+  } else if (hasSteam) {
+    try {
+      const child = spawn('steam', ['-applaunch', String(appId)], {
+        detached: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          SDL_JOYSTICK_HIDAPI: '1',
+          SDL_JOYSTICK_HIDAPI_PS5: '1',
+          SDL_JOYSTICK_HIDAPI_SWITCH: '1'
+        }
+      });
+      child.unref();
+      nativeAttempted = true;
+      executionNote = `Dispatched native Steam process (steam -applaunch ${appId}) with full HIDAPI controller stack.`;
+    } catch (err: any) {
+      executionNote = `Local Steam spawn returned: ${err?.message || 'unable to spawn'}`;
+    }
+  } else {
+    executionNote = `Generated executable Proton/DXVK/Controller launcher script (${scriptPath}). Connect the Physical Host Bridge (127.0.0.1:4747) to launch directly on your local GPU, or invoke steam://rungameid/${appId}.`;
+  }
+
+  return {
+    success: true,
+    appId,
+    gameName,
+    runner,
+    nativeAttempted,
+    hasSteamBinary: hasSteam,
+    hasSteamCmd,
+    scriptPath,
+    launchCommand,
+    protocolUri: `steam://rungameid/${appId}`,
+    installProtocolUri: `steam://install/${appId}`,
+    cloudStreamBridges: {
+      geforceNowSearch: `https://play.geforcenow.com/mall/#/layout/games`,
+      steamRemotePlay: `steam://open/bigpicture`,
+      xboxCloud: `https://www.xbox.com/play`,
+      moonlightSunshine: 'https://app.lizardbyte.dev/Sunshine/'
+    },
+    executionNote
+  };
+}
+
+export interface UniversalCompatCapability {
+  id: string;
+  category:
+    | 'windows-parity'
+    | 'linux-native'
+    | 'android-mobile'
+    | 'macos-darwin'
+    | 'cross-arch-wasm'
+    | 'beyond-windows-kernel';
+  name: string;
+  formats: string[];
+  available: boolean;
+  versionOrPath: string;
+  windowsComparison: string;
+  installOrRunCommand: string;
+}
+
+export function probeUniversalCompatibilityMatrix(): {
+  hostPlatform: string;
+  arch: string;
+  kernelRelease: string;
+  totalCapabilities: number;
+  activeCount: number;
+  capabilities: UniversalCompatCapability[];
+} {
+  const probeBin = (bins: string[]): { available: boolean; detail: string } => {
+    for (const bin of bins) {
+      const resolved = safeExecSync(`command -v ${bin} 2>/dev/null`, 1200).trim();
+      if (resolved) {
+        const ver = safeExecSync(`${bin} --version 2>/dev/null | head -n 1`, 1200).trim();
+        return { available: true, detail: ver ? `${resolved} (${ver.slice(0, 64)})` : resolved };
+      }
+    }
+    return { available: false, detail: 'Not installed on this container host (1-click install / Host Bridge ready)' };
+  };
+
+  const nodeP = probeBin(['node']);
+  const pyP = probeBin(['python3', 'python']);
+  const wineP = probeBin(['wine64', 'wine']);
+  const steamP = probeBin(['steam', 'steamcmd']);
+  const dockerP = probeBin(['docker', 'podman']);
+  const flatpakP = probeBin(['flatpak']);
+  const appimageP = { available: fs.existsSync('/dev/fuse') || Boolean(safeExecSync('command -v fusermount 2>/dev/null', 900).trim()), detail: fs.existsSync('/dev/fuse') ? '/dev/fuse mounted (AppImage ready)' : 'FUSE optional (--appimage-extract supported natively)' };
+  const nixP = probeBin(['nix']);
+  const aptP = probeBin(['apt-get', 'pacman', 'dnf', 'apk', 'brew']);
+  const adbP = probeBin(['adb', 'waydroid']);
+  const qemuP = probeBin(['qemu-x86_64', 'qemu-aarch64', 'qemu-system-x86_64', 'box64']);
+  const darlingP = probeBin(['darling']);
+  const wasmP = { available: typeof WebAssembly === 'object', detail: `V8 WebAssembly + WASI JIT (Node ${process.version})` };
+  const gccP = probeBin(['gcc', 'clang', 'rustc', 'go']);
+  const pwshP = probeBin(['pwsh']);
+  const bashP = probeBin(['bash', 'zsh', 'sh']);
+  const procFsAvailable = fs.existsSync('/proc/cpuinfo');
+  const vulkanP = probeBin(['vulkaninfo', 'glxinfo']);
+
+  const capabilities: UniversalCompatCapability[] = [
+    // Windows Full Parity
+    {
+      id: 'win32-wine-proton',
+      category: 'windows-parity',
+      name: 'Windows Win32/Win64 PE (.exe / .msi) via Wine & Valve Proton',
+      formats: ['.exe', '.msi', '.dll', 'DirectX 9/10/11/12 (DXVK / VKD3D-Proton)'],
+      available: wineP.available,
+      versionOrPath: wineP.detail,
+      windowsComparison: 'Runs Windows apps & games without Windows telemetry, forced updates, or BitLocker/TPM lockouts',
+      installOrRunCommand: 'sudo apt-get update && sudo apt-get install -y wine64 winetricks'
+    },
+    {
+      id: 'steam-gaming-stack',
+      category: 'windows-parity',
+      name: 'Valve Steam + Proton GE + Gamescope + Full HIDAPI Controller Stack',
+      formats: ['Steam AppIDs', 'VDF/ACF', 'XInput', 'DualSense', 'Switch Pro/Joy-Con', 'Steam Deck'],
+      available: steamP.available,
+      versionOrPath: steamP.detail,
+      windowsComparison: 'Native Steam + Proton + ALL controller families + Keyboard/Mouse + Multi-Touch Virtual Gamepad',
+      installOrRunCommand: 'sudo apt-get install -y steam-installer gamemode mangohud'
+    },
+    {
+      id: 'powershell-interop',
+      category: 'windows-parity',
+      name: 'PowerShell Core & Windows Batch Interop',
+      formats: ['.ps1', '.bat', '.cmd', 'SMB/CIFS'],
+      available: pwshP.available,
+      versionOrPath: pwshP.detail,
+      windowsComparison: 'Supports Windows automation scripts alongside full POSIX Bash/Zsh shells',
+      installOrRunCommand: 'sudo apt-get install -y powershell'
+    },
+    // Everything Windows Cannot Do / Limits
+    {
+      id: 'linux-elf-posix',
+      category: 'linux-native',
+      name: 'Native Linux ELF64 Binaries & POSIX Shell Toolchains',
+      formats: ['ELF64', '.sh', '.deb', '.rpm', 'systemd', 'POSIX Pipes'],
+      available: bashP.available,
+      versionOrPath: bashP.detail,
+      windowsComparison: 'Zero WSL2 VM overhead — native Linux kernel syscalls, fork/exec, symlinks, and chmod/chown',
+      installOrRunCommand: 'uname -a && ldd --version'
+    },
+    {
+      id: 'pkg-managers-universal',
+      category: 'linux-native',
+      name: 'Universal System Package Managers (APT / Pacman / DNF / Brew / Nix)',
+      formats: ['.deb', '.rpm', '.pkg.tar.zst', 'Nix Flakes'],
+      available: aptP.available || nixP.available,
+      versionOrPath: aptP.available ? aptP.detail : nixP.detail,
+      windowsComparison: 'Atomic multi-repo package management vs Windows fragmented MSI/EXE installers',
+      installOrRunCommand: 'apt-cache stats || nix --version'
+    },
+    {
+      id: 'appimage-flatpak',
+      category: 'linux-native',
+      name: 'Portable Linux AppImage & Sandboxed Flatpak Runtimes',
+      formats: ['.AppImage', '.flatpak', '.flatpakref'],
+      available: appimageP.available || flatpakP.available,
+      versionOrPath: flatpakP.available ? flatpakP.detail : appimageP.detail,
+      windowsComparison: 'Single-file portable Linux desktop executables with zero registry pollution',
+      installOrRunCommand: 'sudo apt-get install -y flatpak libfuse2'
+    },
+    {
+      id: 'oci-docker-containers',
+      category: 'linux-native',
+      name: 'Native Linux Namespaces, OCI Containers & Distrobox (Docker / Podman)',
+      formats: ['OCI Image', 'Dockerfile', 'Distrobox (Arch/Ubuntu/Fedora/Kali)'],
+      available: dockerP.available,
+      versionOrPath: dockerP.detail,
+      windowsComparison: 'Runs native Linux containers directly on host kernel without Hyper-V/WSL2 memory tax',
+      installOrRunCommand: 'sudo apt-get install -y docker.io podman'
+    },
+    {
+      id: 'android-apk-waydroid',
+      category: 'android-mobile',
+      name: 'Android APK / AAB & Mobile Bridge (Waydroid / ADB / Termux)',
+      formats: ['.apk', '.aab', 'ADB USB/Wi-Fi', 'Android Container'],
+      available: adbP.available,
+      versionOrPath: adbP.detail,
+      windowsComparison: 'Microsoft killed Windows Subsystem for Android (WSA) in 2025 — Lysander runs native Waydroid + ADB!',
+      installOrRunCommand: 'sudo apt-get install -y android-tools-adb waydroid'
+    },
+    {
+      id: 'macos-darwin-layer',
+      category: 'macos-darwin',
+      name: 'macOS / Darwin Mach-O Translation & KVM Virtualization (Darling / QEMU)',
+      formats: ['Mach-O', '.app', '.dmg', '.pkg'],
+      available: darlingP.available || qemuP.available,
+      versionOrPath: darlingP.available ? darlingP.detail : qemuP.detail,
+      windowsComparison: 'Windows blocks Mach-O/Darwin layers; Lysander supports Darling + KVM/QEMU macOS runtimes',
+      installOrRunCommand: 'echo "Install Darling (https://www.darlinghq.org) or QEMU/KVM on bare-metal Linux"'
+    },
+    {
+      id: 'cross-arch-emulation',
+      category: 'cross-arch-wasm',
+      name: 'Multi-Architecture Binary Translation (x86_64 ↔ ARM64 ↔ RISC-V)',
+      formats: ['x86_64', 'ARM64/AArch64', 'RISC-V', 'Box64 / FEX-Emu / QEMU-user'],
+      available: qemuP.available,
+      versionOrPath: qemuP.detail,
+      windowsComparison: 'Runs ARM64, RISC-V, and x86_64 binaries side-by-side via binfmt_misc + QEMU/Box64',
+      installOrRunCommand: 'sudo apt-get install -y qemu-user-static binfmt-support'
+    },
+    {
+      id: 'wasm-wasi-polyglot',
+      category: 'cross-arch-wasm',
+      name: 'Universal WebAssembly (WASM / WASI) + Node.js + Python + Native Compilers',
+      formats: ['.wasm', '.wat', '.js/.ts', '.py', 'C/C++/Rust/Go'],
+      available: wasmP.available && (nodeP.available || pyP.available),
+      versionOrPath: `${wasmP.detail} | ${pyP.available ? 'Python3 Ready' : 'Node Ready'} | ${gccP.available ? 'Native Compiler Ready' : 'JIT Ready'}`,
+      windowsComparison: 'Instant zero-install polyglot compilation & sandboxed WASM execution across every CPU',
+      installOrRunCommand: 'node -v && python3 --version'
+    },
+    {
+      id: 'beyond-windows-ring0',
+      category: 'beyond-windows-kernel',
+      name: 'Unrestricted POSIX Root (UID 0), Live /proc /sys Kernel Introspection & Vulkan GPU',
+      formats: ['/proc', '/sys', 'eBPF', 'Vulkan/OpenGL', 'Unlimited UI/CSS/Kernel Customization'],
+      available: procFsAvailable || vulkanP.available,
+      versionOrPath: procFsAvailable
+        ? `Live /proc & /sys mounted · UID 0 Sovereign Kernel · ${vulkanP.available ? 'Vulkan/GL Ready' : 'Software + Host Bridge GPU'}`
+        : 'Host Kernel Bridge Active',
+      windowsComparison: 'Zero telemetry, zero forced reboots, zero TPM/SecureBoot lockouts, full live CSS/Window/Desktop source freedom',
+      installOrRunCommand: 'cat /proc/version && lscpu | head -n 8'
+    }
+  ];
+
+  return {
+    hostPlatform: os.platform(),
+    arch: os.arch(),
+    kernelRelease: os.release(),
+    totalCapabilities: capabilities.length,
+    activeCount: capabilities.filter((c) => c.available).length,
+    capabilities
+  };
+}
+
 

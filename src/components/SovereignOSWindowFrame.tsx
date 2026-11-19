@@ -42,7 +42,18 @@ import {
   Film,
   Download,
   Wallet,
-  BookOpen
+  BookOpen,
+  FilePlus2,
+  FolderPlus,
+  Trash2,
+  Pencil,
+  RotateCcw,
+  FileText,
+  Link2,
+  SlidersHorizontal,
+  Save,
+  Smartphone,
+  Award
 } from 'lucide-react';
 import { ALL_MODULES } from './Navigation';
 import type { ModuleType } from '../types';
@@ -51,6 +62,12 @@ import {
   saveOSCustomizationProfile,
   applyOSCustomizationToDOM,
   getActiveThemeWallpaperStyle,
+  hideDesktopIcon,
+  restoreAllDesktopIcons,
+  renameDesktopIcon,
+  addCustomDesktopShortcut,
+  removeCustomDesktopShortcut,
+  type CustomDesktopShortcut,
   type SovereignOSCustomizationProfile
 } from '../utils/osCustomizationStore';
 
@@ -553,6 +570,7 @@ const DESKTOP_SHORTCUTS: Array<{
   { id: 'task-manager', label: 'Task Manager', subtitle: 'CPU · RAM · PIDs', icon: Cpu, accent: 'text-cyan-400' },
   { id: 'macro-telemetry', label: 'Macro Telemetry', subtitle: 'Laplace-14 · 99%', icon: Activity, accent: 'text-rose-400' },
   { id: 'crypto-wallet', label: 'Crypto Wallets', subtitle: 'Personal & Agentic', icon: Wallet, accent: 'text-emerald-400' },
+  { id: 'grant-hunter', label: 'Grant Hunter', subtitle: '0% Equity Funding', icon: Award, accent: 'text-emerald-300' },
   { id: 'ai-genesis-distillery', label: 'AI Distillery', subtitle: 'Model Forging', icon: Sparkles, accent: 'text-purple-400' },
   { id: 'projects', label: 'Unified Projects', subtitle: 'IDE & Builds', icon: Briefcase, accent: 'text-indigo-400' },
   { id: 'vault', label: 'Encrypted Vault', subtitle: 'AES-256 Store', icon: Archive, accent: 'text-emerald-300' },
@@ -588,9 +606,31 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
   onSwitchWorkspaceMode
 }) => {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    target?:
+      | { kind: 'builtin'; id: string; label: string }
+      | { kind: 'installed'; id: string; label: string; app: DesktopInstalledApp }
+      | { kind: 'custom'; id: string; label: string; shortcut: CustomDesktopShortcut }
+      | { kind: 'fs'; id: string; label: string; entry: { name: string; path: string; type: 'dir' | 'file'; sizeBytes: number } };
+  } | null>(null);
   const [desktopCommand, setDesktopCommand] = useState('');
   const [installedDesktopApps, setInstalledDesktopApps] = useState<DesktopInstalledApp[]>([]);
+  const [desktopFsPath, setDesktopFsPath] = useState<string>('');
+  const [desktopFsEntries, setDesktopFsEntries] = useState<
+    Array<{ name: string; path: string; type: 'dir' | 'file'; sizeBytes: number }>
+  >([]);
+  const [editIconsMode, setEditIconsMode] = useState<boolean>(false);
+  const [desktopToast, setDesktopToast] = useState<string | null>(null);
+  const [desktopModal, setDesktopModal] = useState<
+    | null
+    | { type: 'new-file'; name: string; content: string }
+    | { type: 'new-folder'; name: string }
+    | { type: 'new-shortcut'; label: string; kind: 'steam' | 'url' | 'command'; target: string }
+    | { type: 'rename'; targetKind: 'builtin' | 'installed' | 'custom' | 'fs'; id: string; oldPath?: string; value: string }
+    | { type: 'edit-file'; name: string; path: string; content: string; saving?: boolean }
+  >(null);
   const [customProfile, setCustomProfile] = useState<SovereignOSCustomizationProfile>(() =>
     loadOSCustomizationProfile()
   );
@@ -608,6 +648,38 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
     uid: number;
     ring: number;
   } | null>(null);
+
+  const showDesktopToast = (msg: string) => {
+    setDesktopToast(msg);
+    setTimeout(() => setDesktopToast((cur) => (cur === msg ? null : cur)), 3800);
+  };
+
+  const refreshDesktopFiles = React.useCallback(() => {
+    fetch('/api/os/desktop/entries')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.success) return;
+        if (data.desktopPath) setDesktopFsPath(data.desktopPath);
+        if (Array.isArray(data.entries)) {
+          setDesktopFsEntries(
+            data.entries.map((e: any) => ({
+              name: String(e.name),
+              path: String(e.path),
+              type: e.type === 'dir' ? 'dir' : 'file',
+              sizeBytes: Number(e.sizeBytes || 0)
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshDesktopFiles();
+    const onFsUpdated = () => refreshDesktopFiles();
+    window.addEventListener('sovereign_desktop_fs_updated', onFsUpdated);
+    return () => window.removeEventListener('sovereign_desktop_fs_updated', onFsUpdated);
+  }, [refreshDesktopFiles]);
 
   useEffect(() => {
     applyOSCustomizationToDOM(customProfile);
@@ -716,12 +788,177 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
     };
   }, [contextMenu]);
 
-  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+  const openContextMenuAt = (
+    e: React.MouseEvent,
+    target?: NonNullable<typeof contextMenu>['target']
+  ) => {
     e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.min(Math.max(8, e.clientX - rect.left), Math.max(8, rect.width - 230));
-    const y = Math.min(Math.max(8, e.clientY - rect.top), Math.max(8, rect.height - 320));
-    setContextMenu({ x, y });
+    e.stopPropagation();
+    const container = e.currentTarget.closest('[data-sovereign-desktop-root="true"]') || e.currentTarget;
+    const rect = container.getBoundingClientRect();
+    const x = Math.min(Math.max(8, e.clientX - rect.left), Math.max(8, rect.width - 245));
+    const y = Math.min(Math.max(8, e.clientY - rect.top), Math.max(8, rect.height - 360));
+    setContextMenu({ x, y, target });
+  };
+
+  const handleUninstallProgram = async (app: DesktopInstalledApp) => {
+    try {
+      const res = await fetch('/api/os/packages/uninstall', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appId: app.id })
+      });
+      const data = await res.json();
+      if (data?.ok || data?.success) {
+        setInstalledDesktopApps((prev) => prev.filter((a) => a.id !== app.id));
+        window.dispatchEvent(new CustomEvent('sovereign_apps_updated'));
+        showDesktopToast(`Uninstalled "${app.name}" and removed desktop shortcut.`);
+      } else {
+        showDesktopToast(data?.error || `Failed to uninstall ${app.name}`);
+      }
+    } catch (err: any) {
+      showDesktopToast(`Uninstall failed: ${err?.message || 'Error'}`);
+    }
+  };
+
+  const handleDeleteDesktopFsEntry = async (entry: { name: string; path: string; type: 'dir' | 'file' }) => {
+    try {
+      const res = await fetch('/api/os/fs/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: entry.path })
+      });
+      const data = await res.json();
+      if (data?.success || data?.ok) {
+        refreshDesktopFiles();
+        showDesktopToast(`Deleted ${entry.type === 'dir' ? 'folder' : 'file'} "${entry.name}" from disk.`);
+      } else {
+        showDesktopToast(data?.error || `Could not delete ${entry.name}`);
+      }
+    } catch (err: any) {
+      showDesktopToast(`Delete error: ${err?.message || 'Error'}`);
+    }
+  };
+
+  const handleOpenDesktopFsEntry = async (entry: { name: string; path: string; type: 'dir' | 'file' }) => {
+    if (entry.type === 'dir') {
+      onOpenModule('file-manager');
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent('sovereign_os_command', {
+            detail: { action: 'file_manager_open_path', targetModule: 'file-manager', path: entry.path }
+          })
+        );
+      }, 100);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/os/fs/read?path=${encodeURIComponent(entry.path)}`);
+      const data = await res.json();
+      if (data?.success && typeof data.content === 'string') {
+        setDesktopModal({ type: 'edit-file', name: entry.name, path: entry.path, content: data.content });
+        return;
+      }
+    } catch {}
+    onOpenModule('file-manager');
+  };
+
+  const handleModalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!desktopModal) return;
+    try {
+      if (desktopModal.type === 'new-file') {
+        const cleanName = desktopModal.name.trim();
+        if (!cleanName) return;
+        const fullPath = `${desktopFsPath || 'data/desktop'}/${cleanName}`;
+        const res = await fetch('/api/os/fs/write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: fullPath, content: desktopModal.content })
+        });
+        const data = await res.json();
+        if (data?.success) {
+          refreshDesktopFiles();
+          showDesktopToast(`Created file "${cleanName}" on Desktop.`);
+          setDesktopModal(null);
+        }
+      } else if (desktopModal.type === 'new-folder') {
+        const cleanName = desktopModal.name.trim();
+        if (!cleanName) return;
+        const fullPath = `${desktopFsPath || 'data/desktop'}/${cleanName}`;
+        const res = await fetch('/api/os/fs/mkdir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: fullPath })
+        });
+        const data = await res.json();
+        if (data?.success) {
+          refreshDesktopFiles();
+          showDesktopToast(`Created folder "${cleanName}" on Desktop.`);
+          setDesktopModal(null);
+        }
+      } else if (desktopModal.type === 'new-shortcut') {
+        const cleanLabel = desktopModal.label.trim();
+        const cleanTarget = desktopModal.target.trim();
+        if (!cleanLabel || !cleanTarget) return;
+        const next = addCustomDesktopShortcut({
+          label: cleanLabel,
+          subtitle:
+            desktopModal.kind === 'steam'
+              ? `Steam #${cleanTarget}`
+              : desktopModal.kind === 'url'
+              ? cleanTarget.replace(/^https?:\/\//i, '').slice(0, 22)
+              : `$ ${cleanTarget.slice(0, 18)}`,
+          kind: desktopModal.kind,
+          target: cleanTarget,
+          accent:
+            desktopModal.kind === 'steam'
+              ? 'text-sky-400'
+              : desktopModal.kind === 'command'
+              ? 'text-emerald-400'
+              : 'text-amber-400',
+          badge: desktopModal.kind === 'steam' ? 'STEAM' : desktopModal.kind === 'command' ? 'CMD' : 'WEB'
+        });
+        setCustomProfile(next);
+        showDesktopToast(`Pinned "${cleanLabel}" to Desktop.`);
+        setDesktopModal(null);
+      } else if (desktopModal.type === 'rename') {
+        const cleanVal = desktopModal.value.trim();
+        if (!cleanVal) return;
+        if (desktopModal.targetKind === 'fs' && desktopModal.oldPath) {
+          const parent = desktopModal.oldPath.slice(0, desktopModal.oldPath.lastIndexOf('/'));
+          const newPath = `${parent}/${cleanVal}`;
+          await fetch('/api/os/fs/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ oldPath: desktopModal.oldPath, newPath })
+          });
+          refreshDesktopFiles();
+          showDesktopToast(`Renamed to "${cleanVal}".`);
+        } else {
+          const next = renameDesktopIcon(desktopModal.id, cleanVal);
+          setCustomProfile(next);
+          showDesktopToast(`Renamed desktop icon to "${cleanVal}".`);
+        }
+        setDesktopModal(null);
+      } else if (desktopModal.type === 'edit-file') {
+        setDesktopModal({ ...desktopModal, saving: true });
+        await fetch('/api/os/fs/write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: desktopModal.path, content: desktopModal.content })
+        });
+        refreshDesktopFiles();
+        showDesktopToast(`Saved "${desktopModal.name}" to disk.`);
+        setDesktopModal(null);
+      }
+    } catch (err: any) {
+      showDesktopToast(`Action failed: ${err?.message || 'Error'}`);
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    openContextMenuAt(e, undefined);
   };
 
   const handleDesktopCommandSubmit = (e: React.FormEvent) => {
@@ -758,8 +995,14 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
     }
   };
 
+  const hiddenSet = new Set(customProfile.hiddenDesktopIcons || []);
+  const visibleBuiltinShortcuts = DESKTOP_SHORTCUTS.filter((item) => !hiddenSet.has(item.id));
+  const visibleInstalledApps = installedDesktopApps.filter((app) => !hiddenSet.has(`app-${app.id}`));
+  const customShortcuts = customProfile.customDesktopShortcuts || [];
+
   return (
     <div
+      data-sovereign-desktop-root="true"
       onContextMenu={handleContextMenu}
       onClick={(e) => {
         if (e.target === e.currentTarget) setSelectedIcon(null);
@@ -801,44 +1044,66 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
               : 'sm:auto-cols-[106px] gap-2 sm:gap-2.5'
           } w-full sm:w-fit`}
         >
-          {DESKTOP_SHORTCUTS.map((item) => {
+          {visibleBuiltinShortcuts.map((item) => {
             const Icon = item.icon;
             const isRunning = openModules.includes(item.id);
             const isSelected = selectedIcon === item.id;
+            const displayLabel = customProfile.customIconLabels?.[item.id] || item.label;
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setSelectedIcon(item.id);
-                  onOpenModule(item.id);
-                }}
-                className={`group p-2 rounded-xl border flex flex-col items-center text-center gap-1.5 transition-colors cursor-pointer ${
-                  isSelected
-                    ? 'bg-sky-500/15 border-sky-400/50'
-                    : 'border-transparent hover:bg-white/[0.06] hover:border-white/10 active:bg-white/[0.1]'
-                }`}
-              >
-                <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-900/90 border border-zinc-800 group-hover:border-amber-500/40 shadow-lg flex items-center justify-center">
-                  <Icon className={`w-5 h-5 ${item.accent}`} />
-                  {isRunning && (
-                    <span className="absolute -bottom-1 w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]" />
-                  )}
-                </div>
-                <span className="text-[11px] font-semibold text-zinc-100 leading-tight drop-shadow line-clamp-1">
-                  {item.label}
-                </span>
-                <span className="text-[9px] font-mono text-zinc-500 leading-none line-clamp-1">
-                  {item.subtitle}
-                </span>
-              </button>
+              <div key={item.id} className="relative group">
+                <button
+                  type="button"
+                  onContextMenu={(e) =>
+                    openContextMenuAt(e, { kind: 'builtin', id: item.id, label: displayLabel })
+                  }
+                  onClick={() => {
+                    setSelectedIcon(item.id);
+                    if (!editIconsMode) onOpenModule(item.id);
+                  }}
+                  className={`w-full p-2 rounded-xl border flex flex-col items-center text-center gap-1.5 transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-sky-500/15 border-sky-400/50'
+                      : 'border-transparent hover:bg-white/[0.06] hover:border-white/10 active:bg-white/[0.1]'
+                  }`}
+                >
+                  <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-900/90 border border-zinc-800 group-hover:border-amber-500/40 shadow-lg flex items-center justify-center">
+                    <Icon className={`w-5 h-5 ${item.accent}`} />
+                    {isRunning && (
+                      <span className="absolute -bottom-1 w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]" />
+                    )}
+                  </div>
+                  <span className="text-[11px] font-semibold text-zinc-100 leading-tight drop-shadow line-clamp-1">
+                    {displayLabel}
+                  </span>
+                  <span className="text-[9px] font-mono text-zinc-500 leading-none line-clamp-1">
+                    {item.subtitle}
+                  </span>
+                </button>
+                {editIconsMode && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCustomProfile(hideDesktopIcon(item.id));
+                      showDesktopToast(`Removed "${displayLabel}" from Desktop (restore anytime in right-click or Settings).`);
+                    }}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg cursor-pointer z-10"
+                    title="Delete / Remove Icon from Desktop"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             );
           })}
 
           {/* Installed Sovereign OS Software & Games Shortcuts (Steam, Discord, Arcade, OBS, custom packages) */}
-          {installedDesktopApps.map((app) => {
+          {visibleInstalledApps.map((app) => {
             const iconKey = `app-${app.id}`;
             const isSelected = selectedIcon === iconKey;
+            const displayLabel =
+              customProfile.customIconLabels?.[iconKey] ||
+              app.name.replace(' (Sovereign OS Edition)', '').replace(' (WebRTC Edition)', '');
             const AppIcon =
               app.iconType === 'discord'
                 ? MessageSquare
@@ -865,45 +1130,204 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
                 : 'text-emerald-400';
 
             return (
-              <button
-                key={iconKey}
-                type="button"
-                onClick={() => {
-                  setSelectedIcon(iconKey);
-                  if (app.launchMode === 'os_module') {
-                    onOpenModule(app.launchTarget as ModuleType);
-                  } else {
-                    onOpenModule('universal-installer');
-                    setTimeout(() => {
-                      window.dispatchEvent(
-                        new CustomEvent('sovereign_launch_installed_app', {
-                          detail: { appId: app.id }
-                        })
-                      );
-                    }, 120);
+              <div key={iconKey} className="relative group">
+                <button
+                  type="button"
+                  onContextMenu={(e) =>
+                    openContextMenuAt(e, { kind: 'installed', id: iconKey, label: displayLabel, app })
                   }
-                }}
-                className={`group p-2 rounded-xl border flex flex-col items-center text-center gap-1.5 transition-colors cursor-pointer ${
-                  isSelected
-                    ? 'bg-sky-500/15 border-sky-400/50'
-                    : 'border-transparent hover:bg-white/[0.06] hover:border-white/10 active:bg-white/[0.1]'
-                }`}
-              >
-                <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-900/90 border border-zinc-800 group-hover:border-emerald-500/50 shadow-lg flex items-center justify-center">
-                  <AppIcon className={`w-5 h-5 ${accentClass}`} />
-                  <span className="absolute -top-1 -right-1 px-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-[8px] font-bold text-emerald-300">
-                    APP
+                  onClick={() => {
+                    setSelectedIcon(iconKey);
+                    if (editIconsMode) return;
+                    if (app.launchMode === 'os_module') {
+                      onOpenModule(app.launchTarget as ModuleType);
+                    } else {
+                      onOpenModule('universal-installer');
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent('sovereign_launch_installed_app', {
+                            detail: { appId: app.id }
+                          })
+                        );
+                      }, 120);
+                    }
+                  }}
+                  className={`w-full p-2 rounded-xl border flex flex-col items-center text-center gap-1.5 transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-sky-500/15 border-sky-400/50'
+                      : 'border-transparent hover:bg-white/[0.06] hover:border-white/10 active:bg-white/[0.1]'
+                  }`}
+                >
+                  <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-900/90 border border-zinc-800 group-hover:border-emerald-500/50 shadow-lg flex items-center justify-center">
+                    <AppIcon className={`w-5 h-5 ${accentClass}`} />
+                    <span className="absolute -top-1 -right-1 px-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-[8px] font-bold text-emerald-300">
+                      APP
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-semibold text-zinc-100 leading-tight drop-shadow line-clamp-1">
+                    {displayLabel}
                   </span>
-                </div>
-                <span className="text-[11px] font-semibold text-zinc-100 leading-tight drop-shadow line-clamp-1">
-                  {app.name.replace(' (Sovereign OS Edition)', '').replace(' (WebRTC Edition)', '')}
-                </span>
-                <span className="text-[9px] font-mono text-zinc-500 leading-none line-clamp-1">
-                  {app.publisher}
-                </span>
-              </button>
+                  <span className="text-[9px] font-mono text-zinc-500 leading-none line-clamp-1">
+                    {app.publisher}
+                  </span>
+                </button>
+                {editIconsMode && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUninstallProgram(app);
+                    }}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg cursor-pointer z-10"
+                    title={`Uninstall ${displayLabel}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             );
           })}
+
+          {/* User Custom Desktop Shortcuts (Pinned Steam Games, Web URLs, Shell Commands) */}
+          {customShortcuts.map((sc) => {
+            const isSelected = selectedIcon === sc.id;
+            const displayLabel = customProfile.customIconLabels?.[sc.id] || sc.label;
+            const ScIcon =
+              sc.kind === 'steam' ? Gamepad2 : sc.kind === 'command' ? Terminal : sc.kind === 'url' ? Globe : Link2;
+            return (
+              <div key={sc.id} className="relative group">
+                <button
+                  type="button"
+                  onContextMenu={(e) =>
+                    openContextMenuAt(e, { kind: 'custom', id: sc.id, label: displayLabel, shortcut: sc })
+                  }
+                  onClick={() => {
+                    setSelectedIcon(sc.id);
+                    if (editIconsMode) return;
+                    if (sc.kind === 'steam') {
+                      onOpenModule('universal-installer');
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent('sovereign_launch_steam_game', {
+                            detail: { appId: Number(sc.target), name: displayLabel }
+                          })
+                        );
+                      }, 120);
+                    } else if (sc.kind === 'url') {
+                      window.dispatchEvent(
+                        new CustomEvent('sovereign_os_command', {
+                          detail: { action: 'browser_navigate', targetModule: 'browser', url: sc.target }
+                        })
+                      );
+                    } else if (sc.kind === 'command') {
+                      onOpenModule('terminal');
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent('sovereign_os_command', {
+                            detail: { action: 'terminal_exec', targetModule: 'terminal', command: sc.target }
+                          })
+                        );
+                      }, 120);
+                    } else {
+                      onOpenModule(sc.target as ModuleType);
+                    }
+                  }}
+                  className={`w-full p-2 rounded-xl border flex flex-col items-center text-center gap-1.5 transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-sky-500/15 border-sky-400/50'
+                      : 'border-transparent hover:bg-white/[0.06] hover:border-white/10 active:bg-white/[0.1]'
+                  }`}
+                >
+                  <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-900/90 border border-sky-500/40 shadow-lg flex items-center justify-center">
+                    <ScIcon className={`w-5 h-5 ${sc.accent || 'text-sky-400'}`} />
+                    {sc.badge && (
+                      <span className="absolute -top-1 -right-1 px-1 rounded bg-sky-500/25 border border-sky-400/50 text-[7px] font-bold text-sky-200">
+                        {sc.badge}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-semibold text-zinc-100 leading-tight drop-shadow line-clamp-1">
+                    {displayLabel}
+                  </span>
+                  <span className="text-[9px] font-mono text-zinc-400 leading-none line-clamp-1">
+                    {sc.subtitle}
+                  </span>
+                </button>
+                {editIconsMode && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCustomProfile(removeCustomDesktopShortcut(sc.id));
+                      showDesktopToast(`Deleted shortcut "${displayLabel}".`);
+                    }}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg cursor-pointer z-10"
+                    title="Delete Shortcut"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Real Sovereign Desktop Files & Folders on Host Disk */}
+          {customProfile.showDesktopFiles !== false &&
+            desktopFsEntries.map((entry) => {
+              const fsKey = `fs-${entry.name}`;
+              const isSelected = selectedIcon === fsKey;
+              return (
+                <div key={fsKey} className="relative group">
+                  <button
+                    type="button"
+                    onContextMenu={(e) =>
+                      openContextMenuAt(e, { kind: 'fs', id: fsKey, label: entry.name, entry })
+                    }
+                    onClick={() => {
+                      setSelectedIcon(fsKey);
+                      if (!editIconsMode) handleOpenDesktopFsEntry(entry);
+                    }}
+                    className={`w-full p-2 rounded-xl border flex flex-col items-center text-center gap-1.5 transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-500/15 border-amber-400/50'
+                        : 'border-transparent hover:bg-white/[0.06] hover:border-white/10 active:bg-white/[0.1]'
+                    }`}
+                  >
+                    <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-900/90 border border-amber-500/35 shadow-lg flex items-center justify-center">
+                      {entry.type === 'dir' ? (
+                        <Folder className="w-5 h-5 text-amber-300" />
+                      ) : (
+                        <FileText className="w-5 h-5 text-cyan-300" />
+                      )}
+                      <span className="absolute -top-1 -right-1 px-1 rounded bg-zinc-950 border border-zinc-700 text-[7px] font-mono text-zinc-300">
+                        {entry.type === 'dir' ? 'DIR' : 'FILE'}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-zinc-100 leading-tight drop-shadow line-clamp-1">
+                      {entry.name}
+                    </span>
+                    <span className="text-[9px] font-mono text-zinc-400 leading-none line-clamp-1">
+                      {entry.type === 'dir'
+                        ? 'Desktop Folder'
+                        : `${Math.max(1, Math.round(entry.sizeBytes / 1024))} KB`}
+                    </span>
+                  </button>
+                  {editIconsMode && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteDesktopFsEntry(entry);
+                      }}
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg cursor-pointer z-10"
+                      title={`Delete ${entry.name} from disk`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
         </div>
 
         {/* Right-Side Live Desktop Telemetry & Customization HUD Widgets */}
@@ -994,13 +1418,22 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
                   <Wallet className="w-3.5 h-3.5 text-emerald-400" />
                   <span>DUAL-VAULT CRYPTO HUD</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onOpenModule('crypto-wallet')}
-                  className="text-[10px] text-emerald-300 hover:underline cursor-pointer"
-                >
-                  Open Vaults
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenModule('grant-hunter')}
+                    className="text-[10px] text-amber-300 hover:underline cursor-pointer"
+                  >
+                    Grants (0%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenModule('crypto-wallet')}
+                    className="text-[10px] text-emerald-300 hover:underline cursor-pointer"
+                  >
+                    Open Vaults
+                  </button>
+                </div>
               </div>
               <div className="flex items-center justify-between text-[10px]">
                 <span className="text-zinc-400">Personal Vault:</span>
@@ -1145,12 +1578,62 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
           </div>
         </div>
 
-        {/* Desktop Right-Bottom Quick Window Manager Bar (sm+) */}
+        {/* Desktop Right-Bottom Quick Customization & Window Manager Bar (sm+) */}
         <div className="hidden sm:flex items-center gap-1.5 bg-zinc-900/85 backdrop-blur-md border border-zinc-800 rounded-xl p-1.5 shadow-xl self-end shrink-0">
           <button
             type="button"
+            onClick={() => setDesktopModal({ type: 'new-file', name: 'notes.txt', content: '' })}
+            className="px-2 py-1 rounded-lg hover:bg-zinc-800 text-[11px] text-cyan-300 flex items-center gap-1 cursor-pointer"
+            title="Create New File on Desktop"
+          >
+            <FilePlus2 className="w-3.5 h-3.5" />
+            <span>+ File</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDesktopModal({ type: 'new-folder', name: 'New Folder' })}
+            className="px-2 py-1 rounded-lg hover:bg-zinc-800 text-[11px] text-amber-300 flex items-center gap-1 cursor-pointer"
+            title="Create New Folder on Desktop"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+            <span>+ Folder</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditIconsMode((v) => !v)}
+            className={`px-2 py-1 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer ${
+              editIconsMode
+                ? 'bg-rose-500/25 text-rose-200 border border-rose-400/50 font-bold'
+                : 'hover:bg-zinc-800 text-zinc-200'
+            }`}
+            title="Edit / Delete Desktop Icons & Uninstall Programs"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-rose-400" />
+            <span>{editIconsMode ? 'Done Editing' : 'Edit Icons'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const next = saveOSCustomizationProfile({
+                showTouchControllerOverlay: !customProfile.showTouchControllerOverlay
+              });
+              setCustomProfile(next);
+            }}
+            className={`px-2 py-1 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer ${
+              customProfile.showTouchControllerOverlay
+                ? 'bg-sky-500/25 text-sky-200 border border-sky-400/50 font-bold'
+                : 'hover:bg-zinc-800 text-emerald-300'
+            }`}
+            title="Toggle Multi-Touch Virtual Gamepad Overlay"
+          >
+            <Gamepad2 className="w-3.5 h-3.5" />
+            <span>Pad</span>
+          </button>
+          <div className="h-4 w-px bg-zinc-700" />
+          <button
+            type="button"
             onClick={onTileWindows}
-            className="px-2.5 py-1 rounded-lg hover:bg-zinc-800 text-[11px] text-zinc-200 flex items-center gap-1.5 cursor-pointer"
+            className="px-2 py-1 rounded-lg hover:bg-zinc-800 text-[11px] text-zinc-200 flex items-center gap-1 cursor-pointer"
             title="Tile Open Windows"
           >
             <Grid2x2 className="w-3.5 h-3.5 text-sky-400" />
@@ -1159,7 +1642,7 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
           <button
             type="button"
             onClick={onCascadeWindows}
-            className="px-2.5 py-1 rounded-lg hover:bg-zinc-800 text-[11px] text-zinc-200 flex items-center gap-1.5 cursor-pointer"
+            className="px-2 py-1 rounded-lg hover:bg-zinc-800 text-[11px] text-zinc-200 flex items-center gap-1 cursor-pointer"
             title="Cascade Open Windows"
           >
             <Layers className="w-3.5 h-3.5 text-amber-400" />
@@ -1168,7 +1651,7 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
           <button
             type="button"
             onClick={onMinimizeAll}
-            className="px-2.5 py-1 rounded-lg hover:bg-zinc-800 text-[11px] text-zinc-200 flex items-center gap-1.5 cursor-pointer"
+            className="px-2 py-1 rounded-lg hover:bg-zinc-800 text-[11px] text-zinc-200 flex items-center gap-1 cursor-pointer"
             title="Minimize All (Show Desktop)"
           >
             <EyeOff className="w-3.5 h-3.5 text-zinc-400" />
@@ -1177,150 +1660,430 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
           <button
             type="button"
             onClick={onSwitchWorkspaceMode}
-            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] text-sky-300 font-semibold cursor-pointer"
+            className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] text-sky-300 font-semibold cursor-pointer"
             title="Switch to Split Workspace Mode"
           >
-            Split Mode
+            Split
           </button>
         </div>
       </div>
 
-      {/* Windows-Style Desktop Right-Click Context Menu */}
+      {/* Desktop Toast Notification */}
+      {desktopToast && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-zinc-950/95 border border-amber-400/50 text-xs font-semibold text-amber-200 shadow-2xl">
+          {desktopToast}
+        </div>
+      )}
+
+      {/* Sleek Inline Desktop Modals (New File / New Folder / New Shortcut / Rename / Quick File Editor) */}
+      {desktopModal && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <form
+            onSubmit={handleModalSubmit}
+            className="w-full max-w-md rounded-2xl bg-zinc-950 border border-zinc-700 shadow-2xl p-5 space-y-3 text-xs text-zinc-100"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-amber-300">
+                {desktopModal.type === 'new-file'
+                  ? 'Create New File on Desktop'
+                  : desktopModal.type === 'new-folder'
+                  ? 'Create New Folder on Desktop'
+                  : desktopModal.type === 'new-shortcut'
+                  ? 'Pin Custom Shortcut to Desktop'
+                  : desktopModal.type === 'rename'
+                  ? 'Rename Desktop Item'
+                  : `Edit Desktop File: ${desktopModal.name}`}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDesktopModal(null)}
+                className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {desktopModal.type === 'new-file' && (
+              <>
+                <input
+                  type="text"
+                  autoFocus
+                  required
+                  value={desktopModal.name}
+                  onChange={(e) => setDesktopModal({ ...desktopModal, name: e.target.value })}
+                  placeholder="Filename (e.g. notes.md, script.sh, config.json)"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100"
+                />
+                <textarea
+                  rows={5}
+                  value={desktopModal.content}
+                  onChange={(e) => setDesktopModal({ ...desktopModal, content: e.target.value })}
+                  placeholder="Optional initial file contents..."
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-3 font-mono text-[11px] text-emerald-300"
+                />
+              </>
+            )}
+
+            {desktopModal.type === 'new-folder' && (
+              <input
+                type="text"
+                autoFocus
+                required
+                value={desktopModal.name}
+                onChange={(e) => setDesktopModal({ ...desktopModal, name: e.target.value })}
+                placeholder="Folder name (e.g. Projects, Games, Receipts)"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100"
+              />
+            )}
+
+            {desktopModal.type === 'new-shortcut' && (
+              <div className="space-y-2.5">
+                <select
+                  value={desktopModal.kind}
+                  onChange={(e) => setDesktopModal({ ...desktopModal, kind: e.target.value as any })}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100"
+                >
+                  <option value="steam">Steam Video Game (by Steam AppID)</option>
+                  <option value="url">Website / Web App URL (Chrome)</option>
+                  <option value="command">Root Shell / CLI Command</option>
+                </select>
+                <input
+                  type="text"
+                  required
+                  value={desktopModal.label}
+                  onChange={(e) => setDesktopModal({ ...desktopModal, label: e.target.value })}
+                  placeholder="Shortcut Label (e.g. Counter-Strike 2, YouTube, System Monitor)"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100"
+                />
+                <input
+                  type="text"
+                  required
+                  value={desktopModal.target}
+                  onChange={(e) => setDesktopModal({ ...desktopModal, target: e.target.value })}
+                  placeholder={
+                    desktopModal.kind === 'steam'
+                      ? 'Steam AppID (e.g. 730 for CS2, 1245620 for Elden Ring)'
+                      : desktopModal.kind === 'url'
+                      ? 'https://...'
+                      : 'Shell command (e.g. htop || uname -a)'
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 font-mono"
+                />
+              </div>
+            )}
+
+            {desktopModal.type === 'rename' && (
+              <input
+                type="text"
+                autoFocus
+                required
+                value={desktopModal.value}
+                onChange={(e) => setDesktopModal({ ...desktopModal, value: e.target.value })}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100"
+              />
+            )}
+
+            {desktopModal.type === 'edit-file' && (
+              <textarea
+                rows={10}
+                value={desktopModal.content}
+                onChange={(e) => setDesktopModal({ ...desktopModal, content: e.target.value })}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-3 font-mono text-[11px] text-emerald-300"
+              />
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setDesktopModal(null)}
+                className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>
+                  {desktopModal.type === 'edit-file'
+                    ? 'Save File'
+                    : desktopModal.type === 'rename'
+                    ? 'Rename'
+                    : 'Create'}
+                </span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Beyond-Windows Desktop & Icon Right-Click Context Menu */}
       {contextMenu && (
         <div
           onPointerDown={(e) => e.stopPropagation()}
           style={{ left: contextMenu.x, top: contextMenu.y }}
-          className="absolute z-50 w-56 rounded-xl bg-zinc-950/95 backdrop-blur-lg border border-zinc-700/90 shadow-2xl py-1.5 text-xs text-zinc-200"
+          className="absolute z-50 w-60 rounded-xl bg-zinc-950/95 backdrop-blur-lg border border-zinc-700/90 shadow-2xl py-1.5 text-xs text-zinc-200"
         >
-          {onOpenStartMenu && (
-            <button
-              type="button"
-              onClick={() => {
-                setContextMenu(null);
-                onOpenStartMenu();
-              }}
-              className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-            >
-              <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />
-              <span>Start Menu · All OS Apps</span>
-            </button>
+          {contextMenu.target ? (
+            <>
+              <div className="px-3 py-1 text-[10px] font-mono text-amber-300 truncate border-b border-zinc-800 mb-1">
+                {contextMenu.target.label}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const t = contextMenu.target!;
+                  setContextMenu(null);
+                  if (t.kind === 'builtin') onOpenModule(t.id as ModuleType);
+                  else if (t.kind === 'fs') handleOpenDesktopFsEntry(t.entry);
+                  else if (t.kind === 'installed') {
+                    if (t.app.launchMode === 'os_module') onOpenModule(t.app.launchTarget as ModuleType);
+                    else {
+                      onOpenModule('universal-installer');
+                      setTimeout(() => window.dispatchEvent(new CustomEvent('sovereign_launch_installed_app', { detail: { appId: t.app.id } })), 120);
+                    }
+                  } else if (t.kind === 'custom') {
+                    if (t.shortcut.kind === 'steam') {
+                      onOpenModule('universal-installer');
+                      setTimeout(() => window.dispatchEvent(new CustomEvent('sovereign_launch_steam_game', { detail: { appId: Number(t.shortcut.target), name: t.label } })), 120);
+                    } else if (t.shortcut.kind === 'url') {
+                      window.dispatchEvent(new CustomEvent('sovereign_os_command', { detail: { action: 'browser_navigate', targetModule: 'browser', url: t.shortcut.target } }));
+                    } else {
+                      onOpenModule('terminal');
+                    }
+                  }
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Open / Launch</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const t = contextMenu.target!;
+                  setContextMenu(null);
+                  setDesktopModal({
+                    type: 'rename',
+                    targetKind: t.kind,
+                    id: t.id,
+                    oldPath: t.kind === 'fs' ? t.entry.path : undefined,
+                    value: t.label
+                  });
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Pencil className="w-3.5 h-3.5 text-sky-400" />
+                <span>Rename</span>
+              </button>
+              <div className="my-1 border-t border-zinc-800" />
+              {contextMenu.target.kind === 'installed' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const t = contextMenu.target!;
+                    setContextMenu(null);
+                    if (t.kind === 'installed') handleUninstallProgram(t.app);
+                  }}
+                  className="w-full px-3 py-1.5 text-left hover:bg-rose-500/20 text-rose-300 flex items-center gap-2.5 cursor-pointer font-semibold"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Uninstall Program</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const t = contextMenu.target!;
+                  setContextMenu(null);
+                  if (t.kind === 'builtin' || t.kind === 'installed') {
+                    setCustomProfile(hideDesktopIcon(t.id));
+                    showDesktopToast(`Removed "${t.label}" icon from Desktop.`);
+                  } else if (t.kind === 'custom') {
+                    setCustomProfile(removeCustomDesktopShortcut(t.id));
+                    showDesktopToast(`Deleted shortcut "${t.label}".`);
+                  } else if (t.kind === 'fs') {
+                    handleDeleteDesktopFsEntry(t.entry);
+                  }
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-rose-500/20 text-rose-300 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>
+                  {contextMenu.target.kind === 'fs'
+                    ? 'Delete from Disk'
+                    : 'Delete / Remove Icon'}
+                </span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  setDesktopModal({ type: 'new-file', name: 'untitled.txt', content: '' });
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 text-cyan-300 cursor-pointer"
+              >
+                <FilePlus2 className="w-3.5 h-3.5" />
+                <span>New File on Desktop...</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  setDesktopModal({ type: 'new-folder', name: 'New Folder' });
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 text-amber-300 cursor-pointer"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+                <span>New Folder on Desktop...</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  setDesktopModal({ type: 'new-shortcut', label: '', kind: 'steam', target: '' });
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 text-sky-300 cursor-pointer"
+              >
+                <Gamepad2 className="w-3.5 h-3.5" />
+                <span>New Steam / Web / CLI Shortcut...</span>
+              </button>
+              <div className="my-1 border-t border-zinc-800" />
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  setEditIconsMode((v) => !v);
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-rose-400" />
+                <span>{editIconsMode ? 'Exit Icon Edit Mode' : 'Edit / Delete Desktop Icons'}</span>
+              </button>
+              {(customProfile.hiddenDesktopIcons?.length || 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setContextMenu(null);
+                    setCustomProfile(restoreAllDesktopIcons());
+                    showDesktopToast('Restored all hidden desktop icons.');
+                  }}
+                  className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 text-emerald-300 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore Hidden Icons ({customProfile.hiddenDesktopIcons.length})</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  const next = saveOSCustomizationProfile({
+                    showTouchControllerOverlay: !customProfile.showTouchControllerOverlay
+                  });
+                  setCustomProfile(next);
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 text-emerald-300 cursor-pointer"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>
+                  {customProfile.showTouchControllerOverlay
+                    ? 'Hide Touch Virtual Controller'
+                    : 'Show Touch Virtual Controller'}
+                </span>
+              </button>
+              <div className="my-1 border-t border-zinc-800" />
+              {onOpenStartMenu && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setContextMenu(null);
+                    onOpenStartMenu();
+                  }}
+                  className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Start Menu · All OS Apps</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  onOpenModule('universal-installer');
+                  setTimeout(() => window.dispatchEvent(new CustomEvent('sovereign_open_installer_tab', { detail: { tab: 'controllers' } })), 120);
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Gamepad2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Steam Games &amp; All Controllers</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  onOpenModule('file-manager');
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Folder className="w-3.5 h-3.5 text-amber-300" />
+                <span>Open This PC (All Host Files)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  onOpenModule('terminal');
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Open Root Terminal (UID 0)</span>
+              </button>
+              <div className="my-1 border-t border-zinc-800" />
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  onTileWindows();
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Grid2x2 className="w-3.5 h-3.5 text-sky-300" />
+                <span>Tile Open Windows</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  onMinimizeAll();
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <EyeOff className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Show Desktop</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextMenu(null);
+                  onOpenModule('os-settings');
+                }}
+                className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Settings className="w-3.5 h-3.5 text-zinc-300" />
+                <span>Hyper-Customize OS &amp; Wallpaper</span>
+              </button>
+            </>
           )}
-          {onToggleDetachChat && (
-            <button
-              type="button"
-              onClick={() => {
-                setContextMenu(null);
-                onToggleDetachChat();
-              }}
-              className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-            >
-              <PictureInPicture2 className="w-3.5 h-3.5 text-amber-300" />
-              <span>{isChatDetached ? 'Re-Dock Orchestrator Chat' : 'Detach Floating Chat PiP'}</span>
-            </button>
-          )}
-          <div className="my-1 border-t border-zinc-800" />
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              onOpenModule('browser');
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-          >
-            <Globe className="w-3.5 h-3.5 text-sky-400" />
-            <span>Open Google Chrome</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              onOpenModule('file-manager');
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-          >
-            <Folder className="w-3.5 h-3.5 text-amber-300" />
-            <span>Open This PC (Files)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              onOpenModule('terminal');
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-          >
-            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Open Root Terminal (UID 0)</span>
-          </button>
-          <div className="my-1 border-t border-zinc-800" />
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              onTileWindows();
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-          >
-            <Grid2x2 className="w-3.5 h-3.5 text-sky-300" />
-            <span>Tile Open Windows</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              onCascadeWindows();
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-          >
-            <Layers className="w-3.5 h-3.5 text-amber-300" />
-            <span>Cascade Windows</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              onMinimizeAll();
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-          >
-            <EyeOff className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Show Desktop</span>
-          </button>
-          <div className="my-1 border-t border-zinc-800" />
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              onOpenModule('os-settings');
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-          >
-            <Settings className="w-3.5 h-3.5 text-zinc-300" />
-            <span>Personalize & OS Settings</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              onSwitchWorkspaceMode();
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-sky-400" />
-            <span>Switch to Split Workspace</span>
-          </button>
-          <div className="my-1 border-t border-zinc-800" />
-          <button
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              window.dispatchEvent(new CustomEvent('open-jhammerz-license'));
-            }}
-            className="w-full px-3 py-1.5 text-left hover:bg-zinc-800 flex items-center gap-2.5 text-amber-300 cursor-pointer"
-          >
-            <Shield className="w-3.5 h-3.5 text-amber-400" />
-            <span>MIT & JHammerZ License Charter</span>
-          </button>
         </div>
       )}
     </div>

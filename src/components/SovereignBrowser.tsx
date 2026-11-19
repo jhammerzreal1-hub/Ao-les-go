@@ -171,7 +171,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
   const [tabs, setTabs] = useState<BrowserTab[]>([
     {
       id: 'tab-1',
-      title: 'Google',
+      title: 'Open Web',
       url: 'https://www.google.com',
       history: ['https://www.google.com'],
       historyIndex: 0,
@@ -183,7 +183,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     },
     {
       id: 'tab-2',
-      title: 'YouTube HD Stream & Audio',
+      title: 'YouTube',
       url: 'https://www.youtube.com',
       history: ['https://www.youtube.com'],
       historyIndex: 0,
@@ -195,13 +195,13 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     },
     {
       id: 'tab-3',
-      title: 'JHammerZ Music & Video Deck',
-      url: 'https://jhammerz.github.io/music.html',
-      history: ['https://jhammerz.github.io/music.html'],
+      title: 'Steam Store',
+      url: 'https://store.steampowered.com',
+      history: ['https://store.steampowered.com'],
       historyIndex: 0,
       isLoading: false,
       isMuted: false,
-      hasAudio: true,
+      hasAudio: false,
       zoom: 100,
       viewMode: 'viewport'
     }
@@ -216,23 +216,26 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
   const [isOmniboxFocused, setIsOmniboxFocused] = useState<boolean>(false);
   const omniboxRef = useRef<HTMLDivElement>(null);
   const [showOmniboxSuggestions, setShowOmniboxSuggestions] = useState<boolean>(false);
-  const [selectedSearchEngine, setSelectedSearchEngine] = useState<'google' | 'ddg' | 'wiki' | 'hn' | 'yt'>('google');
+  const [selectedSearchEngine, setSelectedSearchEngine] = useState<'google' | 'bing' | 'news' | 'yt' | 'ddg' | 'wiki'>('google');
+  const [renderEngineMode, setRenderEngineMode] = useState<'proxy' | 'direct'>('proxy');
 
-  // Bookmarks Bar State
+  // Bookmarks Bar State (Full Open Internet)
   const [showBookmarksBar, setShowBookmarksBar] = useState<boolean>(true);
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([
-    { id: 'bm-1', title: 'Google', url: 'https://www.google.com', folder: 'Search' },
-    { id: 'bm-2', title: 'YouTube Cinema', url: 'https://www.youtube.com', folder: 'Media' },
-    { id: 'bm-3', title: 'JHammerZ Music Deck', url: 'https://jhammerz.github.io/music.html', folder: 'Media' },
-    { id: 'bm-4', title: 'Wikipedia AI', url: 'https://en.wikipedia.org/wiki/Artificial_intelligence', folder: 'Intel' },
-    { id: 'bm-5', title: 'NIST NVD CVE Database', url: 'https://nvd.nist.gov/vuln/search', folder: 'Security' },
-    { id: 'bm-6', title: 'VirusTotal Intelligence', url: 'https://www.virustotal.com', folder: 'Security' },
-    { id: 'bm-7', title: 'Shodan Recon Engine', url: 'https://www.shodan.io', folder: 'Security' },
-    { id: 'bm-8', title: 'Exploit Database', url: 'https://www.exploit-db.com', folder: 'Security' },
-    { id: 'bm-9', title: 'DEFCON Cyber Radio', url: 'https://ice1.somafm.com/defcon-128-mp3', folder: 'Media' },
-    { id: 'bm-10', title: 'HackerNews Wire', url: 'https://news.ycombinator.com', folder: 'Intel' },
-    { id: 'bm-11', title: 'Mail.tm Quantum Web', url: 'https://mail.tm', folder: 'Mail' },
-    { id: 'bm-12', title: 'System Proof Record', url: 'https://doi.org/Local-System-Integrity-Proof', folder: 'Sovereign' }
+    { id: 'bm-1', title: 'Open Web', url: 'https://www.google.com', folder: 'Web' },
+    { id: 'bm-2', title: 'Bing Live', url: 'https://www.bing.com', folder: 'Web' },
+    { id: 'bm-3', title: 'YouTube', url: 'https://www.youtube.com', folder: 'Media' },
+    { id: 'bm-4', title: 'Reddit', url: 'https://www.reddit.com', folder: 'Social' },
+    { id: 'bm-5', title: 'Steam Store', url: 'https://store.steampowered.com', folder: 'Gaming' },
+    { id: 'bm-6', title: 'CNN News', url: 'https://www.cnn.com', folder: 'News' },
+    { id: 'bm-7', title: 'BBC World', url: 'https://www.bbc.com', folder: 'News' },
+    { id: 'bm-8', title: 'Yahoo', url: 'https://www.yahoo.com', folder: 'Web' },
+    { id: 'bm-9', title: 'ESPN', url: 'https://www.espn.com', folder: 'Sports' },
+    { id: 'bm-10', title: 'Twitch', url: 'https://www.twitch.tv', folder: 'Media' },
+    { id: 'bm-11', title: 'Amazon', url: 'https://www.amazon.com', folder: 'Shopping' },
+    { id: 'bm-12', title: 'Wikipedia', url: 'https://www.wikipedia.org', folder: 'Reference' },
+    { id: 'bm-13', title: 'Grants.gov', url: 'https://www.grants.gov', folder: 'Funding' },
+    { id: 'bm-14', title: 'GitHub', url: 'https://github.com', folder: 'Dev' }
   ]);
 
   // Browsing History State
@@ -379,8 +382,8 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     }
   };
 
-  // Search Engine State (0 Tokens)
-  const [searchQuery, setSearchQuery] = useState<string>('JHammerZ Aurelius orchestrator zero volatility');
+  // Search Engine State (Full Open Internet)
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [searchMeta, setSearchMeta] = useState<any>(null);
@@ -626,15 +629,15 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     const looksLikeDomain = /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+([a-zA-Z]{2,24})(:\d+)?(\/.*)?$/i.test(url);
 
     if (!isExplicitUrl && !isLocalhostOrIp && (!looksLikeDomain || url.includes(' '))) {
-      // Direct Web Search via chosen search engine like a real PC browser
-      if (selectedSearchEngine === 'google') {
-        url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+      // Direct Full Open-Internet Web Search via chosen engine
+      if (selectedSearchEngine === 'bing') {
+        url = `https://www.bing.com/search?q=${encodeURIComponent(url)}`;
+      } else if (selectedSearchEngine === 'news') {
+        url = `https://www.google.com/search?q=${encodeURIComponent(url)}&cat=news`;
       } else if (selectedSearchEngine === 'ddg') {
         url = `https://duckduckgo.com/?q=${encodeURIComponent(url)}`;
       } else if (selectedSearchEngine === 'wiki') {
         url = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(url)}`;
-      } else if (selectedSearchEngine === 'hn') {
-        url = `https://hn.algolia.com/?q=${encodeURIComponent(url)}`;
       } else if (selectedSearchEngine === 'yt') {
         url = `https://www.youtube.com/results?search_query=${encodeURIComponent(url)}`;
       } else {
@@ -687,7 +690,10 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     // Imperatively reload iframe if mounted
     if (iframeRef.current && url !== 'sovereign://newtab') {
       try {
-        iframeRef.current.src = `/api/browser/render?url=${encodeURIComponent(url)}&sid=${encodeURIComponent(sessionId)}`;
+        iframeRef.current.src =
+          renderEngineMode === 'direct'
+            ? url
+            : `/api/browser/render?url=${encodeURIComponent(url)}&sid=${encodeURIComponent(sessionId)}`;
       } catch {}
     }
 
@@ -748,7 +754,10 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
       try {
         iframeRef.current.contentWindow?.location?.reload();
       } catch {
-        iframeRef.current.src = `/api/browser/render?url=${encodeURIComponent(activeTab.url)}&sid=${encodeURIComponent(sessionId)}&_t=${Date.now()}`;
+        iframeRef.current.src =
+          renderEngineMode === 'direct'
+            ? activeTab.url
+            : `/api/browser/render?url=${encodeURIComponent(activeTab.url)}&sid=${encodeURIComponent(sessionId)}&_t=${Date.now()}`;
       }
     }
     fetchProxyData(activeTab.url);
@@ -1167,9 +1176,9 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
             <RefreshCw className={`w-4 h-4 ${activeTab.isLoading ? 'animate-spin text-sky-400' : ''}`} />
           </button>
           <button
-            onClick={() => navigateTo('https://jhammerz.github.io')}
+            onClick={() => navigateTo('https://www.google.com')}
             className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-300 transition-colors"
-            title="Home (JHammerZ Hub)"
+            title="Home (Open Web Search)"
           >
             <Home className="w-4 h-4" />
           </button>
@@ -1277,7 +1286,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                   <span>Default Search Engine:</span>
                 </span>
                 <div className="flex items-center gap-1">
-                  {(['google', 'ddg', 'wiki', 'hn', 'yt'] as const).map(engine => (
+                  {(['google', 'bing', 'news', 'yt', 'ddg', 'wiki'] as const).map(engine => (
                     <button
                       key={engine}
                       type="button"
@@ -1291,7 +1300,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                           : 'text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
-                      {engine}
+                      {engine === 'google' ? 'open-web' : engine}
                     </button>
                   ))}
                 </div>
@@ -1398,8 +1407,51 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
           )}
         </div>
 
-        {/* Toolbar Utility Controls: Copy, Reader Mode, Zoom */}
+        {/* Toolbar Utility Controls: Proxy/Direct Mode, Open External, Copy, Reader Mode, Zoom */}
         <div className="hidden sm:flex items-center gap-1 shrink-0">
+          {/* Proxy vs Direct Frame Mode Toggle */}
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 text-[10px] font-mono font-bold">
+            <button
+              type="button"
+              onClick={() => {
+                setRenderEngineMode('proxy');
+                setRefreshKey((k) => k + 1);
+              }}
+              className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                renderEngineMode === 'proxy' ? 'bg-emerald-500/20 text-emerald-300' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              title="Full Web Proxy (strips X-Frame-Options/CSP so almost any website loads inside OS)"
+            >
+              Proxy
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRenderEngineMode('direct');
+                setRefreshKey((k) => k + 1);
+              }}
+              className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                renderEngineMode === 'direct' ? 'bg-sky-500/20 text-sky-300' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              title="Direct Browser Frame (uses your direct IP for embed-friendly sites)"
+            >
+              Direct
+            </button>
+          </div>
+
+          {/* Open Current URL Directly in Native Browser Tab */}
+          {activeTab.url.startsWith('http') && (
+            <a
+              href={activeTab.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded-lg text-sky-400 hover:bg-zinc-800 hover:text-sky-300 transition-colors"
+              title="Open website directly in native browser tab (bypasses proxy & iframe restrictions)"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
+
           {/* Copy URL */}
           <button
             type="button"
@@ -1892,17 +1944,17 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
               </form>
             </div>
 
-            {/* Top Shortcuts / Speed Dial Grid */}
+            {/* Top Shortcuts / Full Open-Internet Speed Dial Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-2xl">
               {[
-                { title: 'Google Search', url: 'https://www.google.com', icon: '🔍', desc: 'World Wide Web' },
-                { title: 'YouTube Cinema', url: 'https://www.youtube.com', icon: '🎬', desc: 'HD Video & Audio' },
-                { title: 'Wikipedia', url: 'https://en.wikipedia.org/wiki/Artificial_intelligence', icon: '📚', desc: 'Encyclopedia' },
-                { title: 'GitHub Open Source', url: 'https://github.com', icon: '💻', desc: 'Code Repositories' },
-                { title: 'HackerNews Wire', url: 'https://news.ycombinator.com', icon: '📰', desc: 'Tech Intel Feed' },
-                { title: 'Reddit Communities', url: 'https://www.reddit.com', icon: '💬', desc: 'Discussions' },
-                { title: 'DEFCON Cyber Radio', url: 'https://ice1.somafm.com/defcon-128-mp3', icon: '🎵', desc: 'Music for Hackers' },
-                { title: 'JHammerZ Hub', url: 'https://jhammerz.github.io', icon: '🏛️', desc: 'Sovereign Core' }
+                { title: 'Open Web Search', url: 'https://www.google.com', icon: '🌐', desc: 'Full Internet' },
+                { title: 'Bing Live Web', url: 'https://www.bing.com', icon: '🔍', desc: 'Web & Shopping' },
+                { title: 'YouTube', url: 'https://www.youtube.com', icon: '🎬', desc: 'Videos & Music' },
+                { title: 'Steam Store', url: 'https://store.steampowered.com', icon: '🎮', desc: 'PC Gaming' },
+                { title: 'Reddit', url: 'https://www.reddit.com', icon: '💬', desc: 'Communities' },
+                { title: 'CNN News', url: 'https://www.cnn.com', icon: '📰', desc: 'Breaking News' },
+                { title: 'Yahoo Portal', url: 'https://www.yahoo.com', icon: '⚡', desc: 'News & Finance' },
+                { title: 'Amazon', url: 'https://www.amazon.com', icon: '🛒', desc: 'Shopping' }
               ].map((sc, i) => (
                 <div
                   key={i}
@@ -1958,8 +2010,12 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
 
               <iframe
                 ref={iframeRef}
-                key={`${activeTab.id}-${activeTab.url}-${refreshKey}`}
-                src={`/api/browser/render?url=${encodeURIComponent(activeTab.url)}&sid=${encodeURIComponent(sessionId)}`}
+                key={`${activeTab.id}-${activeTab.url}-${renderEngineMode}-${refreshKey}`}
+                src={
+                  renderEngineMode === 'direct'
+                    ? activeTab.url
+                    : `/api/browser/render?url=${encodeURIComponent(activeTab.url)}&sid=${encodeURIComponent(sessionId)}&ua=${deviceMode === 'mobile' ? 'mobile' : 'desktop'}`
+                }
                 title={activeTab.title}
                 className="w-full flex-1 border-0 bg-white dark:bg-zinc-950 min-h-[320px] sm:min-h-[460px] h-full"
                 style={{

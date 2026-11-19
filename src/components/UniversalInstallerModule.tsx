@@ -43,8 +43,12 @@ import {
   Send,
   Users,
   Radio,
-  Binary
+  Binary,
+  Pin
 } from 'lucide-react';
+import { UniversalControllerDeck } from './UniversalControllerDeck';
+import { UniversalCompatMatrixPanel } from './UniversalCompatMatrixPanel';
+import { pinSteamGameToDesktop } from '../utils/osCustomizationStore';
 
 interface CatalogApp {
   id: string;
@@ -233,7 +237,15 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
   onOpenUrlInBrowser
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'store' | 'steam-live' | 'discord-live' | 'windows-pe' | 'cli' | 'direct-url' | 'os-deploy'
+    | 'store'
+    | 'steam-live'
+    | 'controllers'
+    | 'universal-compat'
+    | 'discord-live'
+    | 'windows-pe'
+    | 'cli'
+    | 'direct-url'
+    | 'os-deploy'
   >('store');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -257,6 +269,22 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
   const [steamDetailsLoading, setSteamDetailsLoading] = useState<boolean>(false);
   const [steamActionBusy, setSteamActionBusy] = useState<boolean>(false);
   const [steamActionLog, setSteamActionLog] = useState<string>('');
+  const [localSteamPath, setLocalSteamPath] = useState<string>('');
+  const [localSteamGames, setLocalSteamGames] = useState<any[]>([]);
+  const [localSteamMeta, setLocalSteamMeta] = useState<{
+    existingLibraries: string[];
+    steamBinaryAvailable: boolean;
+    steamCmdAvailable: boolean;
+    protonVersions: string[];
+    source: string;
+  } | null>(null);
+  const [localSteamScanning, setLocalSteamScanning] = useState<boolean>(false);
+  const [steamRunnerMode, setSteamRunnerMode] = useState<
+    'native-steam' | 'proton-ge' | 'gamescope-hdr' | 'wine-dxvk' | 'steamcmd-install'
+  >('proton-ge');
+  const [steamUseGamemode, setSteamUseGamemode] = useState<boolean>(true);
+  const [steamUseMangoHud, setSteamUseMangoHud] = useState<boolean>(true);
+  const [steamUniversalLaunchInfo, setSteamUniversalLaunchInfo] = useState<any>(null);
 
   // Live Discord Hub State
   const [discordGuildId, setDiscordGuildId] = useState<string>('804856221118169138'); // Public community widget fallback or custom
@@ -391,6 +419,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
           text: `${app.name} v${app.version} installed at ${data.record.installPath}${dlText}`
         });
         await fetchPackageOverview();
+        window.dispatchEvent(new CustomEvent('sovereign_apps_updated'));
         if (data.nativeDownloadResult?.path && data.nativeDownloadResult.path.endsWith('.exe')) {
           setPeTargetFile(data.nativeDownloadResult.path);
           handleInspectPeBinary(data.nativeDownloadResult.path);
@@ -417,6 +446,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
       if (data.ok) {
         setStatusMessage({ type: 'info', text: `Uninstalled ${name} and purged package directory.` });
         await fetchPackageOverview();
+        window.dispatchEvent(new CustomEvent('sovereign_apps_updated'));
       }
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message });
@@ -424,6 +454,126 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
       setBusyAppId(null);
     }
   };
+
+  const handleScanLocalSteamLibrary = useCallback(async (overridePath?: string) => {
+    setLocalSteamScanning(true);
+    const targetPath = (overridePath ?? localSteamPath).trim();
+    try {
+      // First try Physical Host Bridge (127.0.0.1:4747) if user is running it on their physical gaming PC
+      let bridgeGames: any[] = [];
+      let bridgeLibs: string[] = [];
+      try {
+        const bridgeRes = await fetch(
+          `http://127.0.0.1:4747/host/steam/games${targetPath ? `?path=${encodeURIComponent(targetPath)}` : ''}`,
+          { signal: AbortSignal.timeout(1500) }
+        );
+        if (bridgeRes.ok) {
+          const bData = await bridgeRes.json();
+          if (bData?.success && Array.isArray(bData.games)) {
+            bridgeGames = bData.games;
+            bridgeLibs = bData.scannedLibraries || [];
+          }
+        }
+      } catch {}
+
+      const res = await fetch(
+        `/api/os/steam/local-library${targetPath ? `?path=${encodeURIComponent(targetPath)}` : ''}`
+      );
+      const data = await res.json();
+      const mergedGames = [...bridgeGames, ...(Array.isArray(data?.games) ? data.games : [])];
+      const uniqueGames = Array.from(new Map(mergedGames.map((g) => [g.appid, g])).values());
+      setLocalSteamGames(uniqueGames);
+      setLocalSteamMeta({
+        existingLibraries: [...bridgeLibs, ...(data?.existingLibraries || [])],
+        steamBinaryAvailable: Boolean(data?.steamBinaryAvailable || bridgeGames.length > 0),
+        steamCmdAvailable: Boolean(data?.steamCmdAvailable),
+        protonVersions: data?.protonVersions || [],
+        source: bridgeGames.length > 0 ? 'Physical Gaming PC Bridge (127.0.0.1:4747) + OS Host' : 'OS Host Filesystem'
+      });
+    } catch {
+      setLocalSteamGames([]);
+    } finally {
+      setLocalSteamScanning(false);
+    }
+  }, [localSteamPath]);
+
+  const handleUniversalSteamLaunch = async (appId: number, gameName: string) => {
+    setSteamActionBusy(true);
+    setSteamUniversalLaunchInfo(null);
+    try {
+      // Attempt Physical Host Bridge native GPU launch first if active
+      let bridgeLaunched = false;
+      try {
+        const bRes = await fetch('http://127.0.0.1:4747/host/steam/launch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appId, gameName }),
+          signal: AbortSignal.timeout(1800)
+        });
+        if (bRes.ok) {
+          const bData = await bRes.json();
+          if (bData?.launched) {
+            bridgeLaunched = true;
+            setStatusMessage({
+              type: 'success',
+              text: `Launched ${gameName} (#${appId}) on Physical Host GPU via ${bData.method}`
+            });
+          }
+        }
+      } catch {}
+
+      const res = await fetch('/api/os/steam/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appId,
+          gameName,
+          runner: steamRunnerMode,
+          enableControllerInput: true,
+          enableGamemode: steamUseGamemode,
+          enableMangoHud: steamUseMangoHud
+        })
+      });
+      const data = await res.json();
+      setSteamUniversalLaunchInfo(data);
+      if (!bridgeLaunched) {
+        setStatusMessage({
+          type: 'success',
+          text: data.executionNote || `Prepared Universal Steam/Proton launcher for ${gameName} (#${appId}).`
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err?.message || 'Steam launch failed' });
+    } finally {
+      setSteamActionBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const onOpenTab = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      if (detail.tab) setActiveTab(detail.tab);
+    };
+    const onLaunchSteam = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      const id = Number(detail.appId || 0);
+      if (id > 0) {
+        setActiveTab('steam-live');
+        fetch(`/api/os/steam/appdetails?appid=${id}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d?.ok && d.details) setSelectedSteamApp(d.details);
+          })
+          .catch(() => {});
+      }
+    };
+    window.addEventListener('sovereign_open_installer_tab', onOpenTab);
+    window.addEventListener('sovereign_launch_steam_game', onLaunchSteam);
+    return () => {
+      window.removeEventListener('sovereign_open_installer_tab', onOpenTab);
+      window.removeEventListener('sovereign_launch_steam_game', onLaunchSteam);
+    };
+  }, []);
 
   const handleOpenRealSubsystem = (appId: string, protocolUri?: string) => {
     if (appId === 'steam') {
@@ -814,7 +964,10 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
           </button>
 
           <button
-            onClick={() => setActiveTab('steam-live')}
+            onClick={() => {
+              setActiveTab('steam-live');
+              if (!localSteamMeta) handleScanLocalSteamLibrary();
+            }}
             className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
               activeTab === 'steam-live'
                 ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm'
@@ -823,6 +976,30 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
           >
             <Gamepad2 className="w-3.5 h-3.5" />
             Live Valve Steam Client &amp; Proton
+          </button>
+
+          <button
+            onClick={() => setActiveTab('controllers')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
+              activeTab === 'controllers'
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            All Controllers, KB+M &amp; Touch
+          </button>
+
+          <button
+            onClick={() => setActiveTab('universal-compat')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
+              activeTab === 'universal-compat'
+                ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Beyond-Windows Universal OS Matrix
           </button>
 
           <button
@@ -1274,28 +1451,117 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
                   </button>
                 </div>
 
-                {/* Native Protocol & SteamCMD Execution Buttons */}
-                <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-800">
-                  <a
-                    href={selectedSteamApp.steam_protocol_run}
-                    className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    Launch via Native Steam Protocol ({selectedSteamApp.steam_protocol_run})
-                  </a>
-                  <a
-                    href={selectedSteamApp.steam_protocol_install}
-                    className="px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Install via Steam Client ({selectedSteamApp.steam_protocol_install})
-                  </a>
-                  <button
-                    onClick={() => handleSteamNativeAction('run_steamcmd', selectedSteamApp.appid)}
-                    className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-mono"
-                  >
-                    {selectedSteamApp.steamcmd_install}
-                  </button>
+                {/* Universal Proton/DXVK/Gamescope/Host-Bridge & Controller Runner Bar */}
+                <div className="rounded-xl bg-slate-950/90 border border-slate-800 p-3 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sky-300 font-bold">RUNNER STACK:</span>
+                      <select
+                        value={steamRunnerMode}
+                        onChange={(e) => setSteamRunnerMode(e.target.value as any)}
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white"
+                      >
+                        <option value="proton-ge">Proton GE / Valve Proton + DXVK + VKD3D-Proton</option>
+                        <option value="native-steam">Native Steam Client (Windows / Linux / macOS)</option>
+                        <option value="gamescope-hdr">Gamescope Micro-Compositor (FSR/HDR + Fullscreen)</option>
+                        <option value="wine-dxvk">Wine64 + DXVK Standalone Prefix</option>
+                        <option value="steamcmd-install">SteamCMD Direct Depot Download &amp; Verify</option>
+                      </select>
+                      <label className="flex items-center gap-1 text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={steamUseGamemode}
+                          onChange={(e) => setSteamUseGamemode(e.target.checked)}
+                          className="accent-emerald-400"
+                        />
+                        <span>GameMode</span>
+                      </label>
+                      <label className="flex items-center gap-1 text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={steamUseMangoHud}
+                          onChange={(e) => setSteamUseMangoHud(e.target.checked)}
+                          className="accent-amber-400"
+                        />
+                        <span>MangoHud FPS</span>
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('controllers')}
+                      className="text-emerald-300 hover:underline font-mono text-[10px] cursor-pointer"
+                    >
+                      Xbox · DualSense · Switch · KB+M · Touch Controller Ready →
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={steamActionBusy}
+                      onClick={() => handleUniversalSteamLaunch(selectedSteamApp.appid, selectedSteamApp.name)}
+                      className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      Launch via Universal Proton / Host Bridge
+                    </button>
+                    <a
+                      href={selectedSteamApp.steam_protocol_run}
+                      className="px-3 py-2 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-200 font-semibold text-xs flex items-center gap-1.5"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      steam://rungameid/{selectedSteamApp.appid}
+                    </a>
+                    <a
+                      href={selectedSteamApp.steam_protocol_install}
+                      className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-1.5"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Install via Steam
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        pinSteamGameToDesktop(selectedSteamApp.appid, selectedSteamApp.name);
+                        setStatusMessage({
+                          type: 'success',
+                          text: `Pinned "${selectedSteamApp.name}" (Steam #${selectedSteamApp.appid}) directly to your Sovereign OS Desktop!`
+                        });
+                      }}
+                      className="px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Pin className="w-3.5 h-3.5" />
+                      Pin Game to Desktop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSteamNativeAction('run_steamcmd', selectedSteamApp.appid)}
+                      className="px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 text-[11px] font-mono cursor-pointer"
+                    >
+                      SteamCMD Depot Sync
+                    </button>
+                    {onOpenUrlInBrowser && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenUrlInBrowser(`https://play.geforcenow.com/mall/#/layout/games`)}
+                        className="px-3 py-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/40 text-indigo-200 text-xs font-semibold cursor-pointer"
+                      >
+                        Cloud GPU Play (GeForce NOW)
+                      </button>
+                    )}
+                  </div>
+
+                  {steamUniversalLaunchInfo && (
+                    <div className="rounded-lg bg-black/80 border border-emerald-500/30 p-2.5 font-mono text-[10px] text-emerald-300 space-y-1">
+                      <div>{steamUniversalLaunchInfo.executionNote}</div>
+                      <div className="text-slate-400 break-all">
+                        Script: {steamUniversalLaunchInfo.scriptPath}
+                      </div>
+                      <div className="text-sky-300 break-all">
+                        CMD: {steamUniversalLaunchInfo.launchCommand}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Official Valve CDN Trailer Video + Screenshots */}
@@ -1421,8 +1687,98 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
                 ))}
               </div>
             </div>
+
+            {/* Real Local Steam Library VDF / ACF Scanner */}
+            <div className="bg-slate-900/90 border border-sky-500/30 rounded-xl p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                    <HardDrive className="w-4 h-4" />
+                    <span>Local Installed Steam Library Scanner (VDF / ACF · Host + Physical PC Bridge)</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Scans <code className="text-slate-300">libraryfolders.vdf</code> &amp; <code className="text-slate-300">appmanifest_*.acf</code> across Linux, macOS, Windows (C:\Program Files (x86)\Steam), WSL, and Physical Host Bridge (<code className="text-emerald-300">127.0.0.1:4747</code>).
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={localSteamPath}
+                    onChange={(e) => setLocalSteamPath(e.target.value)}
+                    placeholder="Optional custom steamapps path..."
+                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white w-56"
+                  />
+                  <button
+                    type="button"
+                    disabled={localSteamScanning}
+                    onClick={() => handleScanLocalSteamLibrary()}
+                    className="px-3 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${localSteamScanning ? 'animate-spin' : ''}`} />
+                    <span>Scan Steam Libraries</span>
+                  </button>
+                </div>
+              </div>
+
+              {localSteamMeta && (
+                <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-slate-400">
+                  <span>Source: <strong className="text-sky-300">{localSteamMeta.source}</strong></span>
+                  <span>Libraries Found: <strong className="text-emerald-300">{localSteamMeta.existingLibraries.length}</strong></span>
+                  <span>Installed Titles: <strong className="text-amber-300">{localSteamGames.length}</strong></span>
+                  <span>Steam Binary: <strong className={localSteamMeta.steamBinaryAvailable ? 'text-emerald-300' : 'text-slate-400'}>{localSteamMeta.steamBinaryAvailable ? 'Detected' : 'Use Physical Host Bridge'}</strong></span>
+                </div>
+              )}
+
+              {localSteamGames.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {localSteamGames.map((g) => (
+                    <div
+                      key={g.appid}
+                      className="rounded-lg bg-slate-950 border border-slate-800 p-3 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-white truncate">{g.name}</div>
+                        <div className="text-[10px] font-mono text-slate-400">
+                          AppID {g.appid} · {g.sizeOnDisk ? `${(g.sizeOnDisk / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Installed'}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleUniversalSteamLaunch(g.appid, g.name)}
+                          className="px-2 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10px] font-bold cursor-pointer"
+                        >
+                          Play
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            pinSteamGameToDesktop(g.appid, g.name);
+                            setStatusMessage({ type: 'success', text: `Pinned ${g.name} to Desktop.` });
+                          }}
+                          className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 text-[10px] cursor-pointer"
+                          title="Pin to Desktop"
+                        >
+                          Pin
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400 bg-slate-950/70 border border-slate-800/80 rounded-lg p-3">
+                  No local <code className="text-slate-300">appmanifest_*.acf</code> files found on this cloud container yet. To scan &amp; play every game installed on your physical Windows/Linux/macOS PC GPU directly from Lysander OS, launch the Physical Host Bridge (<code className="text-emerald-300">127.0.0.1:4747</code>) from <strong>This PC → Physical Host Bridge</strong>, or search &amp; launch any Steam AppID above!
+                </div>
+              )}
+            </div>
           </div>
         )}
+
+        {/* TAB: UNIVERSAL MULTI-CONTROLLER, KEYBOARD/MOUSE & MULTI-TOUCH ENGINE */}
+        {activeTab === 'controllers' && <UniversalControllerDeck />}
+
+        {/* TAB: BEYOND-WINDOWS UNIVERSAL COMPATIBILITY MATRIX */}
+        {activeTab === 'universal-compat' && <UniversalCompatMatrixPanel />}
 
         {/* TAB 3: LIVE DISCORD API v10, WEBHOOKS & GUILD WIDGET HUB */}
         {activeTab === 'discord-live' && (
