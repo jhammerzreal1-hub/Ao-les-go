@@ -56,7 +56,8 @@ import {
   Award,
   Layers,
   Folder,
-  Settings
+  Settings,
+  ArrowUpDown
 } from 'lucide-react';
 import type { ModuleType, Artifact } from '../types';
 
@@ -140,6 +141,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       { id: 'swarm-test', title: 'Forensic Audit, Diagnostics & All-Detail Manual', desc: 'Deep SHA-256 file forensics, 46+ subfunction technical manual, expansion blueprints & 1-click self-repair', icon: Activity, color: 'text-amber-400', badge: 'Forensic' },
       { id: 'crypto-wallet', title: 'Sovereign Dual-Vault Crypto Wallets', desc: 'Real secp256k1 & Ed25519 BTC/ETH/SOL wallets for Personal Investing & UID 0 Autonomous 5-Min Execution', icon: Key, color: 'text-emerald-400', badge: 'BTC·ETH·SOL' },
       { id: 'grant-hunter', title: 'Autonomous Non-Reciprocal Grant Hunter (0% Equity)', desc: 'Live Grants.gov API + foundation grants + submission-ready applications with real mainnet payout addresses', icon: Award, color: 'text-emerald-300', badge: '0% Equity' },
+      { id: 'transfer-hub', title: 'Downloads, Uploads & Module Lab', desc: 'All OS downloads in one catalog, universal file uploader, and individual module export & hot-swap replacement with rollback', icon: ArrowUpDown, color: 'text-sky-400', badge: 'Transfer Hub' },
       { id: 'macro-telemetry', title: 'Macro-Telemetry Laplace-14 (h=2s) 99% Engine', desc: '20 global equities & crypto overlapped canvas, 99% conformal band & 5-minute early-warning alerts', icon: Activity, color: 'text-rose-400', badge: '99% Cert' },
       { id: 'packager', title: 'Android APK Packager', desc: 'Package orchestrator modules into Capacitor Android builds', icon: Package, color: 'text-amber-400', badge: 'APK' },
       { id: 'download-models', title: 'Model Wardrobe', desc: 'Offline model downloads & quantized engine management', icon: Download, color: 'text-amber-400', badge: 'GGUF' },

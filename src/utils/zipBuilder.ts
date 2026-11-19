@@ -53,23 +53,33 @@ async function tryDeflateRaw(data: Uint8Array): Promise<Uint8Array | null> {
   try {
     const cs = new CompressionStream('deflate-raw');
     const writer = cs.writable.getWriter();
+    const reader = cs.readable.getReader();
+
     // Copy to a concrete ArrayBuffer-backed view for strict DOM BodyInit/BufferSource compatibility
     const inputCopy = new Uint8Array(data.length);
     inputCopy.set(data);
-    await writer.write(inputCopy);
-    await writer.close();
 
-    const reader = cs.readable.getReader();
+    // Must read concurrently while writing to avoid TransformStream backpressure deadlock on large files (e.g. server.ts)
+    const writePromise = (async () => {
+      await writer.write(inputCopy);
+      await writer.close();
+    })();
+
     const chunks: Uint8Array[] = [];
     let totalLen = 0;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (value) {
-        chunks.push(value);
-        totalLen += value.length;
+    const readPromise = (async () => {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          totalLen += value.length;
+        }
       }
-    }
+    })();
+
+    await Promise.all([writePromise, readPromise]);
+
     const result = new Uint8Array(totalLen);
     let offset = 0;
     for (const chunk of chunks) {

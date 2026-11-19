@@ -1,0 +1,72 @@
+[
+  {
+    "patchId": "patch-mwo1lutl-378a",
+    "timestamp": "2026-11-19T21:08:52.425Z",
+    "agentId": "live-peer-zephyr",
+    "operation": "atomicPatch",
+    "scope": "host",
+    "displayPath": "/tmp/voice_autonomy_final_verify.txt",
+    "targetPath": "/tmp/voice_autonomy_final_verify.txt",
+    "existedBefore": true,
+    "previousContent": "STAGE_1",
+    "beforeSha256": "2b26dcf4856bfc9a",
+    "afterSha256": "6310eff620c4eb7e",
+    "diff": "--- a//tmp/voice_autonomy_final_verify.txt\n+++ b//tmp/voice_autonomy_final_verify.txt\n@@ -1,1 +1,1 @@\n- STAGE_1\n+ STAGE_2"
+  },
+  {
+    "patchId": "patch-mwo1luj2-1ab4",
+    "timestamp": "2026-11-19T21:08:52.046Z",
+    "agentId": "uid_0",
+    "operation": "write",
+    "scope": "host",
+    "displayPath": "/tmp/voice_autonomy_final_verify.txt",
+    "targetPath": "/tmp/voice_autonomy_final_verify.txt",
+    "existedBefore": false,
+    "previousContent": null,
+    "beforeSha256": null,
+    "afterSha256": "2b26dcf4856bfc9a",
+    "diff": "+++ b//tmp/voice_autonomy_final_verify.txt (7 bytes)"
+  },
+  {
+    "patchId": "patch-mwo1k2up-f44f",
+    "timestamp": "2026-11-19T21:07:29.521Z",
+    "agentId": "live-peer-zephyr",
+    "operation": "atomicPatch",
+    "scope": "host",
+    "displayPath": "/tmp/voice_autonomy_patch_verify.txt",
+    "targetPath": "/tmp/voice_autonomy_patch_verify.txt",
+    "existedBefore": true,
+    "previousContent": "ALPHA_ONE",
+    "beforeSha256": "5c5270fc8eb57849",
+    "afterSha256": "8a24e190457e563d",
+    "diff": "--- a//tmp/voice_autonomy_patch_verify.txt\n+++ b//tmp/voice_autonomy_patch_verify.txt\n@@ -1,1 +1,1 @@\n- ALPHA_ONE\n+ ALPHA_TWO"
+  },
+  {
+    "patchId": "patch-mwo1k2h5-585a",
+    "timestamp": "2026-11-19T21:07:29.033Z",
+    "agentId": "uid_0",
+    "operation": "write",
+    "scope": "host",
+    "displayPath": "/tmp/voice_autonomy_patch_verify.txt",
+    "targetPath": "/tmp/voice_autonomy_patch_verify.txt",
+    "existedBefore": false,
+    "previousContent": null,
+    "beforeSha256": null,
+    "afterSha256": "5c5270fc8eb57849",
+    "diff": "+++ b//tmp/voice_autonomy_patch_verify.txt (9 bytes)"
+  },
+  {
+    "patchId": "patch-mwo1jdqa-0195",
+    "timestamp": "2026-11-19T21:06:56.962Z",
+    "agentId": "uid_0",
+    "operation": "write",
+    "scope": "host",
+    "displayPath": "/tmp/voice_autonomy_live_verify.txt",
+    "targetPath": "/tmp/voice_autonomy_live_verify.txt",
+    "existedBefore": false,
+    "previousContent": null,
+    "beforeSha256": null,
+    "afterSha256": "72c158b65633ded8",
+    "diff": "+++ b//tmp/voice_autonomy_live_verify.txt (8 bytes)"
+  }
+]

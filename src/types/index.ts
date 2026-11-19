@@ -54,7 +54,8 @@ export type ModuleType =
   | 'task-manager'
   | 'os-settings'
   | 'crypto-wallet'
-  | 'grant-hunter';
+  | 'grant-hunter'
+  | 'transfer-hub';
 
 export type ChatModel =
   | 'gemini-4-hydrogen'

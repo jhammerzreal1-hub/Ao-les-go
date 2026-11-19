@@ -9,7 +9,8 @@
  * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
  */
 
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 import { 
   auth, 
   db, 
@@ -36,6 +37,7 @@ import { SystemHealthDashboard } from './components/SystemHealthDashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { SovereignOSBar } from './components/SovereignOSBar';
+import { PersistentTalkDock } from './components/PersistentTalkDock';
 import {
   SovereignOSWindowFrame,
   SovereignDesktopCanvas,
@@ -53,52 +55,53 @@ import {
 } from './utils/osCustomizationStore';
 import type { ModuleType, Artifact, AuditLedgerItem } from './types';
 
-// Lazy-loaded OS Applications (keeps initial boot fast & eliminates 20+ MB including Three.js from startup)
-const ChatModule = lazy(() => import('./components/ChatModule').then(m => ({ default: m.ChatModule })));
-const GroundingModule = lazy(() => import('./components/GroundingModule').then(m => ({ default: m.GroundingModule })));
-const MusicModule = lazy(() => import('./components/MusicModule').then(m => ({ default: m.MusicModule })));
-const ImageModule = lazy(() => import('./components/ImageModule').then(m => ({ default: m.ImageModule })));
-const VideoModule = lazy(() => import('./components/VideoModule').then(m => ({ default: m.VideoModule })));
-const TranscribeModule = lazy(() => import('./components/TranscribeModule').then(m => ({ default: m.TranscribeModule })));
-const LiveVoiceModule = lazy(() => import('./components/LiveVoiceModule').then(m => ({ default: m.LiveVoiceModule })));
-const VaultModule = lazy(() => import('./components/VaultModule').then(m => ({ default: m.VaultModule })));
-const GitHubModule = lazy(() => import('./components/GitHubModule').then(m => ({ default: m.GitHubModule })));
-const WarRoomModule = lazy(() => import('./components/WarRoomModule').then(m => ({ default: m.WarRoomModule })));
-const SovereignBrowser = lazy(() => import('./components/SovereignBrowser').then(m => ({ default: m.SovereignBrowser })));
-const ScratchpadModule = lazy(() => import('./components/ScratchpadModule').then(m => ({ default: m.ScratchpadModule })));
-const HITLWorkflowModule = lazy(() => import('./components/HITLWorkflowModule').then(m => ({ default: m.HITLWorkflowModule })));
-const TermuxEdgeModule = lazy(() => import('./components/TermuxEdgeModule').then(m => ({ default: m.TermuxEdgeModule })));
-const OSINTModule = lazy(() => import('./components/OSINTModule').then(m => ({ default: m.OSINTModule })));
-const BurnerMailModule = lazy(() => import('./components/BurnerMailModule').then(m => ({ default: m.BurnerMailModule })));
-const InfiniteSimModule = lazy(() => import('./components/InfiniteSimModule').then(m => ({ default: m.InfiniteSimModule })));
-const FunctionDeckModule = lazy(() => import('./components/FunctionDeckModule').then(m => ({ default: m.FunctionDeckModule })));
-const UnifiedProjectsModule = lazy(() => import('./components/UnifiedProjectsModule').then(m => ({ default: m.UnifiedProjectsModule })));
-const PromptPresetsModule = lazy(() => import('./components/PromptPresetsModule').then(m => ({ default: m.PromptPresetsModule })));
-const AuditLedgerModule = lazy(() => import('./components/AuditLedgerModule').then(m => ({ default: m.AuditLedgerModule })));
-const SwarmDiagnosticModule = lazy(() => import('./components/SwarmDiagnosticModule').then(m => ({ default: m.SwarmDiagnosticModule })));
-const PackagerModule = lazy(() => import('./components/PackagerModule').then(m => ({ default: m.PackagerModule })));
-const GoogleDriveModule = lazy(() => import('./components/GoogleDriveModule').then(m => ({ default: m.GoogleDriveModule })));
-const GoogleTasksModule = lazy(() => import('./components/GoogleTasksModule').then(m => ({ default: m.GoogleTasksModule })));
-const KnowledgeGraphModule = lazy(() => import('./components/KnowledgeGraphModule').then(m => ({ default: m.KnowledgeGraphModule })));
-const ToolShedModule = lazy(() => import('./components/ToolShedModule').then(m => ({ default: m.ToolShedModule })));
-const AutonomySupervisorModule = lazy(() => import('./components/AutonomySupervisorModule').then(m => ({ default: m.AutonomySupervisorModule })));
-const AgentDevKitModule = lazy(() => import('./components/AgentDevKitModule').then(m => ({ default: m.AgentDevKitModule })));
-const AIGenesisDistilleryModule = lazy(() => import('./components/AIGenesisDistilleryModule').then(m => ({ default: m.AIGenesisDistilleryModule })));
-const WorldLoadStartScreen = lazy(() => import('./components/WorldLoadStartScreen').then(m => ({ default: m.WorldLoadStartScreen })));
-const UniversalEmulatorModderModule = lazy(() => import('./components/UniversalEmulatorModderModule').then(m => ({ default: m.UniversalEmulatorModderModule })));
-const MacroTelemetryModule = lazy(() => import('./components/MacroTelemetryModule').then(m => ({ default: m.MacroTelemetryModule })));
-const SovereignFilesModule = lazy(() => import('./components/SovereignFilesModule').then(m => ({ default: m.SovereignFilesModule })));
-const SovereignTerminalModule = lazy(() => import('./components/SovereignTerminalModule').then(m => ({ default: m.SovereignTerminalModule })));
-const SovereignTaskManagerModule = lazy(() => import('./components/SovereignTaskManagerModule').then(m => ({ default: m.SovereignTaskManagerModule })));
-const SovereignOSSettingsModule = lazy(() => import('./components/SovereignOSSettingsModule').then(m => ({ default: m.SovereignOSSettingsModule })));
-const DownloadModelsModule = lazy(() => import('./components/DownloadModelsModule').then(m => ({ default: m.DownloadModelsModule })));
-const UniversalInstallerModule = lazy(() => import('./components/UniversalInstallerModule').then(m => ({ default: m.UniversalInstallerModule })));
-const SovereignCryptoWalletModule = lazy(() => import('./components/SovereignCryptoWalletModule').then(m => ({ default: m.SovereignCryptoWalletModule })));
-const AutonomousGrantEnginePanel = lazy(() => import('./components/AutonomousGrantEnginePanel').then(m => ({ default: m.AutonomousGrantEnginePanel })));
-const ApiSecretsModule = lazy(() => import('./components/ApiSecretsModule').then(m => ({ default: m.ApiSecretsModule })));
-const SovereignIntegrationsHub = lazy(() => import('./components/SovereignIntegrationsHub').then(m => ({ default: m.SovereignIntegrationsHub })));
-const SpatialArenaModule = lazy(() => import('./components/three/SpatialArenaModule').then(m => ({ default: m.SpatialArenaModule })));
-const FloatingTouchGamepadOverlay = lazy(() => import('./components/UniversalControllerDeck').then(m => ({ default: m.FloatingTouchGamepadOverlay })));
+// Lazy-loaded OS Applications with automatic retry & stale-chunk recovery
+const ChatModule = lazyWithRetry(() => import('./components/ChatModule').then(m => ({ default: m.ChatModule })), 'ChatModule');
+const GroundingModule = lazyWithRetry(() => import('./components/GroundingModule').then(m => ({ default: m.GroundingModule })), 'GroundingModule');
+const MusicModule = lazyWithRetry(() => import('./components/MusicModule').then(m => ({ default: m.MusicModule })), 'MusicModule');
+const ImageModule = lazyWithRetry(() => import('./components/ImageModule').then(m => ({ default: m.ImageModule })), 'ImageModule');
+const VideoModule = lazyWithRetry(() => import('./components/VideoModule').then(m => ({ default: m.VideoModule })), 'VideoModule');
+const TranscribeModule = lazyWithRetry(() => import('./components/TranscribeModule').then(m => ({ default: m.TranscribeModule })), 'TranscribeModule');
+const LiveVoiceModule = lazyWithRetry(() => import('./components/LiveVoiceModule').then(m => ({ default: m.LiveVoiceModule })), 'LiveVoiceModule');
+const VaultModule = lazyWithRetry(() => import('./components/VaultModule').then(m => ({ default: m.VaultModule })), 'VaultModule');
+const GitHubModule = lazyWithRetry(() => import('./components/GitHubModule').then(m => ({ default: m.GitHubModule })), 'GitHubModule');
+const WarRoomModule = lazyWithRetry(() => import('./components/WarRoomModule').then(m => ({ default: m.WarRoomModule })), 'WarRoomModule');
+const SovereignBrowser = lazyWithRetry(() => import('./components/SovereignBrowser').then(m => ({ default: m.SovereignBrowser })), 'SovereignBrowser');
+const ScratchpadModule = lazyWithRetry(() => import('./components/ScratchpadModule').then(m => ({ default: m.ScratchpadModule })), 'ScratchpadModule');
+const HITLWorkflowModule = lazyWithRetry(() => import('./components/HITLWorkflowModule').then(m => ({ default: m.HITLWorkflowModule })), 'HITLWorkflowModule');
+const TermuxEdgeModule = lazyWithRetry(() => import('./components/TermuxEdgeModule').then(m => ({ default: m.TermuxEdgeModule })), 'TermuxEdgeModule');
+const OSINTModule = lazyWithRetry(() => import('./components/OSINTModule').then(m => ({ default: m.OSINTModule })), 'OSINTModule');
+const BurnerMailModule = lazyWithRetry(() => import('./components/BurnerMailModule').then(m => ({ default: m.BurnerMailModule })), 'BurnerMailModule');
+const InfiniteSimModule = lazyWithRetry(() => import('./components/InfiniteSimModule').then(m => ({ default: m.InfiniteSimModule })), 'InfiniteSimModule');
+const FunctionDeckModule = lazyWithRetry(() => import('./components/FunctionDeckModule').then(m => ({ default: m.FunctionDeckModule })), 'FunctionDeckModule');
+const UnifiedProjectsModule = lazyWithRetry(() => import('./components/UnifiedProjectsModule').then(m => ({ default: m.UnifiedProjectsModule })), 'UnifiedProjectsModule');
+const PromptPresetsModule = lazyWithRetry(() => import('./components/PromptPresetsModule').then(m => ({ default: m.PromptPresetsModule })), 'PromptPresetsModule');
+const AuditLedgerModule = lazyWithRetry(() => import('./components/AuditLedgerModule').then(m => ({ default: m.AuditLedgerModule })), 'AuditLedgerModule');
+const SwarmDiagnosticModule = lazyWithRetry(() => import('./components/SwarmDiagnosticModule').then(m => ({ default: m.SwarmDiagnosticModule })), 'SwarmDiagnosticModule');
+const PackagerModule = lazyWithRetry(() => import('./components/PackagerModule').then(m => ({ default: m.PackagerModule })), 'PackagerModule');
+const GoogleDriveModule = lazyWithRetry(() => import('./components/GoogleDriveModule').then(m => ({ default: m.GoogleDriveModule })), 'GoogleDriveModule');
+const GoogleTasksModule = lazyWithRetry(() => import('./components/GoogleTasksModule').then(m => ({ default: m.GoogleTasksModule })), 'GoogleTasksModule');
+const KnowledgeGraphModule = lazyWithRetry(() => import('./components/KnowledgeGraphModule').then(m => ({ default: m.KnowledgeGraphModule })), 'KnowledgeGraphModule');
+const ToolShedModule = lazyWithRetry(() => import('./components/ToolShedModule').then(m => ({ default: m.ToolShedModule })), 'ToolShedModule');
+const AutonomySupervisorModule = lazyWithRetry(() => import('./components/AutonomySupervisorModule').then(m => ({ default: m.AutonomySupervisorModule })), 'AutonomySupervisorModule');
+const AgentDevKitModule = lazyWithRetry(() => import('./components/AgentDevKitModule').then(m => ({ default: m.AgentDevKitModule })), 'AgentDevKitModule');
+const AIGenesisDistilleryModule = lazyWithRetry(() => import('./components/AIGenesisDistilleryModule').then(m => ({ default: m.AIGenesisDistilleryModule })), 'AIGenesisDistilleryModule');
+const WorldLoadStartScreen = lazyWithRetry(() => import('./components/WorldLoadStartScreen').then(m => ({ default: m.WorldLoadStartScreen })), 'WorldLoadStartScreen');
+const UniversalEmulatorModderModule = lazyWithRetry(() => import('./components/UniversalEmulatorModderModule').then(m => ({ default: m.UniversalEmulatorModderModule })), 'UniversalEmulatorModderModule');
+const MacroTelemetryModule = lazyWithRetry(() => import('./components/MacroTelemetryModule').then(m => ({ default: m.MacroTelemetryModule })), 'MacroTelemetryModule');
+const SovereignFilesModule = lazyWithRetry(() => import('./components/SovereignFilesModule').then(m => ({ default: m.SovereignFilesModule })), 'SovereignFilesModule');
+const SovereignTerminalModule = lazyWithRetry(() => import('./components/SovereignTerminalModule').then(m => ({ default: m.SovereignTerminalModule })), 'SovereignTerminalModule');
+const SovereignTaskManagerModule = lazyWithRetry(() => import('./components/SovereignTaskManagerModule').then(m => ({ default: m.SovereignTaskManagerModule })), 'SovereignTaskManagerModule');
+const SovereignOSSettingsModule = lazyWithRetry(() => import('./components/SovereignOSSettingsModule').then(m => ({ default: m.SovereignOSSettingsModule })), 'SovereignOSSettingsModule');
+const DownloadModelsModule = lazyWithRetry(() => import('./components/DownloadModelsModule').then(m => ({ default: m.DownloadModelsModule })), 'DownloadModelsModule');
+const UniversalInstallerModule = lazyWithRetry(() => import('./components/UniversalInstallerModule').then(m => ({ default: m.UniversalInstallerModule })), 'UniversalInstallerModule');
+const SovereignCryptoWalletModule = lazyWithRetry(() => import('./components/SovereignCryptoWalletModule').then(m => ({ default: m.SovereignCryptoWalletModule })), 'SovereignCryptoWalletModule');
+const AutonomousGrantEnginePanel = lazyWithRetry(() => import('./components/AutonomousGrantEnginePanel').then(m => ({ default: m.AutonomousGrantEnginePanel })), 'AutonomousGrantEnginePanel');
+const TransferHubModule = lazyWithRetry(() => import('./components/TransferHubModule').then(m => ({ default: m.TransferHubModule })), 'TransferHubModule');
+const ApiSecretsModule = lazyWithRetry(() => import('./components/ApiSecretsModule').then(m => ({ default: m.ApiSecretsModule })), 'ApiSecretsModule');
+const SovereignIntegrationsHub = lazyWithRetry(() => import('./components/SovereignIntegrationsHub').then(m => ({ default: m.SovereignIntegrationsHub })), 'SovereignIntegrationsHub');
+const SpatialArenaModule = lazyWithRetry(() => import('./components/three/SpatialArenaModule').then(m => ({ default: m.SpatialArenaModule })), 'SpatialArenaModule');
+const FloatingTouchGamepadOverlay = lazyWithRetry(() => import('./components/UniversalControllerDeck').then(m => ({ default: m.FloatingTouchGamepadOverlay })), 'FloatingTouchGamepadOverlay');
 
 const ModuleLoadingFallback: React.FC<{ label?: string }> = ({ label = 'Loading module...' }) => (
   <div className="flex-1 min-h-[220px] flex flex-col items-center justify-center gap-3 p-8 bg-zinc-950/90 text-zinc-400 font-mono text-xs">
@@ -368,15 +371,45 @@ export default function App() {
   const [enableGamepadOsNav, setEnableGamepadOsNav] = useState<boolean>(
     () => loadOSCustomizationProfile().enableGamepadOsNav
   );
+  const [notificationPrefs, setNotificationPrefs] = useState(
+    () => loadOSCustomizationProfile().notifications
+  );
+  const [persistentTalkActive, setPersistentTalkActive] = useState<boolean>(false);
+  const [persistentTalkStatus, setPersistentTalkStatus] = useState<{
+    connected: boolean;
+    connecting: boolean;
+    muted: boolean;
+    speaking: boolean;
+    exploringTool: string | null;
+  }>({ connected: false, connecting: false, muted: false, speaking: false, exploringTool: null });
 
   useEffect(() => {
     const syncCustom = (e: Event) => {
       const profile = (e as CustomEvent).detail || loadOSCustomizationProfile();
       setShowTouchControllerOverlay(Boolean(profile.showTouchControllerOverlay));
       setEnableGamepadOsNav(Boolean(profile.enableGamepadOsNav));
+      if (profile.notifications) {
+        setNotificationPrefs({
+          telemetryPopupAlerts: Boolean(profile.notifications.telemetryPopupAlerts),
+          cryptoTradingAlerts: Boolean(profile.notifications.cryptoTradingAlerts),
+          telemetryAudioChime: Boolean(profile.notifications.telemetryAudioChime)
+        });
+      }
+    };
+    const onToggleTalk = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail && typeof detail.active === 'boolean') {
+        setPersistentTalkActive(detail.active);
+      } else {
+        setPersistentTalkActive((prev) => !prev);
+      }
     };
     window.addEventListener('sovereign_os_customization_changed', syncCustom);
-    return () => window.removeEventListener('sovereign_os_customization_changed', syncCustom);
+    window.addEventListener('sovereign_toggle_persistent_talk', onToggleTalk);
+    return () => {
+      window.removeEventListener('sovereign_os_customization_changed', syncCustom);
+      window.removeEventListener('sovereign_toggle_persistent_talk', onToggleTalk);
+    };
   }, []);
 
   // Event-gated Global Hardware Controller OS Navigation (Xbox, PlayStation, Switch, Steam Deck, 8BitDo, HOTAS, HID)
@@ -461,8 +494,22 @@ export default function App() {
     };
   }, [enableGamepadOsNav]);
 
+  // Telemetry & crypto trading popup alerts are OFF by default unless explicitly opted in by the user
   useEffect(() => {
+    if (!notificationPrefs.telemetryPopupAlerts && !notificationPrefs.cryptoTradingAlerts) {
+      setOsMarketAlert(null);
+      return;
+    }
     let active = true;
+    const isCryptoAlert = (a: AutonomousMarketAlert) => {
+      const sym = String(a.symbol || '').toUpperCase();
+      const cls = String((a as any).assetClass || '').toLowerCase();
+      return (
+        cls === 'crypto' ||
+        /^(BTC|ETH|SOL|XRP|DOGE|BNB|AVAX|LINK|ADA|MATIC|ARB|OP|SUI|DOT|ATOM|LTC|SHIB|PEPE|UNI|AAVE)([-/_]USD|USDT)?$/.test(sym) ||
+        sym.endsWith('-USD')
+      );
+    };
     const checkMarketAlerts = async () => {
       try {
         const res = await fetch('/api/macro/live-telemetry?mode=fast2s');
@@ -471,11 +518,15 @@ export default function App() {
         const alerts: AutonomousMarketAlert[] = data?.multiKernelTelemetry?.autonomousAlerts || [];
         if (alerts.length > 0 && active) {
           const now = Date.now();
-          const top = alerts.find(
-            (a) =>
+          const top = alerts.find((a) => {
+            const crypto = isCryptoAlert(a);
+            if (crypto && !notificationPrefs.cryptoTradingAlerts) return false;
+            if (!crypto && !notificationPrefs.telemetryPopupAlerts) return false;
+            return (
               (a.actionSignal === 'STRONG_BUY' || a.actionSignal === 'URGENT_STOP_LOSS_SELL' || a.urgencyScore >= 55) &&
               (!dismissedMarketSymbols[a.symbol] || now - dismissedMarketSymbols[a.symbol] > 90000)
-          );
+            );
+          });
           if (top) {
             setOsMarketAlert(top);
           }
@@ -489,7 +540,7 @@ export default function App() {
       clearTimeout(initTimer);
       clearInterval(interval);
     };
-  }, [dismissedMarketSymbols]);
+  }, [dismissedMarketSymbols, notificationPrefs.telemetryPopupAlerts, notificationPrefs.cryptoTradingAlerts]);
 
   const [openModules, setOpenModules] = useState<ModuleType[]>(() => {
     try {
@@ -507,19 +558,21 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          const migrated = localStorage.getItem('sovereign_os_pinned_grants_v1');
-          if (!migrated) {
+          const next = [...parsed] as ModuleType[];
+          if (!localStorage.getItem('sovereign_os_pinned_grants_v1')) {
             localStorage.setItem('sovereign_os_pinned_grants_v1', '1');
-            const next = [...parsed] as ModuleType[];
             if (!next.includes('crypto-wallet')) next.push('crypto-wallet');
             if (!next.includes('grant-hunter')) next.push('grant-hunter');
-            return next;
           }
-          return parsed;
+          if (!localStorage.getItem('sovereign_os_pinned_transfer_v1')) {
+            localStorage.setItem('sovereign_os_pinned_transfer_v1', '1');
+            if (!next.includes('transfer-hub')) next.push('transfer-hub');
+          }
+          return next;
         }
       }
     } catch {}
-    return ['chat', 'browser', 'file-manager', 'terminal', 'crypto-wallet', 'grant-hunter', 'macro-telemetry', 'projects', 'os-settings'];
+    return ['chat', 'browser', 'file-manager', 'transfer-hub', 'terminal', 'crypto-wallet', 'grant-hunter', 'macro-telemetry', 'projects', 'os-settings'];
   });
   const [windowStates, setWindowStates] = useState<Partial<Record<ModuleType, OSWindowGeometry>>>(() => {
     try {
@@ -561,16 +614,27 @@ export default function App() {
   useEffect(() => {
     const el = mainAreaRef.current;
     if (!el) return;
-    const updateSize = () => {
-      setDesktopSize({
-        width: Math.max(el.clientWidth, 300),
-        height: Math.max(el.clientHeight, 240)
-      });
+    let rafId = 0;
+    const applySize = () => {
+      const nextWidth = Math.max(el.clientWidth, 300);
+      const nextHeight = Math.max(el.clientHeight, 240);
+      setDesktopSize((prev) =>
+        prev.width === nextWidth && prev.height === nextHeight
+          ? prev
+          : { width: nextWidth, height: nextHeight }
+      );
     };
-    updateSize();
+    const updateSize = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(applySize);
+    };
+    applySize();
     const ro = new ResizeObserver(updateSize);
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      ro.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -1463,6 +1527,8 @@ export default function App() {
             </div>
           </div>
         );
+      case 'transfer-hub':
+        return <TransferHubModule onNavigateModule={handleSelectOSModule} />;
       case 'packager':
         return <PackagerModule />;
       case 'drive':
@@ -1623,6 +1689,9 @@ export default function App() {
       onMinimizeAllWindows={handleMinimizeAllWindows}
       isChatDetached={isChatDetached}
       onToggleDetachChat={() => handleToggleDetachChat()}
+      persistentTalkActive={persistentTalkActive}
+      persistentTalkSpeaking={persistentTalkStatus.speaking}
+      onTogglePersistentTalk={() => setPersistentTalkActive((prev) => !prev)}
       onInjectToChat={handleInjectIntoChat}
       showDesktopSidebar={showDesktopSidebar}
       onToggleDesktopSidebar={() => setShowDesktopSidebar((prev) => !prev)}
@@ -1906,13 +1975,13 @@ export default function App() {
             </div>
           )}
 
-          {/* Global Sovereign OS Autonomous 5-Minute Early-Warning Market & Crypto Alert Toast */}
-          {osMarketAlert && (
+          {/* Opt-In Sovereign OS 5-Minute Market & Crypto Alert Toast (Off by Default; Positioned Clear of Window Controls) */}
+          {osMarketAlert && (notificationPrefs.telemetryPopupAlerts || notificationPrefs.cryptoTradingAlerts) && (
             <div
-              className={`fixed top-12 right-3 z-50 w-[340px] max-w-[calc(100vw-1.5rem)] p-3.5 rounded-xl border shadow-2xl backdrop-blur-md transition-all ${
+              className={`fixed bottom-16 right-4 z-40 w-[340px] max-w-[calc(100vw-2rem)] p-3.5 rounded-xl border shadow-2xl backdrop-blur-md transition-all ${
                 osMarketAlert.actionSignal === 'STRONG_BUY' || osMarketAlert.actionSignal === 'BUY_ACCUMULATE'
-                  ? 'bg-zinc-950/95 border-emerald-500/60 text-zinc-100'
-                  : 'bg-zinc-950/95 border-rose-500/60 text-zinc-100'
+                  ? 'bg-zinc-950/95 border-emerald-500/55 text-zinc-100'
+                  : 'bg-zinc-950/95 border-rose-500/55 text-zinc-100'
               }`}
             >
               <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-800">
@@ -1936,12 +2005,13 @@ export default function App() {
                     setOsMarketAlert(null);
                   }}
                   className="text-xs font-mono text-zinc-400 hover:text-zinc-100 px-1.5 cursor-pointer"
+                  aria-label="Dismiss alert"
                 >
                   ✕
                 </button>
               </div>
               <div className="py-2 space-y-1">
-                <div className="flex items-baseline justify-between font-mono text-xs">
+                <div className="flex items-baseline justify-between font-mono text-xs tabular-nums">
                   <span className="font-bold text-sm text-zinc-100">
                     {osMarketAlert.symbol} <span className="text-zinc-400 font-normal text-xs">({osMarketAlert.name})</span>
                   </span>
@@ -1954,7 +2024,7 @@ export default function App() {
                     {osMarketAlert.predicted5mMovePct.toFixed(3)}% in 5m
                   </span>
                 </div>
-                <div className="text-[11px] font-mono text-zinc-300">
+                <div className="text-[11px] font-mono text-zinc-300 tabular-nums">
                   Spot: {osMarketAlert.spotPrice} → 5m Target: <strong className="text-amber-300">{osMarketAlert.target5mPrice}</strong> (±{osMarketAlert.conformal99Band5mPct}% @ {osMarketAlert.conformal99CoveragePct}%)
                 </div>
                 <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug">
@@ -1962,11 +2032,23 @@ export default function App() {
                 </p>
               </div>
               <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2 text-[11px] font-mono">
-                <span className="text-amber-300 font-semibold">
-                  {osMarketAlert.actionSignal.includes('BUY')
-                    ? `+$${osMarketAlert.estimatedPnlPer10kUsd} / $10k`
-                    : `$${osMarketAlert.estimatedPnlPer10kUsd} / $10k Protected`}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveOSCustomizationProfile({
+                      notifications: {
+                        telemetryPopupAlerts: false,
+                        cryptoTradingAlerts: false,
+                        telemetryAudioChime: false
+                      }
+                    });
+                    setOsMarketAlert(null);
+                  }}
+                  className="text-[10px] text-zinc-400 hover:text-rose-300 underline underline-offset-2 cursor-pointer"
+                  title="Disable all telemetry & crypto trading popups"
+                >
+                  Turn Off Alerts
+                </button>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
@@ -1977,7 +2059,7 @@ export default function App() {
                     }}
                     className="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-200 font-semibold cursor-pointer"
                   >
-                    Crypto Wallet
+                    Wallet
                   </button>
                   <button
                     type="button"
@@ -2024,6 +2106,20 @@ export default function App() {
           />
         </Suspense>
       )}
+
+      {/* Global Persistent Hands-Free Peer Talk Dock (Survives All OS Window Switches) */}
+      <PersistentTalkDock
+        isActive={persistentTalkActive}
+        onDeactivate={() => setPersistentTalkActive(false)}
+        activeModule={activeModule}
+        openModules={openModules}
+        onSelectModule={handleSelectOSModule}
+        onNavigateBrowserUrl={handleNavigateUrlInBrowser}
+        onSaveToVault={(title, content, model, metadataJson) =>
+          handleSaveToVault('transcription', title, content, model, undefined, metadataJson)
+        }
+        onStatusChange={setPersistentTalkStatus}
+      />
 
       <OfflineIndicator />
     </div>

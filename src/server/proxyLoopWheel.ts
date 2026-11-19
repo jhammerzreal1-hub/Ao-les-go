@@ -101,12 +101,14 @@ const WHEEL_CONFIG_PATH = path.join(DATA_DIR, '.proxy_wheel_config.json');
 
 const CAPABLE_GEMINI_BASELINE: Array<{ model: string; tier: WheelTier; supportsTools: boolean; supportsThinking: boolean }> = [
   { model: 'gemini-4-hydrogen', tier: 'flagship', supportsTools: true, supportsThinking: true },
+  { model: 'gemini-3.1-flash-lite', tier: 'flagship', supportsTools: true, supportsThinking: true },
   { model: 'gemini-3-flash-preview', tier: 'flagship', supportsTools: true, supportsThinking: true },
-  { model: 'gemini-3.5-flash-lite', tier: 'flagship', supportsTools: true, supportsThinking: false },
-  { model: 'gemini-flash-latest', tier: 'flagship', supportsTools: true, supportsThinking: false },
-  { model: 'gemini-flash-lite-latest', tier: 'capable', supportsTools: true, supportsThinking: false },
-  { model: 'gemini-3.1-flash-lite-preview', tier: 'capable', supportsTools: true, supportsThinking: true },
-  { model: 'gemini-3.5-flash', tier: 'capable', supportsTools: true, supportsThinking: true },
+  { model: 'gemini-4-neon', tier: 'capable', supportsTools: true, supportsThinking: true },
+  { model: 'gemini-4-argon', tier: 'capable', supportsTools: true, supportsThinking: true },
+  { model: 'gemini-4-carbon', tier: 'capable', supportsTools: true, supportsThinking: true },
+  { model: 'gemini-flash-latest', tier: 'capable', supportsTools: true, supportsThinking: false },
+  { model: 'gemini-flash-lite-latest', tier: 'fast', supportsTools: true, supportsThinking: false },
+  { model: 'gemini-3.1-flash-lite-preview', tier: 'fast', supportsTools: true, supportsThinking: true },
   { model: 'gemma-4-31b-it', tier: 'fast', supportsTools: false, supportsThinking: false },
   { model: 'gemma-4-26b-a4b-it', tier: 'fast', supportsTools: false, supportsThinking: false }
 ];
@@ -867,6 +869,11 @@ class ProxyLoopWheelManager {
       }
       const sm = s.model.toLowerCase();
       if (sm === pref || sm.includes(pref) || pref.includes(sm)) return true;
+      if ((pref === 'argon' || pref.includes('argon')) && sm === 'gemini-4-argon') return true;
+      if ((pref === 'neon' || pref.includes('neon') || pref === 'yourself') && sm === 'gemini-4-neon') return true;
+      if ((pref === 'carbon' || pref.includes('carbon')) && sm === 'gemini-4-carbon') return true;
+      if ((pref === 'hydrogen' || pref.includes('hydrogen')) && sm === 'gemini-4-hydrogen') return true;
+      if (pref.includes('flash-lite') && sm.includes('flash-lite')) return true;
       if (pref.includes('deepseek') && sm.includes('deepseek')) return true;
       if (pref.includes('qwen') && sm.includes('qwen')) return true;
       if (pref.includes('llama') && sm.includes('llama')) return true;
@@ -919,7 +926,14 @@ class ProxyLoopWheelManager {
       // boost proven healthy spokes and discovered live Gemini models first, and rotate across multi-key slots via cursor!
       const discoveredSet = new Set(this.discoveredGeminiModels);
       const isDiscoveredOrVerified = (s: WheelSpokePublic) =>
-        s.provider !== 'gemini' || discoveredSet.size === 0 || discoveredSet.has(s.model) || s.model === 'gemini-4-hydrogen';
+        s.provider !== 'gemini' ||
+        discoveredSet.size === 0 ||
+        discoveredSet.has(s.model) ||
+        s.model === 'gemini-4-hydrogen' ||
+        s.model === 'gemini-4-neon' ||
+        s.model === 'gemini-4-argon' ||
+        s.model === 'gemini-4-carbon' ||
+        s.model === 'gemini-3.1-flash-lite';
 
       const tiers: WheelTier[] = ['flagship', 'capable', 'fast', 'local'];
       for (const tier of tiers) {

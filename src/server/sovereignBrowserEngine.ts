@@ -1708,7 +1708,7 @@ export async function handleRealRenderRequest(req: Request, res: Response) {
       return res.send(`
         <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
         <title>${isDirectVideo ? 'Video Stream' : 'Audio Stream'} | Sovereign Browser</title>
-        ${isHls ? '<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>' : ''}
+        ${isHls ? '<script src="https://cdn.jsdelivr.net/npm/hls.js@latest" crossorigin="anonymous"></script>' : ''}
         <style>*{box-sizing:border-box;margin:0;padding:0}body,html{width:100%;height:100%;background:#09090b;color:#f4f4f5;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:16px}video{max-width:100%;max-height:92vh;border-radius:12px;background:#000}audio{width:100%;max-width:540px}</style></head>
         <body>
           ${

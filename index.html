@@ -28,7 +28,13 @@
                  s.indexOf('429') !== -1 ||
                  s.indexOf('quota') !== -1 ||
                  s.indexOf('QUOTA_EXCEEDED') !== -1 ||
-                 s.indexOf('aborted') !== -1;
+                 s.indexOf('aborted') !== -1 ||
+                 s.indexOf('ResizeObserver loop') !== -1;
+        }
+        function isOpaqueCrossOriginScriptError(e) {
+          if (!e) return false;
+          var msg = String(e.message || '').trim();
+          return /^script error\.?$/i.test(msg) && !e.error && !e.filename && (!e.lineno || e.lineno === 0);
         }
         var origWarn = console.warn;
         console.warn = function() {
@@ -53,7 +59,7 @@
         }, true);
         window.addEventListener('error', function(e) {
           var msg = e ? (e.message || (e.error && e.error.message) || e.error) : '';
-          if (shouldSuppress(msg)) {
+          if (isOpaqueCrossOriginScriptError(e) || shouldSuppress(msg)) {
             e.preventDefault();
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
           }
@@ -120,6 +126,6 @@
         }, 12000);
       })();
     </script>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" crossorigin="anonymous" src="/src/main.tsx"></script>
   </body>
 </html>

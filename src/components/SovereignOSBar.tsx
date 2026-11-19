@@ -30,7 +30,11 @@ import {
   Globe,
   Folder,
   Settings,
-  Cpu
+  Cpu,
+  Mic,
+  Radio,
+  Bell,
+  BellOff
 } from 'lucide-react';
 import { ALL_MODULES, WORKSPACE_GROUPS, type WorkspaceGroupId } from './Navigation';
 import type { ModuleType, Artifact } from '../types';
@@ -64,6 +68,9 @@ interface SovereignOSBarProps {
   onMinimizeAllWindows?: () => void;
   isChatDetached?: boolean;
   onToggleDetachChat?: () => void;
+  persistentTalkActive?: boolean;
+  persistentTalkSpeaking?: boolean;
+  onTogglePersistentTalk?: () => void;
   onInjectToChat?: (content: string, immediate?: boolean) => void;
   showDesktopSidebar?: boolean;
   onToggleDesktopSidebar?: () => void;
@@ -96,6 +103,9 @@ export const SovereignOSBar: React.FC<SovereignOSBarProps> = ({
   onMinimizeAllWindows,
   isChatDetached = false,
   onToggleDetachChat,
+  persistentTalkActive = false,
+  persistentTalkSpeaking = false,
+  onTogglePersistentTalk,
   onInjectToChat,
   showDesktopSidebar = false,
   onToggleDesktopSidebar,
@@ -106,6 +116,7 @@ export const SovereignOSBar: React.FC<SovereignOSBarProps> = ({
 }) => {
   const [launcherSearch, setLauncherSearch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<'all' | WorkspaceGroupId>('all');
+  const [alertsMenuOpen, setAlertsMenuOpen] = useState(false);
   const [nowClock, setNowClock] = useState<Date>(() => new Date());
   const [customProfile, setCustomProfile] = useState<SovereignOSCustomizationProfile>(() =>
     loadOSCustomizationProfile()
@@ -263,6 +274,34 @@ export const SovereignOSBar: React.FC<SovereignOSBarProps> = ({
             </button>
           )}
 
+          {onTogglePersistentTalk && (
+            <button
+              type="button"
+              onClick={onTogglePersistentTalk}
+              className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                persistentTalkSpeaking
+                  ? 'bg-sky-500/25 border-sky-400/70 text-sky-100'
+                  : persistentTalkActive
+                  ? 'bg-emerald-500/20 border-emerald-400/65 text-emerald-200'
+                  : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 hover:border-emerald-500/40 text-emerald-300'
+              }`}
+              title={
+                persistentTalkActive
+                  ? 'Persistent Voice Chat Active (Click to End)'
+                  : 'Start Unified Persistent Hands-Free Voice Chat Across All Windows'
+              }
+            >
+              {persistentTalkActive ? (
+                <Radio className={`w-3.5 h-3.5 shrink-0 ${persistentTalkSpeaking ? 'text-sky-300' : 'text-emerald-400'}`} />
+              ) : (
+                <Mic className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              )}
+              <span className="hidden sm:inline">
+                {persistentTalkSpeaking ? 'Voice Speaking' : persistentTalkActive ? 'Voice Live' : 'Voice Chat'}
+              </span>
+            </button>
+          )}
+
           <div className="h-4 w-px bg-zinc-800 shrink-0" />
 
           {/* Multi-Workspace Virtual Desktops Switcher (WS 1-4) */}
@@ -348,10 +387,10 @@ export const SovereignOSBar: React.FC<SovereignOSBarProps> = ({
                         onCloseOpenModule(modId);
                       }}
                       aria-label={`Close ${meta.label} window`}
-                      className="p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-100 cursor-pointer"
+                      className="ml-1.5 p-1 rounded-md opacity-60 group-hover:opacity-100 hover:bg-rose-500/25 text-zinc-400 hover:text-rose-300 transition-colors cursor-pointer"
                       title="Close window"
                     >
-                      <X className="w-2.5 h-2.5" />
+                      <X className="w-3 h-3" />
                     </button>
                   )}
                   {/* Active / Running Taskbar Bottom Indicator Bar */}
@@ -535,9 +574,96 @@ export const SovereignOSBar: React.FC<SovereignOSBarProps> = ({
             <span>UID 0 · Ring -3 OS</span>
           </div>
 
+          {/* Unobtrusive Alerts Tray Popover (Telemetry & Crypto Alerts OFF by default) */}
+          {(() => {
+            const notif = customProfile.notifications;
+            const anyAlertsOn = Boolean(
+              notif?.telemetryPopupAlerts || notif?.cryptoTradingAlerts || notif?.telemetryAudioChime
+            );
+            const toggleNotif = (key: 'telemetryPopupAlerts' | 'cryptoTradingAlerts' | 'telemetryAudioChime') => {
+              const next = saveOSCustomizationProfile({
+                notifications: {
+                  ...notif,
+                  [key]: !notif[key]
+                }
+              });
+              setCustomProfile(next);
+            };
+            return (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setAlertsMenuOpen((v) => !v)}
+                  className={`h-8 px-2 rounded-lg border text-[10px] font-medium flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+                    anyAlertsOn
+                      ? 'bg-amber-500/15 border-amber-500/45 text-amber-200'
+                      : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                  title={
+                    anyAlertsOn
+                      ? 'Telemetry or crypto alerts enabled — click to manage'
+                      : 'Telemetry & crypto notifications are silenced (OFF) — click to configure'
+                  }
+                >
+                  {anyAlertsOn ? <Bell className="w-3.5 h-3.5 text-amber-400" /> : <BellOff className="w-3.5 h-3.5" />}
+                  <span className="hidden md:inline">{anyAlertsOn ? 'Alerts On' : 'Alerts Off'}</span>
+                </button>
+
+                {alertsMenuOpen && (
+                  <div
+                    className={`absolute right-0 ${
+                      isBottomWindows ? 'bottom-11' : 'top-10'
+                    } w-64 p-3 rounded-xl bg-zinc-950/95 border border-zinc-700/90 shadow-2xl backdrop-blur-xl z-50 space-y-2.5 text-xs`}
+                  >
+                    <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800">
+                      <span className="font-semibold text-zinc-100">Notifications</span>
+                      <button
+                        type="button"
+                        onClick={() => setAlertsMenuOpen(false)}
+                        className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 cursor-pointer"
+                        aria-label="Close notifications menu"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-snug">
+                      Telemetry and crypto alerts stay off unless explicitly turned on.
+                    </p>
+                    <div className="space-y-1.5">
+                      {[
+                        { key: 'telemetryPopupAlerts' as const, label: 'Telemetry 5m Popups' },
+                        { key: 'cryptoTradingAlerts' as const, label: 'Crypto Trade Alerts' },
+                        { key: 'telemetryAudioChime' as const, label: 'Signal Audio Chime' }
+                      ].map((row) => {
+                        const on = Boolean(notif?.[row.key]);
+                        return (
+                          <button
+                            key={row.key}
+                            type="button"
+                            onClick={() => toggleNotif(row.key)}
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-between text-left cursor-pointer"
+                          >
+                            <span className="text-[11px] text-zinc-200">{row.label}</span>
+                            <span
+                              className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded ${
+                                on ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-400'
+                              }`}
+                            >
+                              {on ? 'ON' : 'OFF'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {isBottomWindows && (
             <>
-              <div className="hidden md:flex flex-col items-end leading-tight px-1.5 text-[10px] font-mono text-zinc-300">
+              <div className="hidden md:flex flex-col items-end leading-tight px-1.5 text-[10px] font-mono text-zinc-300 tabular-nums">
                 <span>{formattedTime}</span>
                 <span className="text-[9px] text-zinc-500">{formattedDate}</span>
               </div>

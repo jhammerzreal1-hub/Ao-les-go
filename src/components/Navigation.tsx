@@ -56,7 +56,8 @@ import {
   Folder,
   Settings,
   Wallet,
-  Award
+  Award,
+  ArrowUpDown
 } from 'lucide-react';
 import type { ModuleType } from '../types';
 
@@ -523,6 +524,17 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
     accentColor: 'text-emerald-300',
     activeBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
     description: 'Autonomous non-reciprocal (0% equity, non-repayable) Grants.gov & foundation grant discovery + auto-application packet builder'
+  },
+  {
+    id: 'transfer-hub',
+    label: 'Downloads, Uploads & Module Lab',
+    shortLabel: 'Downloads & Uploads',
+    group: 'core',
+    category: 'command',
+    icon: ArrowUpDown,
+    accentColor: 'text-sky-400',
+    activeBg: 'bg-sky-500/15 border-sky-500/40 text-sky-200',
+    description: 'Centralized cross-OS downloads catalog, universal uploader, and individual orchestrator module export, syntax check, and hot-swap replacement'
   },
   {
     id: 'packager',

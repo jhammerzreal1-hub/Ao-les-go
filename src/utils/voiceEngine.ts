@@ -187,36 +187,47 @@ export const PRESET_VOICE_PERSONAS: VoicePersona[] = [
   }
 ];
 
-// Blacklist of novelty, musical, ringtone, and foreign/non-native accented voice patterns
+// Blacklist of novelty, musical, robotic, foreign, and non-native accented English voice patterns
 export const EXCLUDED_NOVELTY_VOICE_PATTERNS = [
   'bad news', 'good news', 'bells', 'boing', 'bubbles', 'cellos',
   'deranged', 'hysterical', 'pipe organ', 'trinoids', 'whisper', 'zarvox',
   'bahh', 'albert', 'junior', 'ralph', 'fred', 'kathy', 'princess', 'wobble',
   'sin-ji', 'tink', 'chime', 'ringtone', 'alert', 'sound', 'tone', 'organ',
   'basso', 'trill', 'cell', 'echo', 'jester', 'robot', 'alien', 'noise',
-  'espeak', 'festival', 'mbrola', 'french', 'german', 'spanish', 'italian',
-  'portuguese', 'russian', 'hindi', 'chinese', 'japanese', 'korean', 'arabic',
-  'dutch', 'polish', 'turkish', 'swedish', 'norwegian', 'danish', 'finnish',
-  'greek', 'hebrew', 'indonesia', 'vietnam', 'thai', 'czech', 'hungarian',
-  'romanian', 'slovak', 'ukrainian', 'afrikaans', 'catalan', 'filipino', 'malay'
+  'espeak', 'festival', 'mbrola', 'flite', 'pico',
+  // Foreign languages & non-native English regional accents
+  'french', 'german', 'spanish', 'italian', 'portuguese', 'russian',
+  'hindi', 'hinglish', 'india', 'indian', 'chinese', 'cantonese', 'mandarin',
+  'japanese', 'korean', 'arabic', 'dutch', 'polish', 'turkish', 'swedish',
+  'norwegian', 'danish', 'finnish', 'greek', 'hebrew', 'indonesia', 'vietnam',
+  'thai', 'czech', 'hungarian', 'romanian', 'slovak', 'ukrainian', 'afrikaans',
+  'catalan', 'filipino', 'philippines', 'malay', 'singapore', 'singlish',
+  'hong kong', 'nigeria', 'kenya', 'tanzania', 'south africa', 'ghana',
+  // Common OS voice names for non-native English locales (en-IN, en-PH, en-SG, en-HK, en-NG, en-ZA, en-KE)
+  'rishi', 'veena', 'neerja', 'prabhat', 'heera', 'ravi', 'sangeeta', 'lekha',
+  'isha', 'kavya', 'aarav', 'ananya', 'swara', 'madhur', 'rosa', 'angelo',
+  'luna', 'wayne', 'yan', 'sam', 'abeo', 'ezinne', 'asili', 'chilemba', 'leah', 'luke', 'tessa'
 ];
 
+const STRICT_NATIVE_ENGLISH_LOCALES = new Set([
+  'en-us',
+  'en-gb',
+  'en-ca',
+  'en-au',
+  'en-nz',
+  'en-ie'
+]);
+
 export const isStrictNativeEnglishVoice = (voice: SpeechSynthesisVoice): boolean => {
-  const lang = (voice.lang || '').toLowerCase().replace('_', '-');
-  // Strictly allow only native English locales (US, UK, AU, CA, NZ, IE)
-  const isNativeEnLocale =
-    lang === 'en-us' ||
-    lang === 'en-gb' ||
-    lang === 'en-au' ||
-    lang === 'en-ca' ||
-    lang === 'en-nz' ||
-    lang === 'en-ie' ||
-    lang === 'en';
-  if (!isNativeEnLocale) return false;
+  const lang = (voice.lang || '').toLowerCase().replace('_', '-').trim();
+  // Strictly allow ONLY core native English locales (US, UK, CA, AU, NZ, IE)
+  // Rejects foreign languages and foreign-accented English locales (en-IN, en-SG, en-PH, en-NG, en-HK, en-ZA, etc.)
+  if (!STRICT_NATIVE_ENGLISH_LOCALES.has(lang)) return false;
 
   const name = (voice.name || '').toLowerCase();
+  const uri = (voice.voiceURI || '').toLowerCase();
   for (const pattern of EXCLUDED_NOVELTY_VOICE_PATTERNS) {
-    if (name.includes(pattern)) return false;
+    if (name.includes(pattern) || uri.includes(pattern)) return false;
   }
   return true;
 };
@@ -233,10 +244,10 @@ export const selectBestSystemVoice = (
 ): SpeechSynthesisVoice | null => {
   if (!availableVoices || availableVoices.length === 0) return null;
 
-  // 1. Strictly filter to native English voices ONLY so it never speaks with a foreign language accent
+  // 1. Strictly filter to native US/UK/CA/AU/NZ/IE English voices ONLY — NEVER fall back to foreign or foreign-accented voices
   const nativeEnVoices = availableVoices.filter(isStrictNativeEnglishVoice);
-  const fallbackEnVoices = availableVoices.filter((v) => (v.lang || '').toLowerCase().startsWith('en'));
-  const pool = nativeEnVoices.length > 0 ? nativeEnVoices : fallbackEnVoices.length > 0 ? fallbackEnVoices : availableVoices;
+  if (nativeEnVoices.length === 0) return null;
+  const pool = nativeEnVoices;
 
   // Infer gender and US/UK preference if preferredNameOrUri is one of our preset personas
   const matchedPersona = preferredNameOrUri
@@ -246,9 +257,10 @@ export const selectBestSystemVoice = (
     : undefined;
 
   const targetGender = preferredGender || matchedPersona?.gender || 'female';
-  const targetLang = (matchedPersona?.preferredLang || preferredLang || 'en-US').toLowerCase().replace('_', '-');
+  const rawTargetLang = (matchedPersona?.preferredLang || preferredLang || 'en-US').toLowerCase().replace('_', '-');
+  const targetLang = STRICT_NATIVE_ENGLISH_LOCALES.has(rawTargetLang) ? rawTargetLang : 'en-us';
 
-  // 2. If preferredNameOrUri directly matches a real native English browser voice, return it
+  // 2. If preferredNameOrUri directly matches a verified native English browser voice, return it
   if (preferredNameOrUri && !matchedPersona) {
     const exact = pool.find(
       (v) =>
@@ -259,10 +271,18 @@ export const selectBestSystemVoice = (
     if (exact) return exact;
   }
 
-  // 3. Prefer voices matching the target English dialect (e.g. en-US first)
-  const usVoices = pool.filter((v) => (v.lang || '').toLowerCase().replace('_', '-') === 'en-us');
+  // 3. Strongly prefer US English or British English first (easiest to understand)
   const dialectVoices = pool.filter((v) => (v.lang || '').toLowerCase().replace('_', '-') === targetLang);
-  const langPool = dialectVoices.length > 0 ? dialectVoices : usVoices.length > 0 ? usVoices : pool;
+  const usVoices = pool.filter((v) => (v.lang || '').toLowerCase().replace('_', '-') === 'en-us');
+  const gbVoices = pool.filter((v) => (v.lang || '').toLowerCase().replace('_', '-') === 'en-gb');
+  const langPool =
+    dialectVoices.length > 0
+      ? dialectVoices
+      : usVoices.length > 0
+      ? usVoices
+      : gbVoices.length > 0
+      ? gbVoices
+      : pool;
 
   // 4. Ranked priority list of the most realistic native English human system voices
   const highRealismFemalePriority = [

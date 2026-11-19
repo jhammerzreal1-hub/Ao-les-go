@@ -1157,7 +1157,13 @@ export const MASTER_MODULE_MANUAL_SPECS: Array<
   }
 ];
 
-export async function runForensicSystemAudit(): Promise<ForensicAuditReport> {
+let lastForensicAuditCache: { report: ForensicAuditReport; cachedAt: number } | null = null;
+const FORENSIC_AUDIT_CACHE_TTL_MS = 20_000;
+
+export async function runForensicSystemAudit(forceRefresh = false): Promise<ForensicAuditReport> {
+  if (!forceRefresh && lastForensicAuditCache && Date.now() - lastForensicAuditCache.cachedAt < FORENSIC_AUDIT_CACHE_TTL_MS) {
+    return lastForensicAuditCache.report;
+  }
   const t0 = Date.now();
   const cpus = os.cpus();
   const loadAvg = os.loadavg();
@@ -1442,7 +1448,7 @@ export async function runForensicSystemAudit(): Promise<ForensicAuditReport> {
     .update(JSON.stringify(reportPayload) + String(t0))
     .digest('hex');
 
-  return {
+  const finalReport: ForensicAuditReport = {
     generatedAt: reportPayload.generatedAt,
     reportHash,
     authority: {
@@ -1474,6 +1480,8 @@ export async function runForensicSystemAudit(): Promise<ForensicAuditReport> {
     fullProjectMerkleAudit,
     osSupremacyMatrix
   };
+  lastForensicAuditCache = { report: finalReport, cachedAt: Date.now() };
+  return finalReport;
 }
 
 export async function executeForensicRepair(actionId: string): Promise<{
@@ -1593,7 +1601,7 @@ export async function executeForensicRepair(actionId: string): Promise<{
     stepsExecuted.push('Synchronized master manual to /app/applet/FORENSIC_SYSTEMS_MANUAL.md.');
   } catch {}
 
-  const report = await runForensicSystemAudit();
+  const report = await runForensicSystemAudit(true);
   const repairedAt = new Date().toISOString();
   const proofHash = crypto
     .createHash('sha256')

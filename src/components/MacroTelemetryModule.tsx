@@ -35,9 +35,15 @@ import {
   LineChart,
   Clock,
   DollarSign,
-  Eye
+  Eye,
+  BellOff
 } from 'lucide-react';
 import type { ModuleType } from '../types';
+import {
+  loadOSCustomizationProfile,
+  saveOSCustomizationProfile,
+  type SovereignOSCustomizationProfile
+} from '../utils/osCustomizationStore';
 
 export interface MacroTelemetryModuleProps {
   onSelectModule?: (mod: ModuleType) => void;
@@ -479,12 +485,48 @@ export const MacroTelemetryModule: React.FC<MacroTelemetryModuleProps> = ({ onIn
   const [live2sStreamArmed, setLive2sStreamArmed] = useState<boolean>(true);
   const [tickCount2s, setTickCount2s] = useState<number>(0);
 
-  // Autonomous Notification Controls
-  const [autonomousAlertsEnabled, setAutonomousAlertsEnabled] = useState<boolean>(true);
-  const [audioChimeEnabled, setAudioChimeEnabled] = useState<boolean>(true);
+  // Autonomous Notification Controls (OFF by default unless explicitly enabled by user)
+  const [autonomousAlertsEnabled, setAutonomousAlertsEnabled] = useState<boolean>(
+    () => loadOSCustomizationProfile().notifications.telemetryPopupAlerts
+  );
+  const [audioChimeEnabled, setAudioChimeEnabled] = useState<boolean>(
+    () => loadOSCustomizationProfile().notifications.telemetryAudioChime
+  );
   const [alertFilter, setAlertFilter] = useState<'ALL' | 'BUY_PROFIT' | 'SELL_PROTECT'>('ALL');
   const [notifiedPositionSize, setNotifiedPositionSize] = useState<number>(10000);
   const lastChimedAlertIdRef = useRef<string>('');
+
+  useEffect(() => {
+    const onCustom = (e: Event) => {
+      const profile = (e as CustomEvent<SovereignOSCustomizationProfile>).detail || loadOSCustomizationProfile();
+      setAutonomousAlertsEnabled(Boolean(profile.notifications?.telemetryPopupAlerts));
+      setAudioChimeEnabled(Boolean(profile.notifications?.telemetryAudioChime));
+    };
+    window.addEventListener('sovereign_os_customization_changed', onCustom);
+    return () => window.removeEventListener('sovereign_os_customization_changed', onCustom);
+  }, []);
+
+  const togglePopupAlerts = () => {
+    const nextVal = !autonomousAlertsEnabled;
+    setAutonomousAlertsEnabled(nextVal);
+    saveOSCustomizationProfile({
+      notifications: {
+        ...loadOSCustomizationProfile().notifications,
+        telemetryPopupAlerts: nextVal
+      }
+    });
+  };
+
+  const toggleAudioChime = () => {
+    const nextVal = !audioChimeEnabled;
+    setAudioChimeEnabled(nextVal);
+    saveOSCustomizationProfile({
+      notifications: {
+        ...loadOSCustomizationProfile().notifications,
+        telemetryAudioChime: nextVal
+      }
+    });
+  };
 
   // Multi-Market Overlapped Graph State
   const [graphNormMode, setGraphNormMode] = useState<GraphNormMode>('pct');
@@ -867,9 +909,9 @@ export const MacroTelemetryModule: React.FC<MacroTelemetryModuleProps> = ({ onIn
               <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded">
                 {mkr?.meanEmpiricalCoverage99Pct ?? 99.7}% CONFORMAL CERTAINTY (α=0.01)
               </span>
-              {autonomousAlerts.length > 0 && (
+              {autonomousAlerts.length > 0 && autonomousAlertsEnabled && (
                 <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded inline-flex items-center gap-1">
-                  <BellRing className="w-3 h-3 text-amber-400 animate-bounce" />
+                  <BellRing className="w-3 h-3 text-amber-400" />
                   <span>{autonomousAlerts.length} ACTIVE 5m SIGNALS</span>
                 </span>
               )}
@@ -919,16 +961,30 @@ export const MacroTelemetryModule: React.FC<MacroTelemetryModuleProps> = ({ onIn
 
             <button
               type="button"
-              onClick={() => setAudioChimeEnabled((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-mono transition-colors cursor-pointer ${
+              onClick={togglePopupAlerts}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-mono transition-colors cursor-pointer whitespace-nowrap ${
+                autonomousAlertsEnabled
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+              }`}
+              title="Off by default: explicitly enable OS popup notifications for 5-minute telemetry signals"
+            >
+              {autonomousAlertsEnabled ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{autonomousAlertsEnabled ? 'Popups ON' : 'Popups OFF'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleAudioChime}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-mono transition-colors cursor-pointer whitespace-nowrap ${
                 audioChimeEnabled
                   ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-200'
               }`}
-              title="Toggle autonomous audio alert chime on 5-minute Buy/Profit & Loss-Prevention warnings"
+              title="Off by default: toggle audio alert chime on critical 5-minute warnings"
             >
               {audioChimeEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{audioChimeEnabled ? 'Chime ON' : 'Muted'}</span>
+              <span className="hidden sm:inline">{audioChimeEnabled ? 'Chime ON' : 'Chime OFF'}</span>
             </button>
 
             <button
@@ -1445,14 +1501,14 @@ export const MacroTelemetryModule: React.FC<MacroTelemetryModuleProps> = ({ onIn
 
                 <button
                   type="button"
-                  onClick={() => setAutonomousAlertsEnabled((v) => !v)}
+                  onClick={togglePopupAlerts}
                   className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold border transition-colors cursor-pointer ${
                     autonomousAlertsEnabled
                       ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-500'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  {autonomousAlertsEnabled ? 'AUTONOMOUS ALERTS ARMED' : 'ALERTS PAUSED'}
+                  {autonomousAlertsEnabled ? 'POPUP ALERTS ON' : 'POPUP ALERTS OFF'}
                 </button>
               </div>
             </div>

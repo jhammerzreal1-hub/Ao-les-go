@@ -321,11 +321,16 @@ export class AudioSwarm {
           this.lockedVoice = selectBestSystemVoice(voices, request.personaId, undefined, 'en-US');
           this.lockedPersonaId = personaKey;
         }
-        if (this.lockedVoice) {
-          utterance.voice = this.lockedVoice;
-          const vLang = (this.lockedVoice.lang || 'en-US').replace('_', '-');
-          utterance.lang = vLang.toLowerCase().startsWith('en') ? vLang : 'en-US';
+        if (!this.lockedVoice) {
+          // Never allow browser default to fall back to a foreign or foreign-accented voice
+          this.isLocked = false;
+          if (request.onEnd) request.onEnd();
+          this.processQueue();
+          return;
         }
+        utterance.voice = this.lockedVoice;
+        const vLang = (this.lockedVoice.lang || 'en-US').replace('_', '-');
+        utterance.lang = /^en-(US|GB|CA|AU|NZ|IE)$/i.test(vLang) ? vLang : 'en-US';
 
         // Strongly retain utterance reference in class array so Chromium GC never collects it mid-sentence
         this.activeUtterances.push(utterance);

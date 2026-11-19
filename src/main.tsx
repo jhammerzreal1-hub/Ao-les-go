@@ -30,8 +30,15 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 window.addEventListener('error', (event) => {
-  const msg = String(event.error?.message || event.message || '');
-  if (msg.includes('WebSocket') || msg.includes('vite')) {
+  const msg = String(event.error?.message || event.message || '').trim();
+  const isOpaqueCrossOriginScriptError =
+    /^script error\.?$/i.test(msg) && !event.error && !event.filename && (!event.lineno || event.lineno === 0);
+  if (
+    isOpaqueCrossOriginScriptError ||
+    msg.includes('WebSocket') ||
+    msg.includes('vite') ||
+    msg.includes('ResizeObserver loop')
+  ) {
     event.preventDefault();
     return;
   }

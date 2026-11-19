@@ -93,7 +93,82 @@ const TARGET_SYSTEM_FILE = path.join(DATA_DIR, 'target_system.json');
 const PATCH_LEDGER_FILE = path.join(DATA_DIR, 'atomic_patch_ledger.json');
 
 const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', '.aistudio', 'android', '.next', 'target', '__pycache__']);
+const CODE_SEARCH_IGNORED_DIRS = new Set([...IGNORED_DIRS, 'data', 'coverage', '.cache']);
 const PROTECTED_CORE_FILES = new Set(['server.ts', 'package.json', 'tsconfig.json', 'vite.config.ts']);
+
+// Fast 15-second TTL workspace file index so voice/chat agents can resolve short filenames (e.g. "ChatModule.tsx") in <1ms
+const workspaceIndexCache = new Map<string, { builtAt: number; files: string[] }>();
+const WORKSPACE_INDEX_TTL_MS = 15_000;
+
+function getCachedWorkspaceFiles(rootDir: string): string[] {
+  const now = Date.now();
+  const cached = workspaceIndexCache.get(rootDir);
+  if (cached && now - cached.builtAt < WORKSPACE_INDEX_TTL_MS) {
+    return cached.files;
+  }
+  const files: string[] = [];
+  const walkSync = (dir: string, relBase: string, depth: number) => {
+    if (depth > 6 || files.length >= 1500) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (CODE_SEARCH_IGNORED_DIRS.has(entry.name)) continue;
+      if (entry.name === '.vault.key' || entry.name === '.secrets.vault.enc') continue;
+      const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walkSync(path.join(dir, entry.name), rel, depth + 1);
+      } else {
+        files.push(rel);
+      }
+    }
+  };
+  walkSync(rootDir, '', 0);
+  workspaceIndexCache.set(rootDir, { builtAt: now, files });
+  return files;
+}
+
+function tryFuzzyResolveWorkspaceFile(rawInput: string, rootDir: string): string | null {
+  const cleaned = rawInput.replace(/^\/+/, '').replace(/^\.\//, '').trim();
+  if (!cleaned || cleaned.includes('..')) return null;
+  const files = getCachedWorkspaceFiles(rootDir);
+  const lower = cleaned.toLowerCase();
+
+  // 1. Case-insensitive exact relative path match
+  const exactRel = files.find((f) => f.toLowerCase() === lower);
+  if (exactRel) return path.resolve(rootDir, exactRel);
+
+  // 2. Exact basename match (e.g. "ChatModule.tsx" -> "src/components/ChatModule.tsx")
+  const exactBase = files.filter((f) => path.basename(f).toLowerCase() === lower);
+  if (exactBase.length === 1) return path.resolve(rootDir, exactBase[0]);
+  if (exactBase.length > 1) {
+    exactBase.sort((a, b) => a.length - b.length);
+    return path.resolve(rootDir, exactBase[0]);
+  }
+
+  // 3. Basename without extension match (e.g. "ChatModule" or "voiceEngine")
+  const stemMatches = files.filter((f) => {
+    const base = path.basename(f);
+    const stem = base.slice(0, base.length - path.extname(base).length).toLowerCase();
+    return stem === lower;
+  });
+  if (stemMatches.length > 0) {
+    stemMatches.sort((a, b) => a.length - b.length);
+    return path.resolve(rootDir, stemMatches[0]);
+  }
+
+  // 4. Path suffix match (e.g. "components/ChatModule.tsx")
+  const suffixMatches = files.filter((f) => f.toLowerCase().endsWith('/' + lower));
+  if (suffixMatches.length > 0) {
+    suffixMatches.sort((a, b) => a.length - b.length);
+    return path.resolve(rootDir, suffixMatches[0]);
+  }
+
+  return null;
+}
 
 let activeTargetSystem: TargetSystemConfig = {
   rootPath: ORCHESTRATOR_ROOT,
@@ -325,6 +400,21 @@ export function resolveUniversalPath(
     }
   }
 
+  // Instant fuzzy workspace path resolution for short/partial filenames when reading (or patching existing files)
+  if (mode === 'read' && !fs.existsSync(resolvedPath) && baseRoot !== '/') {
+    const fuzzyTarget = tryFuzzyResolveWorkspaceFile(raw, baseRoot);
+    if (fuzzyTarget && fs.existsSync(fuzzyTarget)) {
+      resolvedPath = fuzzyTarget;
+    } else if (baseRoot !== ORCHESTRATOR_ROOT) {
+      const fuzzyOrch = tryFuzzyResolveWorkspaceFile(raw, ORCHESTRATOR_ROOT);
+      if (fuzzyOrch && fs.existsSync(fuzzyOrch)) {
+        baseRoot = ORCHESTRATOR_ROOT;
+        resolvedPath = fuzzyOrch;
+        effectiveScope = 'orchestrator';
+      }
+    }
+  }
+
   const relFromOrch = path.relative(ORCHESTRATOR_ROOT, resolvedPath).split(path.sep).join('/');
   const relFromBase = baseRoot === '/'
     ? resolvedPath
@@ -354,6 +444,7 @@ async function atomicWriteTextFile(targetPath: string, content: string): Promise
   const tmpPath = `${targetPath}.aurelius-tmp-${process.pid}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   await fs.promises.writeFile(tmpPath, content, 'utf-8');
   await fs.promises.rename(tmpPath, targetPath);
+  workspaceIndexCache.clear();
 }
 
 function createCompactDiff(filePath: string, before: string, after: string): string {
@@ -606,29 +697,132 @@ export async function autonomyReadFile(args: Record<string, any>): Promise<Auton
     };
   }
   const rawContent = await fs.promises.readFile(targetPath, 'utf-8');
-  const redacted = internalSecretsHandler.redactText(rawContent);
+  const allLines = rawContent.split('\n');
+  const totalLines = allLines.length;
   const startLine = Number(args.startLine);
   const endLine = Number(args.endLine);
+  const query = typeof args.query === 'string' && args.query.trim() ? args.query.trim() : (typeof args.symbol === 'string' && args.symbol.trim() ? args.symbol.trim() : '');
+  const compactForLive = Boolean(args.compactForLive);
+  const maxChars = Number.isFinite(Number(args.maxChars)) && Number(args.maxChars) > 200
+    ? Math.floor(Number(args.maxChars))
+    : (compactForLive ? 3600 : 0);
 
+  // Fast query/symbol jump: locate matching lines inside large files and return a clean line-numbered context window
+  if (query && !(Number.isFinite(startLine) && startLine >= 1)) {
+    const qLower = query.toLowerCase();
+    const hitLines: number[] = [];
+    for (let i = 0; i < allLines.length; i++) {
+      if (allLines[i].toLowerCase().includes(qLower)) {
+        hitLines.push(i + 1);
+        if (hitLines.length >= 12) break;
+      }
+    }
+    if (hitLines.length === 0) {
+      return {
+        tag: 'READ_FILE',
+        action: `Search inside ${cleaned} [${scope}]`,
+        success: true,
+        summary: `No matches for "${query}" inside ${cleaned} (${totalLines} lines)`,
+        output: {
+          path: cleaned,
+          scope,
+          totalLines,
+          query,
+          matchesFound: 0,
+          hint: 'Try a shorter symbol/keyword or pass startLine/endLine.'
+        }
+      };
+    }
+    const anchor = hitLines[0];
+    const contextRadius = compactForLive ? 25 : 45;
+    const from = Math.max(1, anchor - Math.floor(contextRadius / 2));
+    const to = Math.min(totalLines, anchor + contextRadius);
+    let slice = allLines
+      .slice(from - 1, to)
+      .map((line, idx) => `${from + idx}: ${line}`)
+      .join('\n');
+    slice = internalSecretsHandler.redactText(slice);
+    if (maxChars > 0 && slice.length > maxChars) {
+      slice = `${slice.slice(0, maxChars)}\n... [truncated at ${maxChars} chars]`;
+    }
+    return {
+      tag: 'READ_FILE',
+      action: `Read ${cleaned} around "${query}" (lines ${from}-${to}) [${scope}]`,
+      success: true,
+      summary: `Found "${query}" at line ${anchor} (total ${hitLines.length} hit(s)) in ${cleaned} (${totalLines} lines)`,
+      output: compactForLive
+        ? { path: cleaned, scope, totalLines, matchedLines: hitLines, shownLines: `${from}-${to}`, code: slice }
+        : slice
+    };
+  }
+
+  // Explicit line-range slice (slices BEFORE redacting so reading 100 lines of a 1MB file takes <5ms)
   if (Number.isFinite(startLine) && startLine >= 1) {
-    const lines = redacted.split('\n');
     const from = Math.max(1, Math.floor(startLine));
-    const to = Number.isFinite(endLine) && endLine >= from ? Math.min(lines.length, Math.floor(endLine)) : lines.length;
-    const slice = lines.slice(from - 1, to).map((line, idx) => `${from + idx}: ${line}`).join('\n');
+    const defaultWindow = compactForLive ? 95 : totalLines;
+    const to = Number.isFinite(endLine) && endLine >= from
+      ? Math.min(totalLines, Math.floor(endLine))
+      : Math.min(totalLines, from + defaultWindow - 1);
+    let slice = allLines
+      .slice(from - 1, to)
+      .map((line, idx) => `${from + idx}: ${line}`)
+      .join('\n');
+    slice = internalSecretsHandler.redactText(slice);
+    const truncated = maxChars > 0 && slice.length > maxChars;
+    if (truncated) {
+      slice = `${slice.slice(0, maxChars)}\n... [truncated; pass startLine/endLine to read more]`;
+    }
     return {
       tag: 'READ_FILE',
       action: `Read lines ${from}-${to} of ${cleaned} [${scope}]`,
       success: true,
-      summary: `Read lines ${from}-${to} of ${lines.length} from ${cleaned} [${scope}]`,
-      output: slice
+      summary: `Read lines ${from}-${to} of ${totalLines} from ${cleaned} [${scope}]`,
+      output: compactForLive
+        ? { path: cleaned, scope, totalLines, shownLines: `${from}-${to}`, truncated: truncated || to < totalLines, code: slice }
+        : slice
     };
   }
 
+  // Live-voice compact full-file read: return line-numbered head capped cleanly so large files never stall Live audio
+  if (compactForLive) {
+    const capChars = maxChars || 3600;
+    const collected: string[] = [];
+    let charCount = 0;
+    let lastLineShown = 0;
+    for (let i = 0; i < totalLines; i++) {
+      const formatted = `${i + 1}: ${allLines[i]}`;
+      if (charCount + formatted.length + 1 > capChars && collected.length > 0) {
+        break;
+      }
+      collected.push(formatted);
+      charCount += formatted.length + 1;
+      lastLineShown = i + 1;
+    }
+    const redactedSlice = internalSecretsHandler.redactText(collected.join('\n'));
+    const truncated = lastLineShown < totalLines;
+    return {
+      tag: 'READ_FILE',
+      action: `Read file: ${cleaned} [${scope}]`,
+      success: true,
+      summary: `Read lines 1-${lastLineShown} of ${totalLines} from ${cleaned} [${scope}]`,
+      output: {
+        path: cleaned,
+        scope,
+        totalLines,
+        shownLines: `1-${lastLineShown}`,
+        truncated,
+        ...(truncated ? { hint: 'Large file excerpted. Pass query:"symbol" or startLine/endLine to jump anywhere.' } : {}),
+        code: redactedSlice
+      }
+    };
+  }
+
+  const redacted = internalSecretsHandler.redactText(rawContent);
   return {
     tag: 'READ_FILE',
     action: `Read file: ${cleaned} [${scope}]`,
     success: true,
-    summary: `Read ${redacted.length} chars from ${cleaned} [${scope}] (sha256:${sha256(rawContent).slice(0, 10)})`,
+    summary: `Read ${redacted.length} chars (${totalLines} lines) from ${cleaned} [${scope}] (sha256:${sha256(rawContent).slice(0, 10)})`,
     output: redacted
   };
 }
@@ -712,53 +906,63 @@ export async function autonomyPatchFile(args: Record<string, any>): Promise<Auto
   const verifyCompile = Boolean(args.verifyCompile);
   const agentId = String(args.agentId || 'uid_0');
 
-  if (!fs.existsSync(targetPath)) {
+  let effectiveCleaned = cleaned;
+  let effectiveTargetPath = targetPath;
+  if (!fs.existsSync(effectiveTargetPath) && baseRoot !== '/') {
+    const fuzzy = tryFuzzyResolveWorkspaceFile(String(args.filePath || args.path || ''), baseRoot);
+    if (fuzzy && fs.existsSync(fuzzy)) {
+      effectiveTargetPath = fuzzy;
+      effectiveCleaned = path.relative(baseRoot, fuzzy).split(path.sep).join('/');
+    }
+  }
+
+  if (!fs.existsSync(effectiveTargetPath)) {
     return {
       tag: 'PATCH_FILE',
-      action: `Patch ${cleaned} [${scope}]`,
+      action: `Patch ${effectiveCleaned} [${scope}]`,
       success: false,
-      summary: `File not found: ${cleaned} (${targetPath})`,
-      output: { error: `File not found: ${cleaned}`, targetPath, scope }
+      summary: `File not found: ${effectiveCleaned} (${effectiveTargetPath})`,
+      output: { error: `File not found: ${effectiveCleaned}`, targetPath: effectiveTargetPath, scope }
     };
   }
 
-  const original = await fs.promises.readFile(targetPath, 'utf-8');
+  const original = await fs.promises.readFile(effectiveTargetPath, 'utf-8');
   let modified: string;
   try {
-    modified = applyHunkList(cleaned, original, [{ targetContent, replacementContent, startLine, endLine, allowMultiple }]);
+    modified = applyHunkList(effectiveCleaned, original, [{ targetContent, replacementContent, startLine, endLine, allowMultiple }]);
   } catch (err: any) {
     return {
       tag: 'PATCH_FILE',
-      action: `Patch ${cleaned} [${scope}]`,
+      action: `Patch ${effectiveCleaned} [${scope}]`,
       success: false,
-      summary: err?.message || `Patch pre-flight failed on ${cleaned}`,
-      output: { error: err?.message || 'Patch pre-flight failed', targetPath, scope }
+      summary: err?.message || `Patch pre-flight failed on ${effectiveCleaned}`,
+      output: { error: err?.message || 'Patch pre-flight failed', targetPath: effectiveTargetPath, scope }
     };
   }
 
-  await atomicWriteTextFile(targetPath, modified);
+  await atomicWriteTextFile(effectiveTargetPath, modified);
 
   if (verifyCompile) {
-    const tsc = await runTypeCheck(baseRoot === '/' ? path.dirname(targetPath) : baseRoot, targetPath);
+    const tsc = await runTypeCheck(baseRoot === '/' ? path.dirname(effectiveTargetPath) : baseRoot, effectiveTargetPath);
     if (!tsc.clean) {
-      await atomicWriteTextFile(targetPath, original);
+      await atomicWriteTextFile(effectiveTargetPath, original);
       return {
         tag: 'PATCH_FILE',
-        action: `Patch & rollback ${cleaned} [${scope}]`,
+        action: `Patch & rollback ${effectiveCleaned} [${scope}]`,
         success: false,
-        summary: `Compile check failed; rolled back ${cleaned}`,
-        output: { path: cleaned, targetPath, scope, rolledBack: true, diagnostics: tsc.diagnostics }
+        summary: `Compile check failed; rolled back ${effectiveCleaned}`,
+        output: { path: effectiveCleaned, targetPath: effectiveTargetPath, scope, rolledBack: true, diagnostics: tsc.diagnostics }
       };
     }
   }
 
-  const diff = createCompactDiff(cleaned, original, modified);
+  const diff = createCompactDiff(effectiveCleaned, original, modified);
   const snapshot = recordPatchSnapshot({
     agentId,
     operation: 'patch',
     scope,
-    displayPath: cleaned,
-    targetPath,
+    displayPath: effectiveCleaned,
+    targetPath: effectiveTargetPath,
     existedBefore: true,
     previousContent: original,
     beforeSha256: sha256(original).slice(0, 16),
@@ -768,13 +972,13 @@ export async function autonomyPatchFile(args: Record<string, any>): Promise<Auto
 
   return {
     tag: 'PATCH_FILE',
-    action: `Patched file: ${cleaned} [${scope}]`,
+    action: `Patched file: ${effectiveCleaned} [${scope}]`,
     success: true,
-    summary: `Atomically patched ${cleaned} [${scope}] (patchId:${snapshot.patchId})${verifyCompile ? ' (verified)' : ''}`,
+    summary: `Atomically patched ${effectiveCleaned} [${scope}] (patchId:${snapshot.patchId})${verifyCompile ? ' (verified)' : ''}`,
     diff,
     output: {
-      path: cleaned,
-      targetPath,
+      path: effectiveCleaned,
+      targetPath: effectiveTargetPath,
       scope,
       patchId: snapshot.patchId,
       sha256: sha256(modified).slice(0, 16),
@@ -814,53 +1018,62 @@ export async function autonomyAtomicPatchFile(args: Record<string, any>): Promis
       output: { error: 'edits array is required', targetPath, scope }
     };
   }
-  if (!fs.existsSync(targetPath)) {
+  let effectiveCleaned = cleaned;
+  let effectiveTargetPath = targetPath;
+  if (!fs.existsSync(effectiveTargetPath) && baseRoot !== '/') {
+    const fuzzy = tryFuzzyResolveWorkspaceFile(String(args.filePath || args.path || ''), baseRoot);
+    if (fuzzy && fs.existsSync(fuzzy)) {
+      effectiveTargetPath = fuzzy;
+      effectiveCleaned = path.relative(baseRoot, fuzzy).split(path.sep).join('/');
+    }
+  }
+  if (!fs.existsSync(effectiveTargetPath)) {
     return {
       tag: 'ATOMIC_PATCH',
-      action: `Atomic patch ${cleaned} [${scope}]`,
+      action: `Atomic patch ${effectiveCleaned} [${scope}]`,
       success: false,
-      summary: `File not found: ${cleaned} (${targetPath})`,
-      output: { error: `File not found: ${cleaned}`, targetPath, scope }
+      summary: `File not found: ${effectiveCleaned} (${effectiveTargetPath})`,
+      output: { error: `File not found: ${effectiveCleaned}`, targetPath: effectiveTargetPath, scope }
     };
   }
 
-  const original = await fs.promises.readFile(targetPath, 'utf-8');
+  const original = await fs.promises.readFile(effectiveTargetPath, 'utf-8');
   let modified: string;
   try {
-    modified = applyHunkList(cleaned, original, edits);
+    modified = applyHunkList(effectiveCleaned, original, edits);
   } catch (err: any) {
     return {
       tag: 'ATOMIC_PATCH',
-      action: `Atomic patch ${cleaned} [${scope}]`,
+      action: `Atomic patch ${effectiveCleaned} [${scope}]`,
       success: false,
-      summary: err?.message || `Atomic patch pre-flight failed on ${cleaned}`,
-      output: { error: err?.message || 'Atomic patch failed', targetPath, scope }
+      summary: err?.message || `Atomic patch pre-flight failed on ${effectiveCleaned}`,
+      output: { error: err?.message || 'Atomic patch failed', targetPath: effectiveTargetPath, scope }
     };
   }
 
-  await atomicWriteTextFile(targetPath, modified);
+  await atomicWriteTextFile(effectiveTargetPath, modified);
 
   if (verifyCompile) {
-    const tsc = await runTypeCheck(baseRoot === '/' ? path.dirname(targetPath) : baseRoot, targetPath);
+    const tsc = await runTypeCheck(baseRoot === '/' ? path.dirname(effectiveTargetPath) : baseRoot, effectiveTargetPath);
     if (!tsc.clean) {
-      await atomicWriteTextFile(targetPath, original);
+      await atomicWriteTextFile(effectiveTargetPath, original);
       return {
         tag: 'ATOMIC_PATCH',
-        action: `Atomic patch & rollback ${cleaned} [${scope}]`,
+        action: `Atomic patch & rollback ${effectiveCleaned} [${scope}]`,
         success: false,
-        summary: `Syntax/TypeScript check failed after ${edits.length} hunks; rolled back ${cleaned}`,
-        output: { path: cleaned, targetPath, scope, hunks: edits.length, rolledBack: true, diagnostics: tsc.diagnostics }
+        summary: `Syntax/TypeScript check failed after ${edits.length} hunks; rolled back ${effectiveCleaned}`,
+        output: { path: effectiveCleaned, targetPath: effectiveTargetPath, scope, hunks: edits.length, rolledBack: true, diagnostics: tsc.diagnostics }
       };
     }
   }
 
-  const diff = createCompactDiff(cleaned, original, modified);
+  const diff = createCompactDiff(effectiveCleaned, original, modified);
   const snapshot = recordPatchSnapshot({
     agentId,
     operation: 'atomicPatch',
     scope,
-    displayPath: cleaned,
-    targetPath,
+    displayPath: effectiveCleaned,
+    targetPath: effectiveTargetPath,
     existedBefore: true,
     previousContent: original,
     beforeSha256: sha256(original).slice(0, 16),
@@ -870,13 +1083,13 @@ export async function autonomyAtomicPatchFile(args: Record<string, any>): Promis
 
   return {
     tag: 'ATOMIC_PATCH',
-    action: `Atomic multi-hunk patch: ${cleaned} [${scope}]`,
+    action: `Atomic multi-hunk patch: ${effectiveCleaned} [${scope}]`,
     success: true,
-    summary: `Applied ${edits.length} atomic hunk(s) to ${cleaned} [${scope}] (patchId:${snapshot.patchId})${verifyCompile ? ' (verified)' : ''}`,
+    summary: `Applied ${edits.length} atomic hunk(s) to ${effectiveCleaned} [${scope}] (patchId:${snapshot.patchId})${verifyCompile ? ' (verified)' : ''}`,
     diff,
     output: {
-      path: cleaned,
-      targetPath,
+      path: effectiveCleaned,
+      targetPath: effectiveTargetPath,
       scope,
       patchId: snapshot.patchId,
       hunksApplied: edits.length,
@@ -1223,11 +1436,15 @@ export async function autonomyListDirectory(args: Record<string, any>): Promise<
     };
   }
 
-  const recursive = Boolean(args.recursive);
-  const maxDepth = Math.min(Math.max(Number(args.maxDepth) || 2, 1), 6);
+  const filterText = typeof args.filter === 'string' && args.filter.trim() ? args.filter.trim().toLowerCase() : '';
+  const compact = Boolean(args.compact);
+  const recursive = Boolean(args.recursive) || Boolean(filterText);
+  const maxDepth = Math.min(Math.max(Number(args.maxDepth) || (filterText ? 5 : 2), 1), 6);
+  const maxItems = compact ? 100 : 600;
   const results: Array<{ name: string; path: string; fullPath: string; type: 'directory' | 'file'; size?: number }> = [];
 
   const walk = async (dir: string, relBase: string, depth: number) => {
+    if (results.length >= maxItems) return;
     let entries: fs.Dirent[] = [];
     try {
       entries = await fs.promises.readdir(dir, { withFileTypes: true });
@@ -1235,26 +1452,46 @@ export async function autonomyListDirectory(args: Record<string, any>): Promise<
       return;
     }
     for (const entry of entries) {
+      if (results.length >= maxItems) return;
       if (IGNORED_DIRS.has(entry.name)) continue;
+      if (compact && entry.name === 'data' && cleaned !== 'data') continue;
       if (entry.name === '.vault.key' || entry.name === '.secrets.vault.enc') continue;
       const entryRel = relBase === '.' ? entry.name : `${relBase}/${entry.name}`;
       const fullChild = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        results.push({ name: entry.name, path: entryRel, fullPath: fullChild, type: 'directory' });
+        if (!filterText || entryRel.toLowerCase().includes(filterText)) {
+          results.push({ name: entry.name, path: entryRel, fullPath: fullChild, type: 'directory' });
+        }
         if (recursive && depth < maxDepth) {
           await walk(fullChild, entryRel, depth + 1);
         }
       } else {
-        let size = 0;
-        try { size = (await fs.promises.stat(fullChild)).size; } catch {}
-        results.push({ name: entry.name, path: entryRel, fullPath: fullChild, type: 'file', size });
+        if (filterText && !entryRel.toLowerCase().includes(filterText)) continue;
+        if (compact) {
+          results.push({ name: entry.name, path: entryRel, fullPath: fullChild, type: 'file' });
+        } else {
+          let size = 0;
+          try { size = (await fs.promises.stat(fullChild)).size; } catch {}
+          results.push({ name: entry.name, path: entryRel, fullPath: fullChild, type: 'file', size });
+        }
       }
-      if (results.length >= 600) return;
     }
   };
 
   await walk(targetPath, cleaned, 1);
+
+  if (compact) {
+    const dirs = results.filter((r) => r.type === 'directory').map((r) => r.path);
+    const files = results.filter((r) => r.type === 'file').map((r) => r.path);
+    return {
+      tag: 'LIST_DIR',
+      action: `Listed ${cleaned}${filterText ? ` (filter: ${filterText})` : ''} [${scope}]`,
+      success: true,
+      summary: `${dirs.length} dirs, ${files.length} files in ${cleaned} [${scope}]`,
+      output: { path: cleaned, scope, count: results.length, dirs, files }
+    };
+  }
 
   return {
     tag: 'LIST_DIR',
@@ -1300,52 +1537,66 @@ export async function autonomySearchCode(args: Record<string, any>): Promise<Aut
 
   const matches: Array<{ file: string; fullPath: string; line: number; text: string }> = [];
   const qLower = queryText.toLowerCase();
+  const skipDataDir = !cleaned.toLowerCase().startsWith('data');
+  const BINARY_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.db', '.db-wal', '.db-shm', '.gz', '.zip', '.jar', '.apk', '.woff2', '.mp3', '.wav', '.mp4', '.ogg', '.webm']);
 
-  const walk = async (dir: string, relBase: string) => {
-    if (matches.length >= maxResults) return;
+  const candidateFiles: Array<{ rel: string; fullPath: string }> = [];
+  const collectFiles = async (dir: string, relBase: string) => {
+    if (candidateFiles.length >= 1200) return;
     let entries: fs.Dirent[] = [];
     try {
       entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
+    const subdirs: Array<{ full: string; rel: string }> = [];
     for (const entry of entries) {
-      if (matches.length >= maxResults) break;
       if (IGNORED_DIRS.has(entry.name)) continue;
+      if (skipDataDir && entry.name === 'data') continue;
       if (entry.name === '.vault.key' || entry.name === '.secrets.vault.enc') continue;
       const entryRel = relBase === '.' ? entry.name : `${relBase}/${entry.name}`;
       if (internalSecretsHandler.isSensitivePath(entryRel)) continue;
 
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        await walk(fullPath, entryRel);
+        subdirs.push({ full: fullPath, rel: entryRel });
       } else {
         const ext = path.extname(entry.name).toLowerCase();
         if (extFilter && !extFilter.includes(ext)) continue;
-        if (['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.db', '.gz', '.zip', '.jar', '.apk', '.woff2', '.mp3', '.wav', '.mp4'].includes(ext)) continue;
+        if (BINARY_EXTS.has(ext)) continue;
+        candidateFiles.push({ rel: entryRel, fullPath });
+      }
+    }
+    if (subdirs.length > 0) {
+      await Promise.all(subdirs.map((d) => collectFiles(d.full, d.rel)));
+    }
+  };
 
-        let stat: fs.Stats;
-        try { stat = await fs.promises.stat(fullPath); } catch { continue; }
-        if (stat.size > 1_500_000) continue;
+  const scanFile = async (rel: string, fullPath: string) => {
+    if (matches.length >= maxResults) return;
+    let stat: fs.Stats;
+    try { stat = await fs.promises.stat(fullPath); } catch { return; }
+    if (stat.size > 1_500_000) return;
 
-        let content: string;
-        try { content = await fs.promises.readFile(fullPath, 'utf-8'); } catch { continue; }
-        const lines = content.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          const lineText = lines[i];
-          const hit = matcher
-            ? matcher.test(lineText)
-            : (caseSensitive ? lineText.includes(queryText) : lineText.toLowerCase().includes(qLower));
-          if (hit) {
-            matches.push({
-              file: entryRel,
-              fullPath,
-              line: i + 1,
-              text: internalSecretsHandler.redactText(lineText.trim().slice(0, 260))
-            });
-            if (matches.length >= maxResults) break;
-          }
-        }
+    let content: string;
+    try { content = await fs.promises.readFile(fullPath, 'utf-8'); } catch { return; }
+    if (!matcher && !(caseSensitive ? content.includes(queryText) : content.toLowerCase().includes(qLower))) {
+      return;
+    }
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (matches.length >= maxResults) break;
+      const lineText = lines[i];
+      const hit = matcher
+        ? matcher.test(lineText)
+        : (caseSensitive ? lineText.includes(queryText) : lineText.toLowerCase().includes(qLower));
+      if (hit) {
+        matches.push({
+          file: rel,
+          fullPath,
+          line: i + 1,
+          text: internalSecretsHandler.redactText(lineText.trim().slice(0, 220))
+        });
       }
     }
   };
@@ -1353,18 +1604,14 @@ export async function autonomySearchCode(args: Record<string, any>): Promise<Aut
   if (fs.existsSync(targetPath)) {
     const stat = await fs.promises.stat(targetPath);
     if (stat.isDirectory()) {
-      await walk(targetPath, cleaned);
+      await collectFiles(targetPath, cleaned);
+      const BATCH_SIZE = 24;
+      for (let i = 0; i < candidateFiles.length && matches.length < maxResults; i += BATCH_SIZE) {
+        const slice = candidateFiles.slice(i, i + BATCH_SIZE);
+        await Promise.all(slice.map((f) => scanFile(f.rel, f.fullPath)));
+      }
     } else {
-      const content = await fs.promises.readFile(targetPath, 'utf-8');
-      content.split('\n').forEach((lineText, i) => {
-        if (matches.length >= maxResults) return;
-        const hit = matcher
-          ? matcher.test(lineText)
-          : (caseSensitive ? lineText.includes(queryText) : lineText.toLowerCase().includes(qLower));
-        if (hit) {
-          matches.push({ file: cleaned, fullPath: targetPath, line: i + 1, text: internalSecretsHandler.redactText(lineText.trim().slice(0, 260)) });
-        }
-      });
+      await scanFile(cleaned, targetPath);
     }
   }
 

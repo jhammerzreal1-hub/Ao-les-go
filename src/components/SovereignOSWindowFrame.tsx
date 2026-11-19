@@ -53,7 +53,9 @@ import {
   SlidersHorizontal,
   Save,
   Smartphone,
-  Award
+  Award,
+  ArrowUpDown,
+  GripHorizontal
 } from 'lucide-react';
 import { ALL_MODULES } from './Navigation';
 import type { ModuleType } from '../types';
@@ -86,19 +88,22 @@ export function clampWindowGeometry(
   containerW: number,
   containerH: number
 ): OSWindowGeometry {
-  const safeW = Math.max(containerW, 260);
-  const safeH = Math.max(containerH, 200);
-  const minW = Math.min(250, safeW - 8);
-  const minH = Math.min(180, safeH - 8);
+  const safeW = Math.max(containerW, 300);
+  const safeH = Math.max(containerH, 220);
+  const minW = Math.min(280, safeW - 8);
+  const minH = Math.min(200, safeH - 8);
   const width = Math.max(minW, Math.min(geom.width, safeW - 8));
   const height = Math.max(minH, Math.min(geom.height, safeH - 8));
-  const maxX = Math.max(0, safeW - width);
-  const maxY = Math.max(0, safeH - height);
+  // Keep at least 180px of the titlebar reachable horizontally and the full 44px titlebar visible vertically
+  const minVisibleStrip = Math.min(180, Math.max(120, width));
+  const minX = -(width - minVisibleStrip);
+  const maxX = Math.max(0, safeW - minVisibleStrip);
+  const maxY = Math.max(0, safeH - 52);
   return {
     ...geom,
     width,
     height,
-    x: Math.max(0, Math.min(geom.x, maxX)),
+    x: Math.max(minX, Math.min(geom.x, maxX)),
     y: Math.max(0, Math.min(geom.y, maxY))
   };
 }
@@ -111,14 +116,16 @@ export function createDefaultWindowGeometry(
 ): OSWindowGeometry {
   const safeW = Math.max(containerW || 1200, 640);
   const safeH = Math.max(containerH || 700, 420);
-  const width = Math.min(820, Math.max(460, Math.round(safeW * 0.6)));
-  const height = Math.min(620, Math.max(360, Math.round(safeH * 0.78)));
+  const width = Math.min(860, Math.max(480, Math.round(safeW * 0.62)));
+  const height = Math.min(640, Math.max(380, Math.round(safeH * 0.78)));
   const stepX = (index % 6) * 34;
   const stepY = (index % 5) * 28;
+  const maxInitialX = Math.max(8, safeW - width - 8);
+  const maxInitialY = Math.max(8, safeH - height - 8);
   return clampWindowGeometry(
     {
-      x: 24 + stepX,
-      y: 20 + stepY,
+      x: Math.min(24 + stepX, maxInitialX),
+      y: Math.min(20 + stepY, maxInitialY),
       width,
       height,
       zIndex,
@@ -185,11 +192,29 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
     origY: number;
     origW: number;
     origH: number;
+    startedMaximized: boolean;
+    unmaximized: boolean;
+    pointerRatioX: number;
+    containerLeft: number;
+    containerTop: number;
   } | null>(null);
-  const [isInteracting, setIsInteracting] = useState(false);
+  const lastInteractionEndRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
+  const [activeInteraction, setActiveInteraction] = useState<DragAction | null>(null);
+  const [hoveredHandle, setHoveredHandle] = useState<DragAction | null>(null);
+  const isInteracting = activeInteraction !== null;
 
   const meta = ALL_MODULES.find((m) => m.id === moduleId);
   const Icon = meta?.icon || Terminal;
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (typeof document !== 'undefined') {
+        document.body.style.userSelect = '';
+      }
+    };
+  }, []);
 
   if (mode === 'tiled') {
     return (
@@ -209,7 +234,7 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
         <button
           type="button"
           onClick={() => onRestorePip?.()}
-          className={`fixed z-40 px-3.5 py-2 rounded-2xl bg-zinc-900/95 hover:bg-zinc-800 border border-amber-500/50 shadow-[0_12px_32px_rgba(0,0,0,0.7)] flex items-center gap-2 text-xs font-semibold text-amber-200 cursor-pointer backdrop-blur-md ${
+          className={`fixed z-40 px-3.5 py-2 rounded-xl bg-zinc-900/95 hover:bg-zinc-800 border border-amber-500/50 shadow-[0_12px_32px_rgba(0,0,0,0.7)] flex items-center gap-2 text-xs font-semibold text-amber-200 cursor-pointer backdrop-blur-md ${
             moduleId === 'chat'
               ? 'right-3 bottom-14'
               : moduleId === 'browser'
@@ -218,7 +243,6 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
           }`}
           title={`Restore Detached ${meta?.label || moduleId}`}
         >
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <Icon className={`w-4 h-4 ${meta?.accentColor || 'text-amber-400'}`} />
           <span>{meta?.shortLabel || meta?.label || moduleId} PiP</span>
         </button>
@@ -241,13 +265,37 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
 
   const effectiveZ = alwaysOnTop ? Math.max(safeGeom.zIndex, 46) : safeGeom.zIndex;
 
+  // Guard prevents accidental button clicks within 160ms of ending a drag/resize
+  const safeControlClick = (handler?: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (Date.now() - lastInteractionEndRef.current < 160) return;
+    handler?.();
+  };
+
   const startDrag = (e: React.PointerEvent, type: DragAction) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('button')) return;
+    if ((e.target as HTMLElement).closest('button, [data-window-controls="true"]')) return;
     e.preventDefault();
     e.stopPropagation();
     onFocus?.();
-    if (type === 'move' && safeGeom.maximized) return;
+
+    const frameEl = (e.currentTarget as HTMLElement).closest('.sovereign-window-wrapper') as HTMLElement | null;
+    const parentRect = frameEl?.offsetParent?.getBoundingClientRect() || { left: 0, top: 0 };
+    const frameRect = frameEl?.getBoundingClientRect();
+    const pointerRatioX =
+      frameRect && frameRect.width > 0
+        ? Math.max(0.15, Math.min(0.85, (e.clientX - frameRect.left) / frameRect.width))
+        : 0.5;
+
+    // Restored dimensions when dragging out of a maximized window
+    const restoredW = Math.min(
+      Math.max(420, safeGeom.width),
+      Math.max(420, containerSize.width - 80)
+    );
+    const restoredH = Math.min(
+      Math.max(320, safeGeom.height),
+      Math.max(320, containerSize.height - 64)
+    );
 
     dragSessionRef.current = {
       type,
@@ -255,32 +303,93 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
       startY: e.clientY,
       origX: safeGeom.x,
       origY: safeGeom.y,
-      origW: safeGeom.width,
-      origH: safeGeom.height
+      origW: safeGeom.maximized ? restoredW : safeGeom.width,
+      origH: safeGeom.maximized ? restoredH : safeGeom.height,
+      startedMaximized: safeGeom.maximized,
+      unmaximized: false,
+      pointerRatioX,
+      containerLeft: parentRect.left,
+      containerTop: parentRect.top
     };
-    setIsInteracting(true);
+    setActiveInteraction(type);
+    if (typeof document !== 'undefined') {
+      document.body.style.userSelect = 'none';
+    }
+
+    let pendingUpdate: Partial<OSWindowGeometry> | null = null;
+    const flushUpdate = () => {
+      rafRef.current = 0;
+      if (pendingUpdate && onMoveResize) {
+        onMoveResize(pendingUpdate);
+        pendingUpdate = null;
+      }
+    };
+
+    const scheduleUpdate = (patch: Partial<OSWindowGeometry>) => {
+      pendingUpdate = patch;
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(flushUpdate);
+      }
+    };
 
     const handlePointerMove = (moveEvt: PointerEvent) => {
       const sess = dragSessionRef.current;
       if (!sess || !onMoveResize) return;
       const dx = moveEvt.clientX - sess.startX;
       const dy = moveEvt.clientY - sess.startY;
-      const minW = Math.min(250, Math.max(200, containerSize.width - 12));
-      const minH = Math.min(180, Math.max(160, containerSize.height - 12));
+      const minW = Math.min(280, Math.max(220, containerSize.width - 12));
+      const minH = Math.min(200, Math.max(170, containerSize.height - 12));
 
       if (sess.type === 'move') {
+        if (sess.startedMaximized && !sess.unmaximized) {
+          // Require slight 6px threshold before tearing off a maximized window
+          if (Math.hypot(dx, dy) < 6) return;
+          sess.unmaximized = true;
+          const localCursorX = moveEvt.clientX - sess.containerLeft;
+          const localCursorY = moveEvt.clientY - sess.containerTop;
+          sess.origX = Math.round(localCursorX - sess.origW * sess.pointerRatioX);
+          sess.origY = Math.max(0, Math.round(localCursorY - 22));
+          sess.startX = moveEvt.clientX;
+          sess.startY = moveEvt.clientY;
+          const clampedTear = clampWindowGeometry(
+            {
+              ...safeGeom,
+              x: sess.origX,
+              y: sess.origY,
+              width: sess.origW,
+              height: sess.origH,
+              maximized: false
+            },
+            containerSize.width,
+            containerSize.height
+          );
+          scheduleUpdate({
+            x: Math.round(clampedTear.x),
+            y: Math.round(clampedTear.y),
+            width: Math.round(clampedTear.width),
+            height: Math.round(clampedTear.height),
+            maximized: false
+          });
+          return;
+        }
+
         const clamped = clampWindowGeometry(
           {
             ...safeGeom,
             x: sess.origX + dx,
             y: sess.origY + dy,
             width: sess.origW,
-            height: sess.origH
+            height: sess.origH,
+            maximized: false
           },
           containerSize.width,
           containerSize.height
         );
-        onMoveResize({ x: clamped.x, y: clamped.y });
+        scheduleUpdate({
+          x: Math.round(clamped.x),
+          y: Math.round(clamped.y),
+          maximized: false
+        });
         return;
       }
 
@@ -311,7 +420,7 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
         nextH = sess.origH - clampedDy;
       }
 
-      onMoveResize({
+      scheduleUpdate({
         x: Math.round(nextX),
         y: Math.round(nextY),
         width: Math.round(nextW),
@@ -320,15 +429,29 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
       });
     };
 
-    const handlePointerUp = () => {
+    const finishDrag = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      if (pendingUpdate && onMoveResize) {
+        onMoveResize(pendingUpdate);
+        pendingUpdate = null;
+      }
       dragSessionRef.current = null;
-      setIsInteracting(false);
+      lastInteractionEndRef.current = Date.now();
+      setActiveInteraction(null);
+      if (typeof document !== 'undefined') {
+        document.body.style.userSelect = '';
+      }
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('pointercancel', finishDrag);
     };
 
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointercancel', finishDrag);
   };
 
   const windowStyle: React.CSSProperties = safeGeom.maximized
@@ -347,194 +470,273 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
         zIndex: effectiveZ
       };
 
+  const activeResizeEdge = activeInteraction && activeInteraction !== 'move' ? activeInteraction : hoveredHandle;
+  const edgeGlow = (dir: 'n' | 's' | 'e' | 'w') =>
+    Boolean(activeResizeEdge && activeResizeEdge.includes(dir));
+
   return (
     <div
       onPointerDownCapture={() => onFocus?.()}
-      style={{
-        ...windowStyle,
-        borderRadius: 'var(--sovereign-window-radius, 14px)'
-      }}
-      className={`sovereign-window absolute flex flex-col overflow-hidden bg-zinc-950/95 backdrop-blur-md transition-shadow ${
-        isDetached || alwaysOnTop
-          ? 'border border-amber-400/75 shadow-[0_24px_70px_rgba(0,0,0,0.88)] ring-1 ring-amber-400/35'
-          : isFocused
-          ? 'border border-amber-500/50 shadow-[0_20px_60px_rgba(0,0,0,0.75)] ring-1 ring-amber-500/20'
-          : 'border border-zinc-800/90 shadow-[0_12px_36px_rgba(0,0,0,0.6)]'
-      }`}
+      style={windowStyle}
+      className="sovereign-window-wrapper absolute overflow-visible"
     >
-      {/* Window Title Bar */}
+      {/* Inner Clipped Window Surface */}
       <div
-        onPointerDown={(e) => startDrag(e, 'move')}
-        onDoubleClick={() => onToggleMaximize?.()}
-        className={`h-9 px-3 flex items-center justify-between gap-2 shrink-0 select-none touch-none border-b ${
-          safeGeom.maximized ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-        } ${
-          isDetached || alwaysOnTop
-            ? 'bg-gradient-to-r from-zinc-900 via-amber-950/35 to-zinc-900 border-amber-500/35 text-amber-100'
+        style={{
+          borderRadius: 'var(--sovereign-window-radius, 14px)'
+        }}
+        className={`sovereign-window relative w-full h-full flex flex-col overflow-hidden bg-zinc-950/95 backdrop-blur-md transition-shadow ${
+          isInteracting
+            ? 'border-2 border-sky-400/80 shadow-[0_26px_76px_rgba(0,0,0,0.92)] ring-2 ring-sky-400/25'
+            : isDetached || alwaysOnTop
+            ? 'border border-amber-400/75 shadow-[0_24px_70px_rgba(0,0,0,0.88)] ring-1 ring-amber-400/35'
             : isFocused
-            ? 'bg-zinc-900/95 border-zinc-800 text-zinc-100'
-            : 'bg-zinc-950/95 border-zinc-900 text-zinc-400'
+            ? 'border border-amber-500/55 shadow-[0_20px_60px_rgba(0,0,0,0.75)] ring-1 ring-amber-500/20'
+            : 'border border-zinc-800/95 shadow-[0_12px_36px_rgba(0,0,0,0.6)]'
         }`}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <Icon className={`w-3.5 h-3.5 shrink-0 ${meta?.accentColor || 'text-amber-400'}`} />
-          <span className="text-xs font-semibold truncate">{meta?.label || moduleId}</span>
-          {isInteracting ? (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/35 tabular-nums whitespace-nowrap">
-              {Math.round(safeGeom.width)}×{Math.round(safeGeom.height)}
-            </span>
-          ) : isDetached ? (
-            <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 whitespace-nowrap">
-              Detached · Resizable
-            </span>
-          ) : (
-            <span className="text-[10px] font-mono text-zinc-500 hidden xl:inline">
-              · UID 0
-            </span>
-          )}
-        </div>
+        {/* Subtle Visual Edge Glow When Hovering or Dragging a Resize Handle */}
+        {!safeGeom.maximized && edgeGlow('n') && (
+          <div className="pointer-events-none absolute top-0 inset-x-0 h-[2px] bg-sky-400 z-40" />
+        )}
+        {!safeGeom.maximized && edgeGlow('s') && (
+          <div className="pointer-events-none absolute bottom-0 inset-x-0 h-[2px] bg-sky-400 z-40" />
+        )}
+        {!safeGeom.maximized && edgeGlow('w') && (
+          <div className="pointer-events-none absolute left-0 inset-y-0 w-[2px] bg-sky-400 z-40" />
+        )}
+        {!safeGeom.maximized && edgeGlow('e') && (
+          <div className="pointer-events-none absolute right-0 inset-y-0 w-[2px] bg-sky-400 z-40" />
+        )}
 
-        <div className="flex items-center gap-1 shrink-0">
-          {onToggleDetach && (
-            <button
-              type="button"
-              onClick={onToggleDetach}
-              className={`p-1 rounded cursor-pointer ${
-                isDetached
-                  ? 'bg-amber-500/25 text-amber-200 hover:bg-amber-500/35'
-                  : 'hover:bg-zinc-800 text-zinc-400 hover:text-amber-300'
-              }`}
-              title={isDetached ? 'Re-Dock Window into OS' : 'Detach Floating Always-On-Top (Resizable)'}
-              aria-label={isDetached ? 'Re-Dock Window' : 'Detach Window'}
-            >
-              <PictureInPicture2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {onSnapLeft && (
-            <button
-              type="button"
-              onClick={onSnapLeft}
-              className="hidden sm:inline-flex p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 cursor-pointer"
-              title="Snap Left Half"
-              aria-label="Snap Left Half"
-            >
-              <PanelLeft className="w-3 h-3" />
-            </button>
-          )}
-          {onSnapRight && (
-            <button
-              type="button"
-              onClick={onSnapRight}
-              className="hidden sm:inline-flex p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 cursor-pointer"
-              title="Snap Right Half"
-              aria-label="Snap Right Half"
-            >
-              <PanelRight className="w-3 h-3" />
-            </button>
-          )}
-          {onMinimize && (
-            <button
-              type="button"
-              onClick={onMinimize}
-              className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 cursor-pointer"
-              title="Minimize Window"
-              aria-label="Minimize Window"
-            >
-              <Minus className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {onToggleMaximize && (
-            <button
-              type="button"
-              onClick={onToggleMaximize}
-              className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 cursor-pointer"
-              title={safeGeom.maximized ? 'Restore Window' : 'Maximize Window'}
-              aria-label={safeGeom.maximized ? 'Restore Window' : 'Maximize Window'}
-            >
-              {safeGeom.maximized ? <Copy className="w-3 h-3" /> : <Square className="w-3 h-3" />}
-            </button>
-          )}
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 rounded hover:bg-rose-500/25 text-zinc-400 hover:text-rose-300 cursor-pointer"
-              title={isDetached ? 'Re-Dock / Close Overlay' : 'Close Window'}
-              aria-label="Close Window"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
+        {/* Generous 44px Window Title Bar — Easy Grab & Drag, Separated Mistake-Proof Controls */}
+        <div
+          onPointerDown={(e) => startDrag(e, 'move')}
+          onDoubleClick={(e) => {
+            if ((e.target as HTMLElement).closest('button, [data-window-controls="true"]')) return;
+            onToggleMaximize?.();
+          }}
+          className={`h-11 pl-3.5 pr-3 flex items-center justify-between gap-3 shrink-0 select-none touch-none border-b cursor-grab active:cursor-grabbing ${
+            isDetached || alwaysOnTop
+              ? 'bg-gradient-to-r from-zinc-900 via-amber-950/35 to-zinc-900 border-amber-500/35 text-amber-100'
+              : isFocused
+              ? 'bg-zinc-900/95 border-zinc-800 text-zinc-100'
+              : 'bg-zinc-950/95 border-zinc-900 text-zinc-400'
+          }`}
+          title={
+            safeGeom.maximized
+              ? 'Drag down to restore & move, or double-click to restore'
+              : 'Drag to move window, or double-click to maximize'
+          }
+        >
+          {/* Left: Drag Grip + Window Identity + Live Move/Resize Dimensions */}
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <GripHorizontal className="w-4 h-4 text-zinc-500 shrink-0 opacity-75" aria-hidden="true" />
+            <Icon className={`w-4 h-4 shrink-0 ${meta?.accentColor || 'text-amber-400'}`} />
+            <span className="text-xs font-semibold truncate">{meta?.label || moduleId}</span>
+            {isInteracting ? (
+              <span className="text-[11px] font-mono text-sky-300 tabular-nums whitespace-nowrap">
+                {activeInteraction === 'move'
+                  ? `X ${Math.round(safeGeom.x)} · Y ${Math.round(safeGeom.y)}`
+                  : `${Math.round(safeGeom.width)} × ${Math.round(safeGeom.height)}`}
+              </span>
+            ) : isDetached ? (
+              <span className="text-[10px] font-mono text-amber-300/90 whitespace-nowrap hidden md:inline">
+                · Detached
+              </span>
+            ) : null}
+          </div>
 
-      {/* Window Content Body */}
-      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden bg-zinc-950">
-        {children}
-
-        {/* Focus shield on background unfocused windows */}
-        {!isFocused && !alwaysOnTop && (
+          {/* Right: Separated Layout Helpers & Mistake-Proof Window Controls */}
           <div
-            onPointerDown={() => onFocus?.()}
-            className="absolute inset-0 z-10 bg-transparent cursor-pointer"
-            title="Click to focus window"
-          />
-        )}
+            data-window-controls="true"
+            onPointerDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-2 shrink-0 cursor-default"
+          >
+            {/* Group 1: Quiet Layout Helpers (Detach, Snap Left, Snap Right) */}
+            {(onToggleDetach || onSnapLeft || onSnapRight) && (
+              <div className="hidden sm:flex items-center gap-1 p-0.5 rounded-lg bg-zinc-950/70 border border-zinc-800/90">
+                {onToggleDetach && (
+                  <button
+                    type="button"
+                    onClick={safeControlClick(onToggleDetach)}
+                    className={`h-7 w-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                      isDetached
+                        ? 'bg-amber-500/25 text-amber-200 hover:bg-amber-500/35'
+                        : 'text-zinc-400 hover:bg-zinc-800 hover:text-amber-300'
+                    }`}
+                    title={isDetached ? 'Re-Dock Window into Desktop' : 'Pin Always-On-Top Floating Window'}
+                    aria-label={isDetached ? 'Re-Dock Window' : 'Detach Window'}
+                  >
+                    <PictureInPicture2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {onSnapLeft && (
+                  <button
+                    type="button"
+                    onClick={safeControlClick(onSnapLeft)}
+                    className="h-7 w-7 rounded-md flex items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors cursor-pointer"
+                    title="Snap Left Half"
+                    aria-label="Snap Left Half"
+                  >
+                    <PanelLeft className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {onSnapRight && (
+                  <button
+                    type="button"
+                    onClick={safeControlClick(onSnapRight)}
+                    className="h-7 w-7 rounded-md flex items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors cursor-pointer"
+                    title="Snap Right Half"
+                    aria-label="Snap Right Half"
+                  >
+                    <PanelRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
 
-        {/* Drag/Resize pointer shield so embedded iframes don't swallow pointermove */}
-        {isInteracting && (
-          <div className="absolute inset-0 z-20 bg-transparent" />
-        )}
+            {/* Clear Divider Separating Layout Helpers from Primary Window Actions */}
+            {(onToggleDetach || onSnapLeft || onSnapRight) && (onMinimize || onToggleMaximize || onClose) && (
+              <div className="hidden sm:block h-5 w-px bg-zinc-700/80 mx-0.5" aria-hidden="true" />
+            )}
+
+            {/* Group 2: Minimize & Maximize/Restore with Generous Spacing */}
+            <div className="flex items-center gap-2">
+              {onMinimize && (
+                <button
+                  type="button"
+                  onClick={safeControlClick(onMinimize)}
+                  className="h-8 w-8 rounded-lg bg-zinc-800/75 hover:bg-amber-500/20 border border-zinc-700/80 hover:border-amber-400/50 text-zinc-300 hover:text-amber-200 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Minimize Window to Taskbar"
+                  aria-label="Minimize Window"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+              )}
+              {onToggleMaximize && (
+                <button
+                  type="button"
+                  onClick={safeControlClick(onToggleMaximize)}
+                  className="h-8 w-8 rounded-lg bg-zinc-800/75 hover:bg-sky-500/20 border border-zinc-700/80 hover:border-sky-400/50 text-zinc-300 hover:text-sky-200 flex items-center justify-center transition-colors cursor-pointer"
+                  title={safeGeom.maximized ? 'Restore Window Size' : 'Maximize Window'}
+                  aria-label={safeGeom.maximized ? 'Restore Window' : 'Maximize Window'}
+                >
+                  {safeGeom.maximized ? <Copy className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                </button>
+              )}
+            </div>
+
+            {/* Dedicated Safety Gap + Divider Before Destructive Close Action */}
+            {onClose && (onMinimize || onToggleMaximize) && (
+              <div className="h-5 w-px bg-zinc-700/80 mx-1" aria-hidden="true" />
+            )}
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={safeControlClick(onClose)}
+                className="h-8 w-9 mr-0.5 rounded-lg bg-rose-950/50 hover:bg-rose-600 border border-rose-500/40 hover:border-rose-400 text-rose-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                title={isDetached ? 'Re-Dock / Close Floating Window' : 'Close Window'}
+                aria-label="Close Window"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Window Content Body */}
+        <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden bg-zinc-950">
+          {children}
+
+          {/* Focus shield on background unfocused windows */}
+          {!isFocused && !alwaysOnTop && (
+            <div
+              onPointerDown={() => onFocus?.()}
+              className="absolute inset-0 z-10 bg-transparent cursor-pointer"
+              title="Click to focus window"
+            />
+          )}
+
+          {/* Drag/Resize pointer shield so embedded iframes/canvases never swallow pointermove */}
+          {isInteracting && (
+            <div className="absolute inset-0 z-20 bg-transparent" />
+          )}
+        </div>
       </div>
 
-      {/* Full 8-Way Edge & Corner Resize Handles (Active on Floating & Detached Windows) */}
+      {/* Generous Overhanging 8-Way Edge & Corner Resize Handles (Clear of Titlebar Buttons) */}
       {!safeGeom.maximized && (
         <>
-          {/* Edges */}
+          {/* Top Edge — sits strictly above the titlebar rim so it never blocks Minimize/Maximize/Close */}
           <div
             onPointerDown={(e) => startDrag(e, 'n')}
-            className="absolute top-0 left-3 right-3 h-1.5 cursor-ns-resize touch-none z-30"
+            onPointerEnter={() => setHoveredHandle('n')}
+            onPointerLeave={() => setHoveredHandle((cur) => (cur === 'n' ? null : cur))}
+            className="absolute -top-2 left-5 right-5 h-3 cursor-ns-resize touch-none z-30"
             title="Drag top edge to resize"
           />
+          {/* Bottom Edge — wide 14px grab zone */}
           <div
             onPointerDown={(e) => startDrag(e, 's')}
-            className="absolute bottom-0 left-3 right-4 h-2 cursor-ns-resize touch-none z-30"
+            onPointerEnter={() => setHoveredHandle('s')}
+            onPointerLeave={() => setHoveredHandle((cur) => (cur === 's' ? null : cur))}
+            className="absolute -bottom-2 left-6 right-7 h-3.5 cursor-ns-resize touch-none z-30"
             title="Drag bottom edge to resize"
           />
+          {/* Left Edge — starts below titlebar to stay clear of drag handle */}
           <div
             onPointerDown={(e) => startDrag(e, 'w')}
-            className="absolute top-9 bottom-3 left-0 w-2 cursor-ew-resize touch-none z-30"
+            onPointerEnter={() => setHoveredHandle('w')}
+            onPointerLeave={() => setHoveredHandle((cur) => (cur === 'w' ? null : cur))}
+            className="absolute top-11 bottom-6 -left-2 w-3.5 cursor-ew-resize touch-none z-30"
             title="Drag left edge to resize"
           />
+          {/* Right Edge — starts below 44px titlebar so it never overlaps Close button */}
           <div
             onPointerDown={(e) => startDrag(e, 'e')}
-            className="absolute top-9 bottom-4 right-0 w-2 cursor-ew-resize touch-none z-30"
+            onPointerEnter={() => setHoveredHandle('e')}
+            onPointerLeave={() => setHoveredHandle((cur) => (cur === 'e' ? null : cur))}
+            className="absolute top-11 bottom-7 -right-2 w-3.5 cursor-ew-resize touch-none z-30"
             title="Drag right edge to resize"
           />
 
-          {/* Corners */}
+          {/* Top-Left Corner (overhanging outside) */}
           <div
             onPointerDown={(e) => startDrag(e, 'nw')}
-            className="absolute top-0 left-0 w-3 h-3 cursor-nwse-resize touch-none z-30"
+            onPointerEnter={() => setHoveredHandle('nw')}
+            onPointerLeave={() => setHoveredHandle((cur) => (cur === 'nw' ? null : cur))}
+            className="absolute -top-2 -left-2 w-5 h-5 cursor-nwse-resize touch-none z-30"
             title="Drag top-left corner to resize"
           />
+          {/* Top-Right Corner (overhanging strictly outside so Close button is never obscured) */}
           <div
             onPointerDown={(e) => startDrag(e, 'ne')}
-            className="absolute top-0 right-0 w-3 h-3 cursor-nesw-resize touch-none z-30"
+            onPointerEnter={() => setHoveredHandle('ne')}
+            onPointerLeave={() => setHoveredHandle((cur) => (cur === 'ne' ? null : cur))}
+            className="absolute -top-2 -right-2 w-4 h-4 cursor-nesw-resize touch-none z-30"
             title="Drag top-right corner to resize"
           />
+          {/* Bottom-Left Corner — generous 24x24px target */}
           <div
             onPointerDown={(e) => startDrag(e, 'sw')}
-            className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize touch-none z-30"
+            onPointerEnter={() => setHoveredHandle('sw')}
+            onPointerLeave={() => setHoveredHandle((cur) => (cur === 'sw' ? null : cur))}
+            className="absolute -bottom-2 -left-2 w-6 h-6 cursor-nesw-resize touch-none z-30"
             title="Drag bottom-left corner to resize"
           />
+          {/* Bottom-Right Corner — generous 28x28px target with clear tactile diagonal grip */}
           <div
             onPointerDown={(e) => startDrag(e, 'se')}
+            onPointerEnter={() => setHoveredHandle('se')}
+            onPointerLeave={() => setHoveredHandle((cur) => (cur === 'se' ? null : cur))}
             title="Drag bottom-right corner to resize"
-            className="absolute right-0 bottom-0 w-5 h-5 cursor-nwse-resize touch-none z-30 flex items-end justify-end p-0.5 text-zinc-500 hover:text-amber-400"
+            className="absolute -right-1.5 -bottom-1.5 w-7 h-7 cursor-nwse-resize touch-none z-30 flex items-end justify-end p-1.5 text-zinc-400 hover:text-sky-300 transition-colors"
           >
-            <svg viewBox="0 0 12 12" className="w-3.5 h-3.5 fill-current">
-              <path d="M11 2L2 11H4.5L11 4.5V2ZM11 7L7 11H9.5L11 9.5V7Z" />
+            <svg viewBox="0 0 14 14" className="w-4 h-4 fill-current drop-shadow">
+              <path d="M13 2.5L2.5 13H5.2L13 5.2V2.5ZM13 7.5L7.5 13H10.2L13 10.2V7.5Z" />
             </svg>
           </div>
         </>
@@ -571,6 +773,7 @@ const DESKTOP_SHORTCUTS: Array<{
   { id: 'macro-telemetry', label: 'Macro Telemetry', subtitle: 'Laplace-14 · 99%', icon: Activity, accent: 'text-rose-400' },
   { id: 'crypto-wallet', label: 'Crypto Wallets', subtitle: 'Personal & Agentic', icon: Wallet, accent: 'text-emerald-400' },
   { id: 'grant-hunter', label: 'Grant Hunter', subtitle: '0% Equity Funding', icon: Award, accent: 'text-emerald-300' },
+  { id: 'transfer-hub', label: 'Downloads & Uploads', subtitle: 'Hub · Module Lab', icon: ArrowUpDown, accent: 'text-sky-400' },
   { id: 'ai-genesis-distillery', label: 'AI Distillery', subtitle: 'Model Forging', icon: Sparkles, accent: 'text-purple-400' },
   { id: 'projects', label: 'Unified Projects', subtitle: 'IDE & Builds', icon: Briefcase, accent: 'text-indigo-400' },
   { id: 'vault', label: 'Encrypted Vault', subtitle: 'AES-256 Store', icon: Archive, accent: 'text-emerald-300' },

@@ -998,6 +998,63 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
                 </label>
               ))}
             </div>
+
+            {/* Opt-In Telemetry & Crypto Notification Controls (Strictly OFF by default) */}
+            <div className="pt-4 mt-4 border-t border-zinc-800 space-y-3">
+              <div>
+                <h4 className="text-xs font-bold text-zinc-100">
+                  Telemetry &amp; Crypto Trading Notifications (Off by Default)
+                </h4>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  All floating market, telemetry, and crypto trading popups and chimes remain muted unless explicitly turned on here or from the taskbar.
+                </p>
+              </div>
+              <div className="space-y-2 text-xs">
+                {[
+                  {
+                    key: 'telemetryPopupAlerts' as const,
+                    title: 'Macro Telemetry 5-Minute Popup Alerts',
+                    desc: 'Show floating OS popup banners for 5-minute macro market early-warning signals.'
+                  },
+                  {
+                    key: 'cryptoTradingAlerts' as const,
+                    title: 'Crypto Trading & Autonomous Execution Alerts',
+                    desc: 'Show floating OS popup alerts for BTC/ETH/SOL trading signals and autonomous trade activity.'
+                  },
+                  {
+                    key: 'telemetryAudioChime' as const,
+                    title: 'Critical Signal Audio Chime',
+                    desc: 'Play a Web Audio chime inside Macro Telemetry when critical 5-minute alerts fire.'
+                  }
+                ].map((n) => (
+                  <label
+                    key={n.key}
+                    className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start justify-between gap-3 cursor-pointer"
+                  >
+                    <div>
+                      <div className="font-semibold text-zinc-100">{n.title}</div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">{n.desc}</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(profile.notifications?.[n.key])}
+                      onChange={(e) =>
+                        updateProfile(
+                          {
+                            notifications: {
+                              ...profile.notifications,
+                              [n.key]: e.target.checked
+                            }
+                          },
+                          `${n.title}: ${e.target.checked ? 'ON' : 'OFF'}`
+                        )
+                      }
+                      className="mt-1 accent-emerald-400"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

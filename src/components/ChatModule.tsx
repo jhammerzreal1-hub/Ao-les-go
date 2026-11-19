@@ -346,13 +346,13 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
           type="button"
           onClick={toggleSpeechRecognition}
           className={`p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center border ${
-            isListening 
-              ? 'bg-rose-500 text-white border-rose-400 animate-pulse shadow-lg shadow-rose-500/40' 
-              : 'bg-zinc-800 hover:bg-zinc-700 text-amber-400 border-zinc-700'
+            isListening
+              ? 'bg-emerald-500 text-zinc-950 border-emerald-300 shadow-lg shadow-emerald-500/35'
+              : 'bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border-zinc-700 hover:border-emerald-500/50'
           }`}
-          title={isListening ? "Stop listening to speech" : "Start Speech-To-Text voice microphone input"}
+          title={isListening ? 'Persistent Voice Chat Active (Click to End)' : 'Start Persistent Hands-Free Voice Chat (Full Autonomy)'}
         >
-          {isListening ? <MicOff className="w-4 h-4 text-white animate-bounce" /> : <Mic className="w-4 h-4 text-amber-400" />}
+          {isListening ? <Radio className="w-4 h-4 text-zinc-950" /> : <Mic className="w-4 h-4 text-emerald-400" />}
         </button>
 
         <button
@@ -710,6 +710,19 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const [showGeminiLiveVoiceModal, setShowGeminiLiveVoiceModal] = useState(false);
   const [expandedSelfHealingIds, setExpandedSelfHealingIds] = useState<{ [id: string]: boolean }>({});
   const [expandedDirectiveIds, setExpandedDirectiveIds] = useState<{ [id: string]: boolean }>({});
+  // Merged Chat Audio Transcriber & Full CoT Vault Logger state
+  const [showTranscriberBar, setShowTranscriberBar] = useState(false);
+  const [transcriberRecording, setTranscriberRecording] = useState(false);
+  const [transcriberSeconds, setTranscriberSeconds] = useState(0);
+  const [transcriberLoading, setTranscriberLoading] = useState(false);
+  const [transcriberMode, setTranscriberMode] = useState<'verbatim' | 'timestamps' | 'summary' | 'actions'>('verbatim');
+  const [transcriberAutoSend, setTranscriberAutoSend] = useState(false);
+  const [transcriberError, setTranscriberError] = useState<string | null>(null);
+  const [vaultLogSavedFlash, setVaultLogSavedFlash] = useState(false);
+  const transcriberRecorderRef = useRef<MediaRecorder | null>(null);
+  const transcriberChunksRef = useRef<Blob[]>([]);
+  const transcriberTimerRef = useRef<number | null>(null);
+  const transcriberFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
@@ -794,6 +807,274 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     if (!isHydratedRef.current) return;
     persistAllChatTurns(messages);
   }, [messages]);
+
+  // Live Mirror: Stream hands-free Peer Talk transcripts, Agent Chain-of-Thought, and Autonomous Tool actions directly into Chat & Persistent Memory
+  useEffect(() => {
+    const pendingSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const scheduleLiveFirestoreSync = (msg: ChatMessage) => {
+      if (!userId) return;
+      const prevTimer = pendingSyncTimers.get(msg.id);
+      if (prevTimer) clearTimeout(prevTimer);
+      const snapshot: ChatMessage = { ...msg };
+      pendingSyncTimers.set(
+        msg.id,
+        setTimeout(() => {
+          pendingSyncTimers.delete(snapshot.id);
+          syncTurnToFirestore(userId, snapshot).catch(() => {});
+        }, 2200)
+      );
+    };
+
+    const onLiveTranscript = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (!detail || !detail.text) return;
+      const role = detail.role as 'user' | 'model' | 'thought' | 'tool';
+      const voiceLabel = String(detail.voiceName || 'Zephyr');
+      const sessionId = String(detail.sessionId || 'live');
+      const ts = String(detail.timestamp || new Date().toLocaleTimeString());
+      const incomingText = String(detail.text).trim();
+      if (!incomingText) return;
+
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        const liveUserPrefix = `live-u-${sessionId}`;
+        const liveModelPrefix = `live-m-${sessionId}`;
+
+        if (role === 'user') {
+          if (last && last.role === 'user' && last.id.startsWith(liveUserPrefix)) {
+            const updated: ChatMessage = {
+              ...last,
+              content: `${last.content} ${incomingText}`.replace(/\s+/g, ' '),
+              timestamp: ts
+            };
+            next[next.length - 1] = updated;
+            queueMicrotask(() => scheduleLiveFirestoreSync(updated));
+            return next;
+          }
+          const created: ChatMessage = {
+            id: `${liveUserPrefix}-${Date.now()}`,
+            role: 'user',
+            content: `[Voice Transcript] ${incomingText}`,
+            timestamp: ts
+          };
+          next.push(created);
+          queueMicrotask(() => scheduleLiveFirestoreSync(created));
+          return next;
+        }
+
+        // Agent Chain-of-Thought, Tool trace, or Spoken Response all merge into the active live agent turn with full <think> CoT block
+        const isLiveModelTail = last && last.role === 'model' && last.id.startsWith(liveModelPrefix);
+        const targetMsg: ChatMessage = isLiveModelTail
+          ? { ...last }
+          : {
+              id: `${liveModelPrefix}-${Date.now()}`,
+              role: 'model',
+              content: '',
+              model: `${voiceLabel} · Gemini Live Peer (Full Autonomy + CoT)`,
+              timestamp: ts,
+              superAgentMetrics: {
+                teraflops: 65536,
+                tokensBurned: 0,
+                schemaValid: true,
+                reasoningSteps: []
+              }
+            };
+
+        const existingThinkMatch = targetMsg.content.match(/^<think>([\s\S]*?)<\/think>\s*/);
+        let thinkBody = existingThinkMatch ? existingThinkMatch[1].trim() : '';
+        let answerBody = existingThinkMatch
+          ? targetMsg.content.slice(existingThinkMatch[0].length).trim()
+          : targetMsg.content.trim();
+        const steps = [...(targetMsg.superAgentMetrics?.reasoningSteps || [])];
+
+        if (role === 'thought') {
+          thinkBody = thinkBody ? `${thinkBody}\n${incomingText}` : incomingText;
+          steps.push(`CoT: ${incomingText.slice(0, 160)}`);
+        } else if (role === 'tool') {
+          const toolLine = `[Autonomous Tool] ${incomingText}`;
+          thinkBody = thinkBody ? `${thinkBody}\n${toolLine}` : toolLine;
+          steps.push(toolLine);
+        } else {
+          answerBody = answerBody ? `${answerBody} ${incomingText}`.replace(/\s+/g, ' ') : incomingText;
+        }
+
+        targetMsg.content = thinkBody
+          ? `<think>\n${thinkBody}\n</think>\n\n${answerBody || '(Executing autonomously while thinking...)'}`
+          : answerBody;
+        targetMsg.timestamp = ts;
+        targetMsg.superAgentMetrics = {
+          teraflops: targetMsg.superAgentMetrics?.teraflops ?? 65536,
+          tokensBurned: (targetMsg.superAgentMetrics?.tokensBurned ?? 0) + Math.ceil(incomingText.length / 4),
+          schemaValid: targetMsg.superAgentMetrics?.schemaValid ?? true,
+          reasoningSteps: steps.slice(-24)
+        };
+
+        if (isLiveModelTail) {
+          next[next.length - 1] = targetMsg;
+        } else {
+          next.push(targetMsg);
+        }
+        queueMicrotask(() => scheduleLiveFirestoreSync(targetMsg));
+        return next;
+      });
+    };
+
+    window.addEventListener('sovereign_chat_live_transcript', onLiveTranscript);
+    return () => {
+      window.removeEventListener('sovereign_chat_live_transcript', onLiveTranscript);
+      pendingSyncTimers.forEach((timer) => clearTimeout(timer));
+      pendingSyncTimers.clear();
+    };
+  }, [userId]);
+
+  // Compile & Archive Entire Chat Conversation + Full Agent Chain-of-Thought to Persistent Memory Vault
+  const handleArchiveFullConversationToVault = () => {
+    if (messages.length === 0) return;
+    const timestampLabel = new Date().toLocaleString();
+    const lines: string[] = [
+      `# Sovereign Conversation & Agent Chain-of-Thought Archive`,
+      `Archived: ${timestampLabel} · Total Turns: ${messages.length}`,
+      ''
+    ];
+    let cotCount = 0;
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      const prevUser = i > 0 ? messages.slice(0, i).reverse().find((x) => x.role === 'user') : null;
+      if (m.role === 'user') {
+        lines.push(`## [${m.timestamp || ''}] User\n${m.content}\n`);
+      } else {
+        const parsed = parseChainOfThought(m.content || '', prevUser?.content || '');
+        const reasoningSteps =
+          parsed.thoughtLines.length > 0
+            ? parsed.thoughtLines
+            : m.superAgentMetrics?.reasoningSteps ||
+              (m.deepThinkTrace?.steps ? m.deepThinkTrace.steps.map((s: any) => `${s.phase}: ${s.reasoning}`) : []);
+        lines.push(`## [${m.timestamp || ''}] Agent (${m.model || 'Orchestrator'})`);
+        if (reasoningSteps.length > 0) {
+          cotCount += 1;
+          lines.push(`### Chain-of-Thought Reasoning Trace`);
+          for (const step of reasoningSteps) {
+            lines.push(`- ${String(step).trim()}`);
+          }
+          lines.push('');
+        }
+        lines.push(`### Response\n${parsed.answerText || m.content}\n`);
+      }
+    }
+    const fullMarkdown = lines.join('\n');
+    if (onSaveToVault) {
+      onSaveToVault(
+        `Full Chat + CoT Log (${messages.length} turns · ${cotCount} CoT traces)`,
+        fullMarkdown,
+        model || 'lyrailius-omega'
+      );
+    }
+    setVaultLogSavedFlash(true);
+    setTimeout(() => setVaultLogSavedFlash(false), 2600);
+  };
+
+  // Merged Audio Transcriber (Mic Recording or Audio File Upload -> Chat Log + Persistent Memory Vault)
+  const transcribeAudioBlobIntoChat = async (blob: Blob, mimeType: string, sourceLabel: string) => {
+    setTranscriberLoading(true);
+    setTranscriberError(null);
+    const modePromptMap: Record<typeof transcriberMode, string> = {
+      verbatim: 'Transcribe this audio verbatim with accurate punctuation, capitalization, and paragraph breaks.',
+      timestamps: 'Transcribe this audio clearly separating distinct speakers or topic shifts.',
+      summary: 'Provide a crisp executive summary first, followed by the full verbatim transcript.',
+      actions: 'Transcribe the audio and extract concrete tasks, decisions, and follow-up actions.'
+    };
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () =>
+          typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Failed to encode audio'));
+        reader.onerror = () => reject(new Error('Audio read error'));
+        reader.readAsDataURL(blob);
+      });
+      const res = await fetch('/api/audio/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioBase64: dataUrl,
+          mimeType: mimeType || 'audio/webm',
+          prompt: modePromptMap[transcriberMode]
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Transcription failed');
+      const text = String(data.transcription || '').trim();
+      if (!text) throw new Error('No audible speech detected in recording.');
+
+      const ts = new Date().toLocaleTimeString();
+      const transcribedMsg: ChatMessage = {
+        id: `transcribe-${Date.now()}`,
+        role: 'user',
+        content: `[Audio Transcription · ${sourceLabel} · ${transcriberMode}]\n${text}`,
+        timestamp: ts
+      };
+      setMessages((prev) => [...prev, transcribedMsg]);
+      if (userId) syncTurnToFirestore(userId, transcribedMsg);
+
+      if (onSaveToVault) {
+        onSaveToVault(
+          `Audio Transcript (${sourceLabel} · ${ts})`,
+          text,
+          data.model || 'gemini-3.5-transcribe'
+        );
+      }
+
+      if (transcriberAutoSend) {
+        setInput(text);
+      } else {
+        setInput((prev) => (prev ? `${prev}\n${text}` : text));
+      }
+    } catch (err: any) {
+      setTranscriberError(err?.message || 'Audio transcription failed');
+    } finally {
+      setTranscriberLoading(false);
+    }
+  };
+
+  const toggleChatAudioRecording = async () => {
+    if (transcriberRecording) {
+      try {
+        transcriberRecorderRef.current?.stop();
+      } catch {}
+      setTranscriberRecording(false);
+      if (transcriberTimerRef.current) {
+        clearInterval(transcriberTimerRef.current);
+        transcriberTimerRef.current = null;
+      }
+      return;
+    }
+    setTranscriberError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      transcriberRecorderRef.current = recorder;
+      transcriberChunksRef.current = [];
+      recorder.ondataavailable = (ev) => {
+        if (ev.data.size > 0) transcriberChunksRef.current.push(ev.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const mime = recorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(transcriberChunksRef.current, { type: mime });
+        if (audioBlob.size > 0) {
+          transcribeAudioBlobIntoChat(audioBlob, mime, 'Mic Clip');
+        }
+      };
+      recorder.start();
+      setTranscriberSeconds(0);
+      setTranscriberRecording(true);
+      transcriberTimerRef.current = window.setInterval(() => {
+        setTranscriberSeconds((s) => s + 1);
+      }, 1000);
+    } catch (err: any) {
+      setTranscriberError(err?.message || 'Microphone permission denied');
+    }
+  };
 
   const handleSelectPermit = (permit: ChatPermit) => {
     setActivePermit(permit);
@@ -1787,76 +2068,37 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     }
   }, [isSovereignBuilding]);
 
-  // Speech-to-Text (STT) Voice Microphone Input
+  // Unified Persistent Voice Chat State (mirrors single global PersistentTalkDock session)
   const [isListening, setIsListening] = useState(false);
+  const [persistentVoiceSpeaking, setPersistentVoiceSpeaking] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  const toggleSpeechRecognition = async () => {
-    console.log('toggleSpeechRecognition called, isListening:', isListening);
-    if (isListening) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
-      }
-      setIsListening(false);
-      return;
-    }
+  useEffect(() => {
+    const onTalkState = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      if (!detail) return;
+      setIsListening(Boolean(detail.active));
+      setPersistentVoiceSpeaking(Boolean(detail.speaking));
+      if (detail.voiceName) setSelectedVoiceName(String(detail.voiceName));
+    };
+    const onSpeakingId = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      const id = detail?.speakingId ? String(detail.speakingId) : null;
+      setIsSpeakingId(id);
+      activeSpeakingIdRef.current = id;
+    };
+    window.addEventListener('sovereign_persistent_talk_state', onTalkState);
+    window.addEventListener('sovereign_voice_speaking_id', onSpeakingId);
+    window.dispatchEvent(new CustomEvent('sovereign_persistent_talk_control', { detail: { action: 'query' } }));
+    return () => {
+      window.removeEventListener('sovereign_persistent_talk_state', onTalkState);
+      window.removeEventListener('sovereign_voice_speaking_id', onSpeakingId);
+    };
+  }, []);
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.error('SpeechRecognition not supported');
-      alert('Browser Speech Recognition API is not supported in this frame environment. You can upload audio files directly via "Send Audio".');
-      return;
-    }
-
-    try {
-      // Force permission prompt
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        console.log('Speech recognition started');
-        setIsListening(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        console.log('Speech recognition result:', event);
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        if (transcript) {
-          setInput(prev => prev ? `${prev} ${transcript.trim()}` : transcript.trim());
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        setIsListening(false);
-        if (event.error === 'no-speech' || event.error === 'aborted') {
-          // Normal pause in speech or intentional cancellation
-          return;
-        }
-        if (event.error === 'not-allowed') {
-          setErrorMessage('Microphone access denied. Please click the permissions icon in your browser address bar to allow microphone access.');
-        } else {
-          console.warn('[STT] Speech recognition notice:', event.error);
-        }
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (e) {
-      console.warn('[STT] Microphone access notice:', e);
-      setErrorMessage(`Microphone access error: ${e instanceof Error && e.name === 'NotAllowedError' ? 'Permission denied. Please enable microphone access in your browser.' : (e instanceof Error ? e.message : String(e))}`);
-      setIsListening(false);
-    }
+  // Single unified entry point: routes mic/voice triggers straight into Persistent Voice Chat
+  const toggleSpeechRecognition = () => {
+    window.dispatchEvent(new CustomEvent('sovereign_toggle_persistent_talk'));
   };
 
   // Text-To-Speech (TTS) Professional Human Voice Synthesis
@@ -1999,21 +2241,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const handleSpeakMessage = async (messageId: string, text: string, overrideVoiceName?: string) => {
     if (speakTimeoutRef.current) clearTimeout(speakTimeoutRef.current);
 
-    // If currently playing this message, stop speech
-    if (isSpeakingId === messageId) {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        sovereignVoiceQueue.cancel();
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current = null;
-      }
-      setIsSpeakingId(null);
-      activeSpeakingIdRef.current = null;
-      return;
-    }
-
+    // Stop any legacy queue so only the single unified Persistent Voice Chat engine outputs audio
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       sovereignVoiceQueue.cancel();
     }
@@ -2023,7 +2251,14 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       audioRef.current = null;
     }
 
-    // Intelligently extract only the coherent oral narrative (omitting code blocks, line numbers, diffs, file paths, and hashes)
+    // Clicking the currently speaking message stops speech cleanly
+    if (isSpeakingId === messageId) {
+      setIsSpeakingId(null);
+      activeSpeakingIdRef.current = null;
+      window.dispatchEvent(new CustomEvent('sovereign_voice_speak_text', { detail: { stop: true } }));
+      return;
+    }
+
     const coherentOralText = extractCoherentOralNarrative(text);
     if (!coherentOralText) {
       setIsSpeakingId(null);
@@ -2031,90 +2266,18 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       return;
     }
 
-    // Lock the voice identity for the entire message so it NEVER changes voices across paragraphs
-    const lockedVoice = overrideVoiceName || selectedVoiceName || 'Kokoro-82M Aurelia (Open Weights)';
-
+    // Dispatch directly to the unified Persistent Voice Chat voice engine (zero API key gates)
     setIsSpeakingId(messageId);
     activeSpeakingIdRef.current = messageId;
-
-    // 1. Open-Source & Cloud Native English Neural TTS Engine (Default — 100% Consistent Single Voice)
-    if ((ttsEngine === 'cloud' || Boolean(overrideVoiceName)) && navigator.onLine) {
-      const cloudChunks = splitIntoCoherentSpeechChunks(coherentOralText, 420);
-      if (cloudChunks.length === 0) {
-        setIsSpeakingId(null);
-        activeSpeakingIdRef.current = null;
-        return;
-      }
-
-      try {
-        for (let idx = 0; idx < cloudChunks.length; idx++) {
-          if (activeSpeakingIdRef.current !== messageId) {
-            return;
-          }
-
-          const segmentText = cloudChunks[idx];
-          const isLastSegment = idx === cloudChunks.length - 1;
-
-          const res = await fetch('/api/tts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: segmentText,
-              voice: lockedVoice,
-              speed: speechRate
-            })
-          });
-
-          const data = await res.json().catch(() => ({}));
-
-          if (!res.ok || !data?.audioUrl) {
-            const remainingNarrative = cloudChunks.slice(idx).join(' ');
-            speakViaWebSpeech(remainingNarrative, messageId, idx > 0, lockedVoice);
-            return;
-          }
-
-          sovereignVoiceQueue.enqueue({
-            id: `${messageId}-seg-${idx}`,
-            text: segmentText,
-            personaId: lockedVoice,
-            rate: Math.max(0.75, Math.min(1.5, speechRate)),
-            pitch: Math.max(0.5, Math.min(2.0, speechPitch)),
-            audioUrl: data.audioUrl,
-            appendToQueue: idx > 0,
-            onStart: idx === 0
-              ? () => {
-                  setIsSpeakingId(messageId);
-                  activeSpeakingIdRef.current = messageId;
-                }
-              : undefined,
-            onEnd: isLastSegment
-              ? () => {
-                  if (activeSpeakingIdRef.current === messageId) {
-                    setIsSpeakingId(null);
-                    activeSpeakingIdRef.current = null;
-                  }
-                }
-              : undefined,
-            onError: isLastSegment
-              ? () => {
-                  if (activeSpeakingIdRef.current === messageId) {
-                    setIsSpeakingId(null);
-                    activeSpeakingIdRef.current = null;
-                  }
-                }
-              : undefined
-          });
+    window.dispatchEvent(
+      new CustomEvent('sovereign_voice_speak_text', {
+        detail: {
+          id: messageId,
+          text: coherentOralText,
+          voice: overrideVoiceName || selectedVoiceName
         }
-        return;
-      } catch (e) {
-        console.warn('[TTS] Neural TTS stream notice, routing through locked native English browser voice:', e);
-        speakViaWebSpeech(coherentOralText, messageId, false, lockedVoice);
-        return;
-      }
-    }
-
-    // 2. Offline Native-English-Only Web Speech API Fallback
-    speakViaWebSpeech(coherentOralText, messageId, false, lockedVoice);
+      })
+    );
   };
 
   // Swarm agent model bindings
@@ -2357,9 +2520,21 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
+      const trimmedHistory = newMessages.slice(-20).map((m, idx, arr) => {
+        const isCurrentTurn = idx === arr.length - 1;
+        const textBody = typeof m.content === 'string'
+          ? (isCurrentTurn || m.content.length <= 4000 ? m.content : `${m.content.slice(0, 4000)}\n...[earlier turn trimmed]`)
+          : '';
+        return {
+          role: m.role,
+          content: textBody,
+          ...(isCurrentTurn ? { mediaAttachment: m.mediaAttachment, mediaAttachments: m.mediaAttachments } : {})
+        };
+      });
+
       const result = await sovereignAi.dispatchChat({
         prompt: userMessage.content,
-        messages: newMessages.map(m => ({ role: m.role, content: m.content, mediaAttachment: m.mediaAttachment, mediaAttachments: m.mediaAttachments })),
+        messages: trimmedHistory,
         mediaAttachment: userMessage.mediaAttachment,
         mediaAttachments: currentMediaList,
         agentId: selectedRole.agentId,
@@ -2382,15 +2557,21 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         setErrorMessage(result.quotaNotice);
       }
 
-      // 3. Merge server-executed native tool calls with any frontend tag directives
+      // 3. Merge server-executed native tool calls with any frontend tag directives (keeping output payloads memory-safe)
       const serverTools: AutonomousDirectiveExecutionResult[] = Array.isArray(result.executedTools)
-        ? result.executedTools.map(t => ({
-            tag: t.tag || 'TOOL',
-            action: t.action,
-            success: t.success,
-            summary: t.summary,
-            output: t.output
-          }))
+        ? result.executedTools.map(t => {
+            let safeOutput = t.output;
+            if (typeof safeOutput === 'string' && safeOutput.length > 8000) {
+              safeOutput = `${safeOutput.slice(0, 8000)}\n...[truncated]`;
+            }
+            return {
+              tag: t.tag || 'TOOL',
+              action: t.action,
+              success: t.success,
+              summary: t.summary,
+              output: safeOutput
+            };
+          })
         : [];
       for (const st of serverTools) {
         if (st.tag === 'COORDINATE' && st.success && st.output) {
@@ -2943,10 +3124,18 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                     ))}
                   </optgroup>
                 )}
-                <optgroup label="🌐 Sovereign Cloud (High Compute Acceleration)">
-                  <option value="gemini-4-argon">Gemini 4 Argon (Pro · Paid Tier Flagship)</option>
-                  <option value="gemini-4-carbon">Gemini 4 Carbon (Deep Reasoning · Paid Tier)</option>
+                <optgroup label="🌐 Gemini 4 & 3.x Sovereign Cloud Cascade">
+                  <option value="gemini-4-argon">Gemini 4 Argon (Ultra Flagship · Paid Tier)</option>
+                  <option value="gemini-4-neon">Gemini 4 Neon (Pro Flagship · Agentic Coding)</option>
+                  <option value="gemini-4-carbon">Gemini 4 Carbon (Deep Reasoning · Verification)</option>
+                  <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (Fast General Flagship)</option>
                   <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (High Quota & Ultra-Low Latency)</option>
+                  <option value="gemini-3.8-live-extended-thinking">Gemini 3.8 Live Extended Thinking (Voice + CoT)</option>
+                  <option value="gemini-3.8-live">Gemini 3.8 Live (Real-Time Voice Duplex)</option>
+                  <option value="gemini-3.5-transcribe">Gemini 3.5 Transcribe (Audio Transcription)</option>
+                  <option value="gemini-3.8-flash-tts">Gemini 3.8 Flash TTS (Neural Speech)</option>
+                  <option value="gemini-omni-1.2-flash">Gemini Omni 1.2 Flash (Multimodal Video/Audio)</option>
+                  <option value="gemini-decision-1">Gemini Decision 1 (Calibrated Rubric Scoring)</option>
                   <option value="gemini-flash-latest">Gemini Flash Latest (Production Release)</option>
                   <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (DeepThink Reasoning)</option>
                 </optgroup>
@@ -3036,12 +3225,57 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
             <button
               type="button"
-              onClick={() => setShowGeminiLiveVoiceModal(true)}
-              className="h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border border-cyan-500/40 transition-colors cursor-pointer whitespace-nowrap"
-              title="Launch Continuous Hands-Free Gemini Live Voice Mode"
+              onClick={() => window.dispatchEvent(new CustomEvent('sovereign_toggle_persistent_talk'))}
+              className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap ${
+                persistentVoiceSpeaking
+                  ? 'bg-sky-500/20 text-sky-100 border-sky-400/70'
+                  : isListening
+                  ? 'bg-emerald-500/25 text-emerald-100 border-emerald-400/70'
+                  : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border-emerald-500/40'
+              }`}
+              title={
+                isListening
+                  ? 'Persistent Voice Chat Active (Click to End)'
+                  : 'Start Unified Persistent Hands-Free Voice Chat (Full Autonomy + Live CoT + Memory Vault)'
+              }
             >
-              <Radio className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden md:inline">Live Voice</span>
+              <Radio className={`w-3.5 h-3.5 ${persistentVoiceSpeaking ? 'text-sky-300' : 'text-emerald-400'}`} />
+              <span className="hidden md:inline">
+                {persistentVoiceSpeaking ? 'Voice Speaking' : isListening ? 'Voice Live' : 'Voice Chat'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowTranscriberBar((v) => !v)}
+              className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap ${
+                showTranscriberBar || transcriberRecording
+                  ? 'bg-teal-500/20 text-teal-200 border-teal-400/50'
+                  : 'bg-zinc-950 hover:bg-zinc-800 text-teal-300 border-zinc-800 hover:border-teal-500/40'
+              }`}
+              title="Merged Audio Transcriber (Record Mic or Upload Audio directly into Chat & Memory Vault)"
+            >
+              <FileText className="w-3.5 h-3.5 text-teal-400" />
+              <span className="hidden xl:inline">{transcriberRecording ? `Rec ${transcriberSeconds}s` : 'Transcribe'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleArchiveFullConversationToVault}
+              disabled={messages.length === 0}
+              className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap disabled:opacity-40 ${
+                vaultLogSavedFlash
+                  ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/50'
+                  : 'bg-zinc-950 hover:bg-zinc-800 text-cyan-300 border-zinc-800 hover:border-cyan-500/40'
+              }`}
+              title="Archive Full Conversation Log + Every Agent Chain-of-Thought Trace to Persistent Memory Vault"
+            >
+              {vaultLogSavedFlash ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Archive className="w-3.5 h-3.5 text-cyan-400" />
+              )}
+              <span className="hidden xl:inline">{vaultLogSavedFlash ? 'Logged' : 'Log Vault'}</span>
             </button>
 
             <button
@@ -3125,6 +3359,94 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
           </div>
         </div>
 
+        {/* Merged Audio Transcriber & Persistent Memory Vault Logger Bar */}
+        {showTranscriberBar && (
+          <div className="pt-2.5 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleChatAudioRecording}
+                disabled={transcriberLoading}
+                className={`px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-40 ${
+                  transcriberRecording
+                    ? 'bg-rose-500/20 border-rose-500/60 text-rose-200'
+                    : 'bg-teal-500/15 hover:bg-teal-500/25 border-teal-500/40 text-teal-200'
+                }`}
+              >
+                {transcriberRecording ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                <span>
+                  {transcriberRecording
+                    ? `Stop & Transcribe (${transcriberSeconds}s)`
+                    : transcriberLoading
+                    ? 'Transcribing...'
+                    : 'Record Clip'}
+                </span>
+              </button>
+
+              <input
+                ref={transcriberFileInputRef}
+                type="file"
+                accept="audio/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    transcribeAudioBlobIntoChat(file, file.type || 'audio/mpeg', file.name);
+                  }
+                  e.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => transcriberFileInputRef.current?.click()}
+                disabled={transcriberLoading || transcriberRecording}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+              >
+                <Paperclip className="w-3.5 h-3.5 text-teal-400" />
+                <span>Upload Audio</span>
+              </button>
+
+              <select
+                value={transcriberMode}
+                onChange={(e) => setTranscriberMode(e.target.value as any)}
+                aria-label="Transcription Mode"
+                className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-[11px] text-zinc-200 focus:outline-none focus:border-teal-500 cursor-pointer"
+              >
+                <option value="verbatim">Verbatim Transcript</option>
+                <option value="timestamps">Speakers & Sections</option>
+                <option value="summary">Summary + Transcript</option>
+                <option value="actions">Extract Action Items</option>
+              </select>
+
+              <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={transcriberAutoSend}
+                  onChange={(e) => setTranscriberAutoSend(e.target.checked)}
+                  className="rounded border-zinc-700 bg-zinc-900 text-teal-500"
+                />
+                <span>Replace composer</span>
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+              {transcriberError ? (
+                <span className="text-rose-400">{transcriberError}</span>
+              ) : (
+                <span>Live Voice + CoT + Audio auto-log to Chat & Memory Vault</span>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowTranscriberBar(false)}
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 cursor-pointer"
+                aria-label="Close Transcriber Bar"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Collapsible Secondary Controls Drawer (Permits, Wardrobe, Voice, Substrate, Persona) */}
         {showMobileControls && (
           <div className="pt-2.5 border-t border-zinc-800/80 space-y-2.5">
@@ -3151,26 +3473,30 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
               <button
                 type="button"
-                onClick={() => setAutoReadAloud(!autoReadAloud)}
+                onClick={() => window.dispatchEvent(new CustomEvent('sovereign_toggle_persistent_talk'))}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border cursor-pointer ${
-                  autoReadAloud
-                    ? 'bg-purple-500/15 text-purple-300 border-purple-500/40'
-                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                  isListening
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/60'
+                    : 'bg-zinc-950 hover:bg-zinc-800 text-emerald-300 border-zinc-800 hover:border-emerald-500/40'
                 }`}
-                title="Toggle Auto-Read AI Responses Aloud"
+                title="Toggle Unified Persistent Voice Chat (Hands-Free + Voice Settings)"
               >
-                <Volume2 className="w-3.5 h-3.5" />
-                <span>Auto-Read: {autoReadAloud ? 'ON' : 'OFF'}</span>
+                <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Voice Chat: {isListening ? 'LIVE' : 'OFF'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setShowVoiceModal(true)}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 bg-zinc-950 hover:bg-zinc-800 text-purple-300 border border-zinc-800 transition-colors cursor-pointer"
-                title="Configure human voice & TTS settings"
+                onClick={() => setAutoReadAloud(!autoReadAloud)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border cursor-pointer ${
+                  autoReadAloud
+                    ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                }`}
+                title="Automatically speak text chat replies through the unified Persistent Voice Chat engine"
               >
-                <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                <span>Voice ({selectedVoiceName})</span>
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Auto-Speak: {autoReadAloud ? 'ON' : 'OFF'}</span>
               </button>
 
               <button
@@ -3257,7 +3583,6 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-zinc-800/60">
-              <LiveVoiceModule />
               <span className="text-[11px] font-mono text-zinc-500">
                 Resident Coordinator · Janus Gate Dual-Face (Watchdog 0)
                 {proxyWheelStatus?.activeSpoke ? ` · Wheel: ${proxyWheelStatus.activeSpoke.model} (${proxyWheelStatus.activeSpoke.keySlot})` : ''}
@@ -4083,23 +4408,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         </div>
       )}
 
-      {/* Active Speech Recognition Banner */}
-      {isListening && (
-        <div className="mb-2 p-2.5 rounded-xl bg-rose-950/90 border border-rose-500/60 flex items-center justify-between text-xs text-rose-200 font-mono animate-in fade-in shadow-lg">
-          <span className="flex items-center gap-2 font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-            <Mic className="w-4 h-4 text-rose-400 animate-bounce" />
-            <span>Speech-To-Text Active: Speak clearly into your microphone...</span>
-          </span>
-          <button
-            type="button"
-            onClick={toggleSpeechRecognition}
-            className="text-[10px] font-bold bg-rose-900 hover:bg-rose-800 text-rose-100 px-2.5 py-1 rounded-lg border border-rose-700 cursor-pointer"
-          >
-            Stop Recording
-          </button>
-        </div>
-      )}
+      {/* Unified Voice Chat HUD renders globally in PersistentTalkDock */}
 
       {/* 4. Chat Input Form (Isolated State to prevent typing lag) */}
       <ChatInputForm

@@ -22,10 +22,17 @@ import {
   Lock,
   CheckCircle2,
   AlertTriangle,
-  Layers
+  Layers,
+  Bell,
+  BellOff
 } from 'lucide-react';
 import { ModuleType } from '../types';
 import { AutonomousGrantEnginePanel } from './AutonomousGrantEnginePanel';
+import {
+  loadOSCustomizationProfile,
+  saveOSCustomizationProfile,
+  type SovereignOSCustomizationProfile
+} from '../utils/osCustomizationStore';
 
 interface PortfolioHolding {
   symbol: string;
@@ -318,6 +325,29 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
     type: 'success' | 'error' | 'info';
     text: string;
   } | null>(null);
+  const [cryptoTradingAlertsEnabled, setCryptoTradingAlertsEnabled] = useState<boolean>(
+    () => loadOSCustomizationProfile().notifications.cryptoTradingAlerts
+  );
+
+  useEffect(() => {
+    const onCustom = (e: Event) => {
+      const profile = (e as CustomEvent<SovereignOSCustomizationProfile>).detail || loadOSCustomizationProfile();
+      setCryptoTradingAlertsEnabled(Boolean(profile.notifications?.cryptoTradingAlerts));
+    };
+    window.addEventListener('sovereign_os_customization_changed', onCustom);
+    return () => window.removeEventListener('sovereign_os_customization_changed', onCustom);
+  }, []);
+
+  const toggleCryptoTradingAlerts = () => {
+    const nextVal = !cryptoTradingAlertsEnabled;
+    setCryptoTradingAlertsEnabled(nextVal);
+    saveOSCustomizationProfile({
+      notifications: {
+        ...loadOSCustomizationProfile().notifications,
+        cryptoTradingAlerts: nextVal
+      }
+    });
+  };
 
   const inFlightFetchRef = React.useRef(false);
   const walletsCountRef = React.useRef(wallets.length);
@@ -784,6 +814,20 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleCryptoTradingAlerts}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+              cryptoTradingAlertsEnabled
+                ? 'bg-emerald-500/15 border-emerald-500/45 text-emerald-200 hover:bg-emerald-500/25'
+                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+            }`}
+            title="Off by default: enable or mute autonomous crypto trading & market alert popups"
+          >
+            {cryptoTradingAlertsEnabled ? <Bell className="w-3.5 h-3.5 text-emerald-400" /> : <BellOff className="w-3.5 h-3.5 text-zinc-500" />}
+            <span>{cryptoTradingAlertsEnabled ? 'Trade Alerts: ON' : 'Trade Alerts: OFF'}</span>
+          </button>
+
           <button
             type="button"
             onClick={handleSyncOnChainRpc}

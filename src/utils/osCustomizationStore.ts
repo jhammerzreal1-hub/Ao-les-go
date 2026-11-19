@@ -69,6 +69,11 @@ export interface SovereignOSCustomizationProfile {
     showCryptoVaultHud: boolean;
     showClipboardHud: boolean;
   };
+  notifications: {
+    telemetryPopupAlerts: boolean;
+    cryptoTradingAlerts: boolean;
+    telemetryAudioChime: boolean;
+  };
   hotkeys: {
     launcher: string;
     splitMode: string;
@@ -253,6 +258,11 @@ export const DEFAULT_CUSTOMIZATION_PROFILE: SovereignOSCustomizationProfile = {
     showCryptoVaultHud: true,
     showClipboardHud: false
   },
+  notifications: {
+    telemetryPopupAlerts: false,
+    cryptoTradingAlerts: false,
+    telemetryAudioChime: false
+  },
   hotkeys: {
     launcher: 'Alt+L',
     splitMode: 'Alt+/',
@@ -298,6 +308,10 @@ export function loadOSCustomizationProfile(): SovereignOSCustomizationProfile {
       desktopWidgets: {
         ...DEFAULT_CUSTOMIZATION_PROFILE.desktopWidgets,
         ...(parsed.desktopWidgets || {})
+      },
+      notifications: {
+        ...DEFAULT_CUSTOMIZATION_PROFILE.notifications,
+        ...(parsed.notifications || {})
       },
       hotkeys: {
         ...DEFAULT_CUSTOMIZATION_PROFILE.hotkeys,
@@ -356,6 +370,10 @@ export function saveOSCustomizationProfile(
     desktopWidgets: {
       ...current.desktopWidgets,
       ...(next.desktopWidgets || {})
+    },
+    notifications: {
+      ...current.notifications,
+      ...(next.notifications || {})
     },
     hotkeys: {
       ...current.hotkeys,

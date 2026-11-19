@@ -551,35 +551,41 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 text-zinc-400 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-2 text-zinc-400 shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
+              type="button"
               onClick={handleFullRefresh}
               title="Refresh All Telemetry"
-              className={`p-1.5 hover:text-amber-300 rounded-lg hover:bg-zinc-800 transition cursor-pointer ${loading ? 'animate-spin text-amber-400' : ''}`}
+              className={`h-8 w-8 flex items-center justify-center rounded-lg bg-zinc-800/75 border border-zinc-700/80 hover:border-amber-400/50 hover:text-amber-300 hover:bg-zinc-800 transition cursor-pointer ${loading ? 'animate-spin text-amber-400' : ''}`}
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
             {isExpanded && (
               <button
+                type="button"
                 onClick={() => setIsMaximized(!isMaximized)}
-                title={isMaximized ? 'Restore' : 'Maximize'}
-                className="p-1.5 hover:text-amber-300 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                title={isMaximized ? 'Restore Size' : 'Maximize HUD'}
+                aria-label={isMaximized ? 'Restore HUD' : 'Maximize HUD'}
+                className="h-8 w-8 flex items-center justify-center rounded-lg bg-zinc-800/75 border border-zinc-700/80 hover:border-sky-400/50 hover:text-sky-200 hover:bg-sky-500/20 transition cursor-pointer"
               >
                 {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               </button>
             )}
             {!isControlled && (
               <button
+                type="button"
                 onClick={() => {
                   if (isMaximized) setIsMaximized(false);
                   setIsExpanded(!isExpanded);
                 }}
-                title={isExpanded ? 'Collapse' : 'Expand'}
-                className="p-1.5 hover:text-amber-300 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                title={isExpanded ? 'Collapse HUD' : 'Expand HUD'}
+                aria-label={isExpanded ? 'Collapse HUD' : 'Expand HUD'}
+                className="h-8 w-8 flex items-center justify-center rounded-lg bg-zinc-800/75 border border-zinc-700/80 hover:border-amber-400/50 hover:text-amber-200 hover:bg-amber-500/20 transition cursor-pointer"
               >
                 {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
               </button>
             )}
+            <div className="h-5 w-px bg-zinc-700/80 mx-0.5" aria-hidden="true" />
             <button
               type="button"
               onClick={() => {
@@ -588,7 +594,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
               }}
               title="Close HUD (ESC)"
               aria-label="Close System Telemetry HUD"
-              className="p-1.5 rounded-lg bg-zinc-800/80 text-zinc-300 hover:text-red-400 hover:bg-zinc-800 transition cursor-pointer"
+              className="h-8 w-9 flex items-center justify-center rounded-lg bg-rose-950/50 hover:bg-rose-600 border border-rose-500/40 hover:border-rose-400 text-rose-300 hover:text-white transition cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>

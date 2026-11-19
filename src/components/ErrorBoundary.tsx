@@ -10,7 +10,8 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertOctagon, RefreshCw, Terminal, ShieldCheck } from 'lucide-react';
+import { AlertOctagon, RefreshCw, Terminal, ShieldCheck, RotateCcw } from 'lucide-react';
+import { isDynamicImportError } from '../utils/lazyWithRetry';
 
 interface Props {
   children: ReactNode;
@@ -20,23 +21,61 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  retryKey: number;
+  autoRetried: boolean;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
-    errorInfo: null
+    errorInfo: null,
+    retryKey: 0,
+    autoRetried: false
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  private autoRetryTimer: number | null = null;
+
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error, errorInfo: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Aurelius Sovereign ErrorBoundary caught an exception:', error, errorInfo);
     this.setState({ errorInfo });
+
+    // Automatically attempt one non-destructive retry for transient dynamic module fetch errors
+    if (isDynamicImportError(error) && !this.state.autoRetried) {
+      this.autoRetryTimer = window.setTimeout(() => {
+        this.setState((prev) => ({
+          hasError: false,
+          error: null,
+          errorInfo: null,
+          retryKey: prev.retryKey + 1,
+          autoRetried: true
+        }));
+      }, 750);
+    }
   }
+
+  public componentWillUnmount() {
+    if (this.autoRetryTimer !== null) {
+      window.clearTimeout(this.autoRetryTimer);
+    }
+  }
+
+  private handleSoftRetry = () => {
+    this.setState((prev) => ({
+      hasError: false,
+      error: null,
+      errorInfo: null,
+      retryKey: prev.retryKey + 1
+    }));
+  };
+
+  private handleReloadPage = () => {
+    window.location.reload();
+  };
 
   private handleReset = () => {
     try {
@@ -47,14 +86,20 @@ export class ErrorBoundary extends Component<Props, State> {
       localStorage.removeItem('aurelius_knowledge_edges');
       localStorage.removeItem('aurelius_active_account');
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((regs) => {
-          regs.forEach((r) => r.unregister());
-        }).catch(() => {});
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((regs) => {
+            regs.forEach((r) => r.unregister());
+          })
+          .catch(() => {});
       }
       if ('caches' in window) {
-        caches.keys().then((keys) => {
-          keys.forEach((k) => caches.delete(k));
-        }).catch(() => {});
+        caches
+          .keys()
+          .then((keys) => {
+            keys.forEach((k) => caches.delete(k));
+          })
+          .catch(() => {});
       }
     } catch (_) {}
     this.setState({ hasError: false, error: null, errorInfo: null });
@@ -63,19 +108,22 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      const isChunkErr = isDynamicImportError(this.state.error);
       return (
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-mono select-none">
-          <div className="max-w-xl w-full bg-zinc-900/90 border border-amber-500/30 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/80 space-y-6">
+        <div className="h-full min-h-[280px] w-full bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-5 font-mono select-none overflow-y-auto">
+          <div className="max-w-xl w-full bg-zinc-900/90 border border-amber-500/30 rounded-2xl p-5 sm:p-6 shadow-2xl shadow-black/80 space-y-5">
             <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
                 <AlertOctagon className="w-5 h-5" />
               </div>
-              <div>
-                <h1 className="text-base font-bold text-zinc-100 uppercase tracking-wider">
-                  Sovereign Nexus Self-Healing Intercept
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base font-bold text-zinc-100 tracking-tight">
+                  {isChunkErr ? 'Module Reload Required' : 'Sovereign Nexus Self-Healing Intercept'}
                 </h1>
                 <p className="text-xs text-zinc-400">
-                  Substrate caught an unhandled exception. Continuous state preserved.
+                  {isChunkErr
+                    ? 'The OS updated or restarted while loading this module. Click Reload App to sync the latest build without losing your data.'
+                    : 'Substrate caught an unhandled exception. Your data is preserved.'}
                 </p>
               </div>
             </div>
@@ -89,30 +137,50 @@ export class ErrorBoundary extends Component<Props, State> {
                 {this.state.error?.name}: {this.state.error?.message || 'Unknown runtime interruption'}
               </p>
               {this.state.errorInfo?.componentStack && (
-                <pre className="text-[10px] text-zinc-500 mt-2 max-h-36 overflow-y-auto whitespace-pre-wrap font-mono">
+                <pre className="text-[10px] text-zinc-500 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap font-mono">
                   {this.state.errorInfo.componentStack.slice(0, 500)}
                 </pre>
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <div className="flex items-center gap-2 text-[11px] text-emerald-400">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Zero-Loss State Recovery Ready</span>
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>State Preserved</span>
               </div>
-              <button
-                onClick={this.handleReset}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Re-Initialize Sovereign Core</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={this.handleSoftRetry}
+                  className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Retry Module</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={this.handleReloadPage}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reload App</span>
+                </button>
+                {!isChunkErr && (
+                  <button
+                    type="button"
+                    onClick={this.handleReset}
+                    className="px-3.5 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Clear Cache &amp; Reset
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
       );
     }
 
-    return this.props.children;
+    return <React.Fragment key={this.state.retryKey}>{this.props.children}</React.Fragment>;
   }
 }
