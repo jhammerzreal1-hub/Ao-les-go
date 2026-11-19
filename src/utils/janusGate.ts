@@ -1,4 +1,15 @@
 /**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+/**
  * 🏛️ AURELIUS & LYSANDER SOVEREIGN JANUS GATE (v2.0)
  * ==============================================================================
  * Zero-Watchdog, Dual-Aperture Inference & Reasoning Bridge
@@ -22,8 +33,7 @@
  * ==============================================================================
  */
 
-import { executeAgentChat } from './bakedNeuralEngine';
-// queryCompendium removed from chat path per user directive.
+// Synthetic offline text synthesis removed so model streams remain pure and unpolluted.
 import { healReasoningStream } from './janusUtils';
 import { dev_null } from './devNullLogger';
 import { audioSwarm } from './AudioSwarm';
@@ -60,6 +70,7 @@ export interface JanusExecutionOptions {
   deepthink?: boolean;
   zeroTokenMode?: boolean;
   skipServerChat?: boolean;
+  rawMode?: boolean;
   abortSignal?: AbortSignal;
   onToken?: (token: string, chunkInfo?: JanusStreamChunk) => void;
   onReasoningProgress?: (phase: string, partialThought: string) => void;
@@ -137,7 +148,7 @@ class JanusGateService {
    * Completely immune to watchdog aborts or main-thread freezes.
    */
   public async executeThroughGate(options: JanusExecutionOptions): Promise<JanusExecutionResult> {
-    const { prompt, agentId, agentName, systemInstruction, modelId = 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC', deepthink = true, onToken, onReasoningProgress } = options;
+    const { prompt, agentId, agentName, systemInstruction, modelId = 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC', deepthink = false, rawMode = false, onToken, onReasoningProgress } = options;
     const startTime = performance.now();
     let accumulated = '';
     let tokenCount = 0;
@@ -209,6 +220,7 @@ class JanusGateService {
               model: modelId,
               systemInstruction,
               deepthink,
+              rawMode,
               zeroTokenMode: false
             }),
             signal: controller.signal
@@ -260,49 +272,28 @@ class JanusGateService {
                   await handleChunk(t);
                 });
               } else {
-                this.pushLog('Local Bridge: All Speculative Faces Offline');
-                throw new Error('Local server standby');
+                this.pushLog('Local Bridge: No active WebGPU weights or local llama-server');
+                throw new Error('No live local inference server or loaded WebGPU weights available.');
               }
             }
         } catch (localErr) {
-          dev_null('[Janus Gate] Engaging Face 1 Sovereign Anchor (Zero-Watchdog In-Process Fallback):', localErr);
+          dev_null('[Janus Gate] Local speculative engines unavailable:', localErr);
         }
       }
 
-      // 3. Face 1: Sovereign Anchor (Baked Neural Substrate & Compendium)
       if (!accumulated.trim()) {
-        this.activeFace = 'FACE_1_SOVEREIGN_ANCHOR';
-        this.pushLog('Dual-Aperture Handshake: Face 1 Sovereign Anchor Active');
-        
-        // DeepThink reasoning phase
-        if (deepthink) {
-          this.pushLog('Reasoning Engine: Invoking Multi-Branch Tree Logic');
-          isInReasoning = true;
-          const thinkHeader = `<think>\nAnalyzing request: "${prompt.slice(0, 100)}"\nDecomposing objectives and evaluating optimal resolution path...\nContext and invariants aligned.\n</think>\n\n`;
-          const thinkParts = thinkHeader.split(/(\s+)/);
-          for (const tp of thinkParts) {
-            await handleChunk(tp);
-          }
-          isInReasoning = false;
-        }
-
-        const fallback = executeAgentChat(modelId || 'aurelius-teraflop-omega', prompt, { deepthink });
-        const textParts = fallback.text.split(/(\s+)/);
-        for (const part of textParts) {
-          await handleChunk(part);
-        }
+        throw new Error('No real model backend (cloud spoke, WebGPU weights, Ollama, or llama-server) returned output.');
       }
 
-    } catch (criticalErr) {
-      dev_null('[Janus Gate] Intercepted stream exception, preserving state:', criticalErr);
-      this.reasoningProtected++;
-      
-      // Zero-loss synthesis via compendium removed per user directive.
-      accumulated = `[JANUS_GATE_ERROR] Both cloud model cascade and local inference engines failed to return a response. Verify API keys in API Keys & Gateway or start Ollama/llama-server.`;
+    } catch (criticalErr: any) {
+      dev_null('[Janus Gate] Real inference unavailable:', criticalErr);
+      audioSwarm.setMemoryStateResolved(true);
+      throw criticalErr;
     }
 
-    // Post-generation reasoning healing
-    const healed = this.healReasoningStream(accumulated, prompt);
+    const healed = rawMode
+      ? { reasoning: '', answer: accumulated, fullText: accumulated }
+      : this.healReasoningStream(accumulated, prompt);
     const elapsed = Math.max(15, Math.round(performance.now() - startTime));
     this.pushLog(`Execution Complete: ${elapsed}ms · Output Verified`);
     const proofHash = `0xJANUS_${Date.now().toString(16)}_${Math.random().toString(36).substring(2, 8)}`;
@@ -311,12 +302,12 @@ class JanusGateService {
     audioSwarm.setMemoryStateResolved(true);
 
     return {
-      text: healed.fullText,
+      text: rawMode ? accumulated : healed.fullText,
       reasoningText: healed.reasoning,
       answerText: healed.answer,
       faceUsed: this.activeFace,
       watchdogTriggered: false,
-      tokensGenerated: Math.max(tokenCount, 30),
+      tokensGenerated: Math.max(tokenCount, 1),
       elapsedMs: elapsed,
       proofHash
     };

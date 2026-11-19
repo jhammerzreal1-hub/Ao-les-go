@@ -4,11 +4,13 @@
  * Production offline cache and Android background sync service worker
  */
 
-const CACHE_NAME = 'aurelius-swarm-v5';
+const CACHE_NAME = 'lysander-sovereign-os-v6';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {

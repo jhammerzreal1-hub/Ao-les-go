@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Activity, 
@@ -136,6 +147,18 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
   };
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'telemetry' | 'latency' | 'router' | 'logs'>('telemetry');
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMaximized(false);
+        setIsExpanded(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isExpanded]);
 
   // Live Metrics
   const [sysData, setSysData] = useState<SystemHealthData | null>(null);
@@ -462,7 +485,13 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
     { id: 'download-models', name: 'Model Wardrobe', tag: 'Weights' },
     { id: 'universal-installer', name: 'Universal Installer', tag: 'Installer' },
     { id: 'api-secrets', name: 'API Keys & Secrets', tag: 'AES-256-GCM' },
-    { id: 'integrations', name: 'Integrations Matrix', tag: 'Add-ons' }
+    { id: 'integrations', name: 'Integrations Matrix', tag: 'Add-ons' },
+    { id: 'spatial-arena', name: '3D Spatial Arena', tag: '3D Engine' },
+    { id: 'agent-dev-kit', name: 'UI Master Dev Kit', tag: 'UI Forge' },
+    { id: 'ai-genesis-distillery', name: 'AI Genesis Distillery', tag: 'Weights' },
+    { id: 'world-start', name: 'World Load Screen', tag: 'Engine' },
+    { id: 'emulator-modder', name: 'Universal Modder', tag: 'ROM/RAM' },
+    { id: 'macro-telemetry', name: 'Macro Telemetry', tag: 'Aladdin Risk' }
   ];
 
   if (isControlled && !isExpanded) {
@@ -483,10 +512,10 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
       <div
         className={`fixed transition-all duration-200 z-50 font-mono text-xs select-none ${
           isMaximized
-            ? 'inset-2 sm:inset-6 bg-zinc-950 border border-amber-500/40 shadow-2xl rounded-2xl flex flex-col overflow-hidden'
+            ? 'inset-2 sm:inset-6 max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-3rem)] bg-zinc-950 border border-amber-500/40 shadow-2xl rounded-2xl flex flex-col overflow-hidden'
             : isExpanded
-            ? 'inset-x-2 bottom-16 lg:bottom-5 sm:inset-auto sm:right-5 sm:w-[640px] lg:w-[700px] max-h-[75dvh] sm:max-h-[80vh] bg-zinc-950 border border-zinc-800 shadow-2xl rounded-2xl flex flex-col overflow-hidden'
-            : 'bottom-[74px] right-3 lg:bottom-4 lg:right-4 bg-zinc-950/95 border border-zinc-800 shadow-xl rounded-xl max-w-[calc(100vw-24px)]'
+            ? 'inset-x-2 bottom-14 lg:bottom-5 sm:inset-auto sm:right-5 sm:w-[640px] lg:w-[700px] max-h-[calc(100dvh-7.5rem)] sm:max-h-[82dvh] bg-zinc-950 border border-zinc-800 shadow-2xl rounded-2xl flex flex-col overflow-hidden'
+            : 'bottom-[68px] right-3 lg:bottom-4 lg:right-4 bg-zinc-950/95 border border-zinc-800 shadow-xl rounded-xl max-w-[calc(100vw-24px)]'
         }`}
       >
         {/* HUD Header Bar */}
@@ -552,12 +581,14 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
               </button>
             )}
             <button
+              type="button"
               onClick={() => {
                 setIsExpanded(false);
                 setIsMaximized(false);
               }}
-              title="Close HUD"
-              className="p-1.5 hover:text-red-400 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+              title="Close HUD (ESC)"
+              aria-label="Close System Telemetry HUD"
+              className="p-1.5 rounded-lg bg-zinc-800/80 text-zinc-300 hover:text-red-400 hover:bg-zinc-800 transition cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -903,7 +934,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
                     <span>LYRAILIUS OMEGA · RESIDENT COORDINATOR BUS</span>
                   </div>
                   <div className="text-[10px] text-zinc-400 mt-0.5">
-                    Model: <span className="text-emerald-300 font-semibold">gemini-4-hydrogen</span> · Clearance: <span className="text-amber-300 font-semibold">UID {sysData?.uid ?? 0} · Ring {sysData?.hypervisor?.ring ?? -3}</span> · Autonomy: <span className="text-emerald-300 font-semibold">ENABLED</span> · All 33 modules active.
+                    Model: <span className="text-emerald-300 font-semibold">gemini-4-hydrogen</span> · Clearance: <span className="text-amber-300 font-semibold">UID {sysData?.uid ?? 0} · Ring {sysData?.hypervisor?.ring ?? -3}</span> · Autonomy: <span className="text-emerald-300 font-semibold">ENABLED</span> · All {allModules.length} modules active.
                   </div>
                 </div>
                 <button

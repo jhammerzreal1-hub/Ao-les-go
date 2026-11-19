@@ -1,4 +1,15 @@
-import React, { useState } from 'react';
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+import React, { useState, useEffect } from 'react';
 import { 
   Wrench, 
   Play, 
@@ -69,6 +80,15 @@ export const OSINTForgeWorkbench: React.FC<OSINTForgeWorkbenchProps> = ({
   const [activeTab, setActiveTab] = useState<'patch' | 'diff' | 'verify' | 'sandbox' | 'guide'>('patch');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!isModal || !onClose) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isModal, onClose]);
+
   const copyText = (text: string, key: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -103,7 +123,7 @@ export const OSINTForgeWorkbench: React.FC<OSINTForgeWorkbenchProps> = ({
     'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
 
   const content = (
-    <div className={`space-y-6 ${isModal ? 'p-6 max-h-[88vh] overflow-y-auto' : ''}`}>
+    <div className={`space-y-6 ${isModal ? 'p-4 sm:p-6 max-h-[90dvh] overflow-y-auto' : ''}`}>
       {/* Top Banner / Finding Dossier */}
       <div className="bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 border border-amber-500/30 rounded-2xl p-5 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-40 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -440,7 +460,7 @@ export const OSINTForgeWorkbench: React.FC<OSINTForgeWorkbenchProps> = ({
                         Simulated Virtual HTTP Response Headers (Post-Remediation):
                       </span>
                       <div className="p-4 bg-zinc-900/60 rounded-xl border border-zinc-800 font-mono text-[11px] divide-y divide-zinc-800/60 space-y-1.5">
-                        {Object.entries(simulationResult.simulatedResponseHeaders).map(([k, v], i) => (
+                        {Object.entries(simulationResult?.simulatedResponseHeaders || {}).map(([k, v], i) => (
                           <div key={i} className="pt-1.5 flex items-start justify-between gap-4">
                             <span className="text-cyan-400 font-bold shrink-0">{k}:</span>
                             <span className="text-emerald-300 break-all text-right font-medium">{String(v)}</span>
@@ -554,8 +574,13 @@ export const OSINTForgeWorkbench: React.FC<OSINTForgeWorkbenchProps> = ({
 
   if (isModal) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-        <div className="bg-zinc-950 border border-amber-500/40 rounded-3xl w-full max-w-5xl max-h-[92vh] shadow-2xl overflow-hidden flex flex-col">
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget && onClose) onClose();
+        }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      >
+        <div className="bg-zinc-950 border border-amber-500/40 rounded-3xl w-full max-w-5xl max-h-[90dvh] shadow-2xl overflow-hidden flex flex-col">
           {content}
         </div>
       </div>

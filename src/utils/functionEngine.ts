@@ -1,4 +1,15 @@
 /**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+/**
  * 🏛️ AURELIUS & SOVEREIGN AGENT AUTONOMOUS FUNCTION ENGINE
  * ==============================================================================
  * Enables agents and users to execute separate, discrete functions directly
@@ -192,6 +203,54 @@ export const SOVEREIGN_FUNCTION_DEFINITIONS: SovereignFunction[] = [
         required: true,
         description: 'Array of tool objects containing name, description, and code.'
       }
+    ]
+  },
+  {
+    id: 'genesisCreateAgent',
+    name: 'Synthesize Autonomous AI Agent',
+    category: 'tool-forge',
+    description: 'Creates or updates a custom AI/Agent in the AI Genesis Foundry with custom neural architecture, quantization, and 8-axis cognitive genome.',
+    parameters: [
+      { name: 'name', type: 'string', required: true, placeholder: 'Hyperion Tensor Architect', description: 'Display name of the autonomous AI agent.' },
+      { name: 'roleTitle', type: 'string', required: false, placeholder: 'Autonomous Systems & Molecular Distillation Architect', description: 'Specialized domain role.' },
+      { name: 'architecture', type: 'string', required: false, defaultValue: 'Transformer-MoE-v6', description: 'Neural backbone architecture.' },
+      { name: 'parameterScale', type: 'string', required: false, defaultValue: '148B Active / 1.2T Sparse', description: 'Parameter topology scale.' },
+      { name: 'quantization', type: 'string', required: false, defaultValue: 'FP8_E4M3', description: 'Weight quantization precision.' }
+    ]
+  },
+  {
+    id: 'forgeNeuralWeights',
+    name: 'Forge Neural Weight Checkpoint (.safetensors)',
+    category: 'tool-forge',
+    description: 'Forges a new neural weight tensor checkpoint via SLERP, TIES, DARE, or QLoRA with SVD singular value spectrum and 6x6 Principal Eigen-Block projection.',
+    parameters: [
+      { name: 'name', type: 'string', required: true, placeholder: 'Lyrailius-Sovereign-SLERP-v9.safetensors', description: 'Checkpoint name.' },
+      { name: 'agentId', type: 'string', required: false, defaultValue: 'lyrailius-omega-zenith', description: 'Target agent ID.' },
+      { name: 'mergeMethod', type: 'string', required: false, defaultValue: 'SLERP_GEODESIC', description: 'Tensor merge method.' },
+      { name: 'interpolationAlpha', type: 'number', required: false, defaultValue: 0.64, description: 'Geodesic interpolation factor (0.05-0.95).' }
+    ]
+  },
+  {
+    id: 'runAutonomousTraining',
+    name: 'Execute Autonomous Training & Evolution Run',
+    category: 'tool-forge',
+    description: 'Runs a multi-epoch autonomous training & evolution cycle (GRPO, RLAIF, DPO, or Compiler-Verified) and distills a permanent evolutive axiom.',
+    parameters: [
+      { name: 'agentId', type: 'string', required: false, defaultValue: 'lyrailius-omega-zenith', description: 'Agent ID to train and evolve.' },
+      { name: 'paradigm', type: 'string', required: false, defaultValue: 'GRPO_DEEP_REASONING', description: 'Training paradigm.' },
+      { name: 'curriculumTopic', type: 'string', required: false, placeholder: 'Zero-Rollback Atomic Multi-Scope Patching & Eigenstate Convergence', description: 'Training curriculum objective.' },
+      { name: 'totalEpochs', type: 'number', required: false, defaultValue: 16, description: 'Number of training epochs (4-40).' }
+    ]
+  },
+  {
+    id: 'molecularDistillState',
+    name: 'Molecularly Distill Ideal Agent Eigenstate',
+    category: 'tool-forge',
+    description: 'Executes a 3-Vessel Cryogenic Molecular State Distillation cycle to strip cognitive entropy, lower free energy (eV), and crystallize the ideal eigenstate.',
+    parameters: [
+      { name: 'agentId', type: 'string', required: false, defaultValue: 'COLLECTIVE_SWARM_CROSS_POLLINATION', description: 'Agent ID or COLLECTIVE_SWARM_CROSS_POLLINATION.' },
+      { name: 'targetTemperatureKelvin', type: 'number', required: false, defaultValue: 0.042, description: 'Cryogenic distillation temperature in Kelvin.' },
+      { name: 'purificationStages', type: 'number', required: false, defaultValue: 9, description: 'Fractionation stages (3-16).' }
     ]
   },
   {
@@ -554,6 +613,146 @@ export const SOVEREIGN_FUNCTION_DEFINITIONS: SovereignFunction[] = [
     category: 'sovereign',
     description: 'Queries UID 0 Root Clearance (uid_0), Ring -3 Hypervisor status, and live host CPU/RAM telemetry.',
     parameters: []
+  },
+  {
+    id: 'osintRecon',
+    name: 'OSINT Reconnaissance & Whois',
+    category: 'security',
+    description: 'Performs live DNS, RDAP/Whois, GeoIP, or HTTP security header reconnaissance on a domain or IP.',
+    parameters: [
+      { name: 'target', type: 'string', required: true, placeholder: 'example.com', description: 'Domain or IP target.' },
+      { name: 'mode', type: 'string', required: false, defaultValue: 'all', description: 'Mode: all | dns | whois | geo | headers' }
+    ]
+  },
+  {
+    id: 'manageBurnerMail',
+    name: 'Burner Mail Provision & Inbox',
+    category: 'security',
+    description: 'Provisions disposable inboxes and reads emails via mail.tm / 1secmail with OTP extraction.',
+    parameters: [
+      { name: 'action', type: 'string', required: true, defaultValue: 'create', description: 'create | inbox | list' },
+      { name: 'address', type: 'string', required: false, description: 'Existing burner email address.' }
+    ]
+  },
+  {
+    id: 'fetchWebPage',
+    name: 'Fetch & Extract Live URL',
+    category: 'sovereign',
+    description: 'Fetches a live web page and extracts clean readable text, title, and discovered links.',
+    parameters: [
+      { name: 'url', type: 'string', required: true, placeholder: 'https://example.com', description: 'Target URL.' },
+      { name: 'maxChars', type: 'number', required: false, defaultValue: 8000, description: 'Max extracted character count.' }
+    ]
+  },
+  {
+    id: 'inspectGithubAndProjects',
+    name: 'GitHub & Projects Inspector',
+    category: 'build',
+    description: 'Inspects GitHub repos or lists/saves local & synced Projects Studio workspaces.',
+    parameters: [
+      { name: 'action', type: 'string', required: true, defaultValue: 'list-projects', description: 'inspect-repo | list-projects | save-project' },
+      { name: 'owner', type: 'string', required: false, description: 'GitHub owner or repo URL.' },
+      { name: 'repo', type: 'string', required: false, description: 'GitHub repository name.' }
+    ]
+  },
+  {
+    id: 'manageScratchpad',
+    name: 'Manage Scratchpad Memory',
+    category: 'sovereign',
+    description: 'Lists, creates, updates, or deletes persistent working memory notes in Scratchpad.',
+    parameters: [
+      { name: 'action', type: 'string', required: true, defaultValue: 'list', description: 'list | save | delete' },
+      { name: 'title', type: 'string', required: false, description: 'Note title.' },
+      { name: 'content', type: 'string', required: false, description: 'Note content.' }
+    ]
+  },
+  {
+    id: 'manageProxyWheel',
+    name: 'Manage Proxy Loop Wheel',
+    category: 'sovereign',
+    description: 'Inspects, steps, toggles, or probes all API spokes on the multi-key/multi-provider Proxy Loop Wheel.',
+    parameters: [
+      { name: 'action', type: 'string', required: true, defaultValue: 'status', description: 'status | step | probe-all | reset | set-mode' },
+      { name: 'mode', type: 'string', required: false, description: 'Optional mode (round-robin | capability-first | health-weighted).' }
+    ]
+  },
+  {
+    id: 'synthesizeMedia',
+    name: 'Synthesize Image, Audio or Video',
+    category: 'sovereign',
+    description: 'Dispatches creative synthesis for images, audio/music prompts, or video generation.',
+    parameters: [
+      { name: 'mediaType', type: 'string', required: true, defaultValue: 'image', description: 'image | audio | video' },
+      { name: 'prompt', type: 'string', required: true, description: 'Creative synthesis prompt.' }
+    ]
+  },
+  {
+    id: 'invokeLysanderSkill',
+    name: 'Invoke Lysander Skill (24 Skills)',
+    category: 'swarm',
+    description: 'Executes any of the 24 Lysander CBP, Enterprise, or DeepMind protocol skills directly.',
+    parameters: [
+      { name: 'skillId', type: 'string', required: false, placeholder: 'skill-01-d-mesh', description: 'Skill ID or search keyword.' },
+      { name: 'listAll', type: 'boolean', required: false, defaultValue: false, description: 'Return all 24 skills.' }
+    ]
+  },
+  {
+    id: 'inspectSystemTelemetry',
+    name: 'System Telemetry & Audit Ledger',
+    category: 'build',
+    description: 'Reads live CPU, RAM, host uptime, secrets vault status, and the recent audit ledger.',
+    parameters: [
+      { name: 'includeAudit', type: 'boolean', required: false, defaultValue: true, description: 'Include recent audit log entries.' }
+    ]
+  },
+  {
+    id: 'evaluateSandboxedCode',
+    name: 'Evaluate Sandboxed JS Code',
+    category: 'build',
+    description: 'Executes JavaScript logic in an isolated Node vm sandbox for math, parsing, and rapid prototyping.',
+    parameters: [
+      { name: 'code', type: 'string', required: true, placeholder: 'return { sum: 2 + 2 };', description: 'JavaScript body or expression.' },
+      { name: 'input', type: 'json', required: false, description: 'Optional JSON input bound to `input` and `args`.' }
+    ]
+  },
+  {
+    id: 'setTargetSystem',
+    name: 'Point Target System',
+    category: 'sovereign',
+    description: 'Points the Orchestrator at any directory, repository, or project path on the host machine (or "self" for Orchestrator own files).',
+    parameters: [
+      { name: 'targetPath', type: 'string', required: true, placeholder: 'self', description: 'Directory path on host system or "self" / "orchestrator".' },
+      { name: 'label', type: 'string', required: false, placeholder: 'External Target System', description: 'Optional label for the pointed target system.' },
+      { name: 'createIfMissing', type: 'boolean', required: false, defaultValue: false, description: 'Create directory if missing.' }
+    ]
+  },
+  {
+    id: 'inspectTargetSystem',
+    name: 'Inspect Target, Self & Host Systems',
+    category: 'sovereign',
+    description: 'Inspects the Orchestrator own root, pointed Target System root, Host OS telemetry, and Atomic Patch Snapshot Ledger.',
+    parameters: []
+  },
+  {
+    id: 'rollbackAtomicPatch',
+    name: 'Rollback Atomic Patch',
+    category: 'file',
+    description: 'Atomically rolls back the latest file mutation or a specific patchId / filePath from the persistent snapshot ledger.',
+    parameters: [
+      { name: 'patchId', type: 'string', required: false, description: 'Optional specific patchId to roll back.' },
+      { name: 'filePath', type: 'string', required: false, description: 'Optional file path whose latest patch should be rolled back.' }
+    ]
+  },
+  {
+    id: 'executeHostSystemAction',
+    name: 'Execute Host OS Action',
+    category: 'build',
+    description: 'Inspects or executes actions directly on the Host OS where the Orchestrator is installed (status, processes, mounts, network, or exec).',
+    parameters: [
+      { name: 'operation', type: 'string', required: true, defaultValue: 'status', description: 'status | processes | mounts | env_keys | network | exec' },
+      { name: 'command', type: 'string', required: false, description: 'Shell command when operation="exec".' },
+      { name: 'cwd', type: 'string', required: false, description: 'Working directory when operation="exec".' }
+    ]
   }
 ];
 
@@ -1380,7 +1579,30 @@ const DIRECTIVE_TAGS = [
   'LIST_DIR',
   'MUTATE_UI',
   'NAVIGATE_MODULE',
-  'COORDINATE'
+  'COORDINATE',
+  'OSINT_RECON',
+  'BURNER_MAIL',
+  'FETCH_URL',
+  'GITHUB_PROJECTS',
+  'SCRATCHPAD',
+  'PROXY_WHEEL',
+  'MEDIA_SYNTHESIS',
+  'LYSANDER_SKILL',
+  'SYSTEM_TELEMETRY',
+  'CODE_EVAL',
+  'INFINITE_SIM',
+  'WEB_SEARCH',
+  'LIST_TOOLS',
+  'SET_TARGET',
+  'TARGET_SYSTEM',
+  'INSPECT_SYSTEMS',
+  'ROLLBACK_PATCH',
+  'HOST_ACTION',
+  'OS_CONTROL',
+  'WINDOW_ACTION',
+  'DETACH_CHAT',
+  'DOCK_CHAT',
+  'BROWSER_OPEN'
 ];
 
 /**
@@ -1791,6 +2013,126 @@ export async function executeAutonomousModelDirectives(
           summary: 'UID 0 Root Clearance (uid_0=true) · Ring -3 Hypervisor ACTIVE',
           output: hvRes.output ?? hvRes.error
         });
+      } else if (tag === 'OSINT_RECON') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { target: payload, mode: 'all' };
+        const res = await executeSovereignFunction('osintRecon', data, agentId);
+        results.push({ tag: 'OSINT_RECON', action: `OSINT Recon: ${data.target}`, success: res.success, summary: res.success ? `Recon completed for ${data.target}` : (res.error || 'OSINT failed'), output: res.output ?? res.error });
+      } else if (tag === 'BURNER_MAIL') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { action: payload || 'create' };
+        const res = await executeSovereignFunction('manageBurnerMail', data, agentId);
+        results.push({ tag: 'BURNER_MAIL', action: `Burner Mail: ${data.action}`, success: res.success, summary: res.success ? `Burner mail action ${data.action} complete` : (res.error || 'Burner mail failed'), output: res.output ?? res.error });
+      } else if (tag === 'FETCH_URL') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { url: payload };
+        const res = await executeSovereignFunction('fetchWebPage', data, agentId);
+        results.push({ tag: 'FETCH_URL', action: `Fetch URL: ${data.url}`, success: res.success, summary: res.success ? `Fetched ${data.url}` : (res.error || 'Fetch failed'), output: res.output ?? res.error });
+      } else if (tag === 'GITHUB_PROJECTS') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { action: payload || 'list-projects' };
+        const res = await executeSovereignFunction('inspectGithubAndProjects', data, agentId);
+        results.push({ tag: 'GITHUB_PROJECTS', action: `GitHub/Projects: ${data.action}`, success: res.success, summary: res.success ? `Projects action ${data.action} completed` : (res.error || 'Projects failed'), output: res.output ?? res.error });
+      } else if (tag === 'SCRATCHPAD') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { action: 'list' };
+        const res = await executeSovereignFunction('manageScratchpad', data, agentId);
+        results.push({ tag: 'SCRATCHPAD', action: `Scratchpad: ${data.action || 'list'}`, success: res.success, summary: res.success ? `Scratchpad synced` : (res.error || 'Scratchpad failed'), output: res.output ?? res.error });
+      } else if (tag === 'PROXY_WHEEL') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { action: payload || 'status' };
+        const res = await executeSovereignFunction('manageProxyWheel', data, agentId);
+        results.push({ tag: 'PROXY_WHEEL', action: `Proxy Wheel: ${data.action}`, success: res.success, summary: res.success ? `Proxy Wheel ${data.action} completed` : (res.error || 'Wheel failed'), output: res.output ?? res.error });
+      } else if (tag === 'MEDIA_SYNTHESIS') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { mediaType: 'image', prompt: payload };
+        const res = await executeSovereignFunction('synthesizeMedia', data, agentId);
+        results.push({ tag: 'MEDIA_SYNTHESIS', action: `Synthesize ${data.mediaType || 'image'}`, success: res.success, summary: res.success ? `Media synthesis complete` : (res.error || 'Media failed'), output: res.output ?? res.error });
+      } else if (tag === 'LYSANDER_SKILL') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : (payload ? { skillId: payload } : { listAll: true });
+        const res = await executeSovereignFunction('invokeLysanderSkill', data, agentId);
+        results.push({ tag: 'LYSANDER_SKILL', action: `Lysander Skill: ${data.skillId || 'registry'}`, success: res.success, summary: res.success ? `Lysander protocol executed` : (res.error || 'Skill failed'), output: res.output ?? res.error });
+      } else if (tag === 'SYSTEM_TELEMETRY') {
+        const data = payload && payload.startsWith('{') ? JSON.parse(payload) : { includeAudit: true };
+        const res = await executeSovereignFunction('inspectSystemTelemetry', data, agentId);
+        results.push({ tag: 'SYSTEM_TELEMETRY', action: 'System Telemetry & Audit', success: res.success, summary: res.success ? `Live telemetry captured` : (res.error || 'Telemetry failed'), output: res.output ?? res.error });
+      } else if (tag === 'CODE_EVAL') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { code: payload };
+        const res = await executeSovereignFunction('evaluateSandboxedCode', data, agentId);
+        results.push({ tag: 'CODE_EVAL', action: 'Sandboxed JS Evaluation', success: res.success, summary: res.success ? `Evaluated in sandbox` : (res.error || 'Eval failed'), output: res.output ?? res.error });
+      } else if (tag === 'WEB_SEARCH') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { query: payload };
+        const res = await executeSovereignFunction('searchWeb', data, agentId);
+        results.push({ tag: 'WEB_SEARCH', action: `Web Search: ${data.query}`, success: res.success, summary: res.success ? `Search completed` : (res.error || 'Search failed'), output: res.output ?? res.error });
+      } else if (tag === 'INFINITE_SIM') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { action: payload || 'list' };
+        const res = await executeSovereignFunction('manageBurnerSim', data, agentId);
+        results.push({ tag: 'INFINITE_SIM', action: `Burner SIM/SMS: ${data.action}`, success: res.success, summary: res.success ? `Carrier op complete` : (res.error || 'SIM op failed'), output: res.output ?? res.error });
+      } else if (tag === 'LIST_TOOLS') {
+        const toolsList = getRegisteredTools();
+        results.push({ tag: 'LIST_TOOLS', action: 'List Forged Tools', success: true, summary: `${toolsList.length} forged tool(s) available`, output: toolsList });
+      } else if (tag === 'SCAN_GAMES') {
+        const res = await fetch('/api/games/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const data = await res.json();
+        results.push({ tag: 'GAME_SCANNER', action: 'Auto-Scan Existing Games', success: Boolean(data.success), summary: `Detected ${data.count || 0} game(s)`, output: data });
+      } else if (tag === 'MOD_GAME') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { modPrompt: payload };
+        const res = await fetch('/api/games/mod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const out = await res.json();
+        results.push({ tag: 'GAME_MOD', action: `Autonomous Game Mod`, success: Boolean(out.success), summary: out.summary || 'Game mod applied', output: out });
+      } else if (tag === 'FORGE_ENGINE_TOOL') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { toolName: 'Procedural Tool', description: payload };
+        const res = await fetch('/api/spatial/forge-tool', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const out = await res.json();
+        results.push({ tag: 'ENGINE_FORGE_TOOL', action: `Forge 3D Engine Tool`, success: Boolean(out.success), summary: `Forged ${out.tool?.name || 'tool'}`, output: out });
+      } else if (tag === 'EVOLVE_SKILL') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { customIntent: payload };
+        const res = await fetch('/api/spatial/evolve-skill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const out = await res.json();
+        if (typeof window !== 'undefined' && out.command) {
+          window.dispatchEvent(new CustomEvent('aurelius_spatial_command', { detail: { module: 'spatial-arena', command: out.command } }));
+        }
+        results.push({ tag: 'SKILL_EVOLUTION', action: `1-of-1 Skill Genesis`, success: Boolean(out.success), summary: out.evolvedSkill ? `${out.evolvedSkill.name} (${out.evolvedSkill.editionTag})` : 'Evolved', output: out });
+      } else if (tag === 'SET_TARGET' || tag === 'TARGET_SYSTEM') {
+        const data = payload.startsWith('{') ? JSON.parse(payload) : { targetPath: payload || 'self' };
+        const res = await executeSovereignFunction('setTargetSystem', data, agentId);
+        results.push({ tag: 'SET_TARGET', action: `Pointed target system: ${data.targetPath}`, success: res.success, summary: res.success ? `Target pointed to ${res.output?.target?.rootPath || data.targetPath}` : (res.error || 'Failed to point target'), output: res.output ?? res.error });
+      } else if (tag === 'INSPECT_SYSTEMS') {
+        const res = await executeSovereignFunction('inspectTargetSystem', {}, agentId);
+        results.push({ tag: 'INSPECT_SYSTEMS', action: 'Inspected Orchestrator, Target & Host Systems', success: res.success, summary: res.success ? 'Captured 3-scope system state' : (res.error || 'Inspect failed'), output: res.output ?? res.error });
+      } else if (tag === 'ROLLBACK_PATCH') {
+        const data = payload && payload.startsWith('{') ? JSON.parse(payload) : (payload ? { filePath: payload } : {});
+        const res = await executeSovereignFunction('rollbackAtomicPatch', data, agentId);
+        results.push({ tag: 'ROLLBACK_PATCH', action: 'Rolled back atomic patch', success: res.success, summary: res.success ? 'Restored file snapshot from ledger' : (res.error || 'Rollback failed'), output: res.output ?? res.error });
+      } else if (tag === 'HOST_ACTION') {
+        const data = payload && payload.startsWith('{') ? JSON.parse(payload) : { operation: payload || 'status' };
+        const res = await executeSovereignFunction('executeHostSystemAction', data, agentId);
+        results.push({ tag: 'HOST_ACTION', action: `Host OS: ${data.operation}`, success: res.success, summary: res.success ? `Host OS ${data.operation} executed` : (res.error || 'Host action failed'), output: res.output ?? res.error });
+      } else if (tag === 'OS_CONTROL' || tag === 'WINDOW_ACTION') {
+        const data = payload && payload.startsWith('{') ? JSON.parse(payload) : { action: payload || 'open_window' };
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('sovereign_os_command', { detail: { ...data, source: agentId } }));
+        }
+        orchestratorRuntime.coordinate(data.targetModule || 'sovereign-os', data.action || 'os_control', data, agentId).catch(() => {});
+        results.push({
+          tag: 'OS_CONTROL',
+          action: `Sovereign OS: ${data.action || 'open_window'}${data.targetModule ? ` -> ${data.targetModule}` : ''}`,
+          success: true,
+          summary: `Dispatched ${data.action || 'os_control'} across OS desktop`,
+          output: data
+        });
+      } else if (tag === 'DETACH_CHAT') {
+        const detail = { action: 'detach_chat', source: agentId };
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('sovereign_os_command', { detail }));
+        }
+        results.push({ tag: 'OS_CONTROL', action: 'Detach Chat PiP', success: true, summary: 'Detached floating Orchestrator Chat', output: detail });
+      } else if (tag === 'DOCK_CHAT') {
+        const detail = { action: 'dock_chat', source: agentId };
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('sovereign_os_command', { detail }));
+        }
+        results.push({ tag: 'OS_CONTROL', action: 'Dock Chat', success: true, summary: 'Re-docked Orchestrator Chat', output: detail });
+      } else if (tag === 'BROWSER_OPEN') {
+        const data = payload && payload.startsWith('{') ? JSON.parse(payload) : { url: payload };
+        const detail = { action: 'browser_navigate', targetModule: 'browser', url: data.url || payload, source: agentId };
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('sovereign_os_command', { detail }));
+        }
+        results.push({ tag: 'OS_CONTROL', action: `Chrome Open: ${detail.url}`, success: true, summary: `Navigated Chrome to ${detail.url}`, output: detail });
       }
     } catch (e: any) {
       results.push({

@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState } from 'react';
 import { 
   Sparkles, 
@@ -393,16 +404,23 @@ export const PromptPresetsModule: React.FC<PromptPresetsModuleProps> = ({
 
       {/* Add Custom Preset Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-xl w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-xl w-full max-h-[90dvh] overflow-y-auto p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                <BookmarkPlus className="w-4 h-4 text-amber-400" />
+                <BookmarkPlus className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>Create Custom Prompt Template</span>
               </h3>
               <button
+                type="button"
                 onClick={() => setShowAddModal(false)}
-                className="text-zinc-500 hover:text-zinc-300 text-xs"
+                aria-label="Close Create Prompt Modal"
+                className="p-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs cursor-pointer"
               >
                 ✕
               </button>

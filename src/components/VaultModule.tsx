@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState } from 'react';
 import { 
   Archive, 
@@ -19,9 +30,23 @@ import {
   FileCode2,
   Lock,
   Eye,
-  X
+  X,
+  FileArchive,
+  FileJson,
+  Loader2,
+  FolderDown,
+  Box,
+  Radio
 } from 'lucide-react';
 import type { Artifact } from '../types';
+import {
+  collectLocallyStoredArtifacts,
+  createArtifactsJsonBackup,
+  createArtifactsZipBackup,
+  triggerBlobDownload,
+  type VaultBackupFormat,
+  type VaultBackupSummary
+} from '../utils/vaultBackup';
 
 interface VaultModuleProps {
   artifacts: Artifact[];
@@ -34,11 +59,16 @@ export const VaultModule: React.FC<VaultModuleProps> = ({
   onDeleteArtifact,
   userId 
 }) => {
-  const [filter, setFilter] = useState<'all' | 'music' | 'image' | 'video' | 'transcription' | 'knowledge'>('all');
+  const [filter, setFilter] = useState<'all' | 'music' | 'image' | 'video' | 'transcription' | 'voice' | 'spatial' | 'knowledge'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeAudio, setActiveAudio] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const [backupFormat, setBackupFormat] = useState<VaultBackupFormat>('zip');
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [backupNotice, setBackupNotice] = useState<{ type: 'success' | 'error'; summary?: VaultBackupSummary; message?: string } | null>(null);
+
+  const allLocalArtifacts = collectLocallyStoredArtifacts(artifacts);
 
   const filtered = artifacts.filter(a => {
     const matchesFilter = filter === 'all' || a.type === filter;
@@ -63,45 +93,48 @@ export const VaultModule: React.FC<VaultModuleProps> = ({
       case 'image': return <ImageIcon className="w-4 h-4 text-purple-400" />;
       case 'video': return <Video className="w-4 h-4 text-rose-400" />;
       case 'transcription': return <Mic className="w-4 h-4 text-teal-400" />;
+      case 'voice': return <Radio className="w-4 h-4 text-rose-400" />;
+      case 'spatial': return <Box className="w-4 h-4 text-amber-400" />;
       case 'knowledge': return <FileCode2 className="w-4 h-4 text-cyan-400" />;
       default: return <Layers className="w-4 h-4 text-amber-400" />;
     }
   };
 
-  // Export complete tactical vault bundle
-  const handleExportVaultBundle = () => {
-    const bundle = {
-      bundleTitle: 'Aurelius Sovereign Vault Tactical Archive',
-      architect: 'Master Architect Joshua Hamilton',
-      exportedAt: new Date().toISOString(),
-      zenodoReference: 'Local-System-Integrity-Proof',
-      integritySeal: 'SHA256_VERIFIED_100_100',
-      totalCount: artifacts.length,
-      categoryCounts: {
-        music: artifacts.filter(a => a.type === 'music').length,
-        image: artifacts.filter(a => a.type === 'image').length,
-        video: artifacts.filter(a => a.type === 'video').length,
-        transcription: artifacts.filter(a => a.type === 'transcription').length,
-        knowledge: artifacts.filter(a => a.type === 'knowledge').length
-      },
-      artifacts
-    };
+  const formatByteSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
 
-    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sovereign_vault_bundle_${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  // Download all locally stored artifacts as a single JSON or ZIP backup archive
+  const handleDownloadAllArtifacts = async (requestedFormat?: VaultBackupFormat) => {
+    if (isExporting) return;
+    const formatToUse = requestedFormat || backupFormat;
+    setIsExporting(true);
+    setBackupNotice(null);
+
+    try {
+      const localArtifacts = collectLocallyStoredArtifacts(artifacts);
+      const { blob, summary } = formatToUse === 'zip'
+        ? await createArtifactsZipBackup(localArtifacts, userId)
+        : await createArtifactsJsonBackup(localArtifacts, userId);
+
+      triggerBlobDownload(blob, summary.fileName);
+      setBackupNotice({ type: 'success', summary });
+    } catch (err: any) {
+      setBackupNotice({
+        type: 'error',
+        message: err?.message || 'Failed to package locally stored artifacts for backup.'
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Banner */}
-      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
             <Archive className="w-6 h-6" />
@@ -123,18 +156,109 @@ export const VaultModule: React.FC<VaultModuleProps> = ({
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-          <button
-            onClick={handleExportVaultBundle}
-            className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-mono font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-            title="Export all artifacts into signed JSON bundle"
+        {/* Action Controls: Backup Format Selector + Download All Artifacts */}
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end">
+          <div
+            className="flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-[11px] font-mono"
+            role="group"
+            aria-label="Backup export format"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Bundle</span>
+            <button
+              type="button"
+              onClick={() => setBackupFormat('zip')}
+              disabled={isExporting}
+              className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                backupFormat === 'zip'
+                  ? 'bg-zinc-800 text-amber-300 font-bold border border-zinc-700'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              title="Package all artifacts and decoded media into a ZIP archive"
+            >
+              <FileArchive className="w-3.5 h-3.5" />
+              <span>ZIP</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBackupFormat('json')}
+              disabled={isExporting}
+              className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                backupFormat === 'json'
+                  ? 'bg-zinc-800 text-amber-300 font-bold border border-zinc-700'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              title="Export all artifacts as a single portable JSON backup"
+            >
+              <FileJson className="w-3.5 h-3.5" />
+              <span>JSON</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleDownloadAllArtifacts()}
+            disabled={isExporting}
+            className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-60 text-amber-300 border border-amber-500/40 text-xs font-mono font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+            title={`Download all ${allLocalArtifacts.length} locally stored artifact(s) as a ${backupFormat.toUpperCase()} backup`}
+          >
+            {isExporting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <FolderDown className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {isExporting
+                ? 'Packaging Backup...'
+                : `Download All Artifacts (${allLocalArtifacts.length})`}
+            </span>
           </button>
         </div>
       </div>
+
+      {/* Backup Export Status Banner */}
+      {backupNotice && (
+        <div
+          className={`rounded-2xl p-3.5 border text-xs font-mono flex items-start justify-between gap-3 ${
+            backupNotice.type === 'success'
+              ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+              : 'bg-red-950/30 border-red-500/30 text-red-300'
+          }`}
+        >
+          <div className="space-y-1">
+            {backupNotice.type === 'success' && backupNotice.summary ? (
+              <>
+                <div className="font-bold flex items-center gap-2 flex-wrap">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Backup exported: {backupNotice.summary.fileName} ({formatByteSize(backupNotice.summary.byteSize)})
+                  </span>
+                </div>
+                <div className="text-[11px] text-emerald-400/90">
+                  Artifacts: {backupNotice.summary.totalArtifacts} · Format: {backupNotice.summary.format.toUpperCase()}
+                  {backupNotice.summary.format === 'zip'
+                    ? ` · Media assets packaged: ${backupNotice.summary.mediaFilesPackaged}`
+                    : ''}
+                  {` · SHA-256: ${backupNotice.summary.checksumSha256.slice(0, 16)}...`}
+                </div>
+                {backupNotice.summary.warnings.length > 0 && (
+                  <div className="text-[11px] text-amber-300/90 pt-0.5">
+                    Notes: {backupNotice.summary.warnings.join(' | ')}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div>{backupNotice.message}</div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setBackupNotice(null)}
+            className="p-1 rounded-lg hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 cursor-pointer shrink-0"
+            aria-label="Dismiss backup notice"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-950 p-2 rounded-2xl border border-zinc-800">
@@ -150,9 +274,9 @@ export const VaultModule: React.FC<VaultModuleProps> = ({
           />
         </div>
 
-        {/* Filter Pills */}
+        {/* Filter Tabs */}
         <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800 text-xs font-mono flex-wrap gap-1">
-          {(['all', 'music', 'image', 'video', 'transcription', 'knowledge'] as const).map(tab => (
+          {(['all', 'music', 'image', 'video', 'spatial', 'transcription', 'voice', 'knowledge'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -189,9 +313,9 @@ export const VaultModule: React.FC<VaultModuleProps> = ({
               className="bg-zinc-900/80 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-zinc-700 transition-all shadow-lg group"
             >
               {/* Media Preview Header */}
-              {item.type === 'image' && item.mediaUrl && (
+              {(item.type === 'image' || item.type === 'spatial') && item.mediaUrl && (
                 <div className="relative aspect-video bg-zinc-950 overflow-hidden">
-                  <img src={item.mediaUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <img src={item.mediaUrl} alt={item.title} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 </div>
               )}
 
@@ -229,8 +353,8 @@ export const VaultModule: React.FC<VaultModuleProps> = ({
                 </div>
               )}
 
-              {item.type === 'transcription' && (
-                <div className="p-4 bg-teal-950/20 border-b border-zinc-800/80 max-h-32 overflow-y-auto text-xs text-zinc-300 font-mono">
+              {(item.type === 'transcription' || item.type === 'voice') && (
+                <div className={`p-4 border-b border-zinc-800/80 max-h-32 overflow-y-auto text-xs text-zinc-300 font-mono ${item.type === 'voice' ? 'bg-rose-950/20' : 'bg-teal-950/20'}`}>
                   {item.mediaUrl || item.prompt}
                 </div>
               )}
@@ -292,7 +416,7 @@ export const VaultModule: React.FC<VaultModuleProps> = ({
                     </a>
                   )}
 
-                  {item.type === 'transcription' && (
+                  {(item.type === 'transcription' || item.type === 'voice') && (
                     <button
                       onClick={() => handleCopy(item.mediaUrl || item.prompt, item.id)}
                       className="p-1 hover:text-teal-400 transition-colors cursor-pointer"
@@ -320,16 +444,22 @@ export const VaultModule: React.FC<VaultModuleProps> = ({
 
       {/* Detail Modal for Selected Artifact */}
       {selectedArtifact && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedArtifact(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-2xl w-full max-h-[90dvh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
                 {getIcon(selectedArtifact.type)}
                 <h3 className="font-bold text-sm text-zinc-100 truncate">{selectedArtifact.title}</h3>
               </div>
               <button
                 onClick={() => setSelectedArtifact(null)}
-                className="p-1 text-zinc-400 hover:text-zinc-200 rounded-lg hover:bg-zinc-800 cursor-pointer"
+                aria-label="Close Inspector"
+                className="p-1.5 text-zinc-400 hover:text-zinc-200 rounded-lg hover:bg-zinc-800 cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>

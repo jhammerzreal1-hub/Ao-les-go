@@ -107,7 +107,7 @@ service cloud.firestore {
         data.keys().hasOnly(['userId', 'type', 'title', 'prompt', 'model', 'mediaUrl', 'metadataJson', 'createdAt']) &&
         isValidId(data.userId) &&
         data.userId == uid &&
-        data.type in ['music', 'image', 'video', 'transcription', 'knowledge', 'dossier'] &&
+        data.type in ['music', 'image', 'video', 'transcription', 'knowledge', 'dossier', 'spatial', 'voice'] &&
         isValidStr(data.title, 256) &&
         isValidStr(data.prompt, 4000) &&
         isValidStr(data.model, 128) &&
@@ -128,6 +128,70 @@ service cloud.firestore {
         (!('result' in data) || isOptStr(data.result, 50000)) &&
         (!('proofHash' in data) || isOptStr(data.proofHash, 128)) &&
         (!('status' in data) || data.status in ['SUCCESS', 'FAILED', 'HEALED']);
+    }
+
+    function isValidGameRun(data, uid) {
+      return data.keys().hasAll(['userId', 'mode', 'shipFinish', 'score', 'wave', 'beaconsCollected', 'durationSec', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'mode', 'shipFinish', 'score', 'wave', 'beaconsCollected', 'durationSec', 'status', 'agentsCount', 'engineTitle', 'processMetricValue', 'createdAt']) &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        data.mode in ['arcade', 'aerial_combat', 'swarm_logistics', 'byzantine_mesh', 'orbital_physics', 'photoreal_sandbox', 'mmorpg_world', 'custom_world', 'time_trial', 'zen_inspect'] &&
+        data.shipFinish in ['titanium-amber', 'obsidian-cyan', 'ceramic-emerald', 'forged-bronze', 'titanium', 'obsidian', 'amber', 'sapphire'] &&
+        data.score is number && data.score >= 0 && data.score <= 10000000 &&
+        data.wave is number && data.wave >= 1 && data.wave <= 999 &&
+        data.beaconsCollected is number && data.beaconsCollected >= 0 && data.beaconsCollected <= 99999 &&
+        data.durationSec is number && data.durationSec >= 0 && data.durationSec <= 86400 &&
+        data.status in ['COMPLETED', 'VICTORY', 'DEFEAT', 'ABORTED'] &&
+        (!('agentsCount' in data) || (data.agentsCount is number && data.agentsCount >= 0 && data.agentsCount <= 64)) &&
+        (!('engineTitle' in data) || isOptStr(data.engineTitle, 128)) &&
+        (!('processMetricValue' in data) || (data.processMetricValue is number && data.processMetricValue >= -1000000 && data.processMetricValue <= 10000000)) &&
+        isValidStr(data.createdAt, 64);
+    }
+
+    function isValidSpatialBlueprint(data, uid) {
+      return data.keys().hasAll(['userId', 'title', 'engineKind', 'createdByAgent', 'blueprintJson', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'title', 'engineKind', 'createdByAgent', 'blueprintJson', 'createdAt', 'updatedAt']) &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        isValidStr(data.title, 128) &&
+        data.engineKind in ['aerial_combat', 'swarm_logistics', 'byzantine_mesh', 'orbital_physics', 'photoreal_sandbox', 'mmorpg_world', 'custom_world'] &&
+        isValidStr(data.createdByAgent, 128) &&
+        isValidStr(data.blueprintJson, 50000) &&
+        isValidStr(data.createdAt, 64) &&
+        (!('updatedAt' in data) || isOptStr(data.updatedAt, 64));
+    }
+
+    function isValidDetectedGameMod(data, uid) {
+      return data.keys().hasAll(['userId', 'gameKey', 'title', 'engine', 'sourcePath', 'status', 'modCount', 'modStateJson', 'detectedAt']) &&
+        data.keys().hasOnly(['userId', 'gameKey', 'title', 'engine', 'sourcePath', 'status', 'modCount', 'modStateJson', 'detectedAt', 'updatedAt']) &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        isValidStr(data.gameKey, 128) &&
+        isValidStr(data.title, 128) &&
+        data.engine in ['threejs', 'phaser', 'godot', 'unity', 'unreal', 'minecraft', 'pygame', 'love2d', 'html5_canvas', 'custom_engine'] &&
+        isValidStr(data.sourcePath, 512) &&
+        data.status in ['DETECTED', 'HOOKED', 'MODDED'] &&
+        data.modCount is number && data.modCount >= 0 && data.modCount <= 10000 &&
+        isValidStr(data.modStateJson, 50000) &&
+        isValidStr(data.detectedAt, 64) &&
+        (!('updatedAt' in data) || isOptStr(data.updatedAt, 64));
+    }
+
+    function isValidCraftedItem(data, uid) {
+      return data.keys().hasAll(['userId', 'itemId', 'name', 'category', 'rarity', 'crafterName', 'crafterSkillLevel', 'signatureHash', 'uniqueMakerTrait', 'itemSpecJson', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'itemId', 'name', 'category', 'rarity', 'crafterName', 'crafterSkillLevel', 'signatureHash', 'uniqueMakerTrait', 'itemSpecJson', 'createdAt']) &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        isValidStr(data.itemId, 128) &&
+        isValidStr(data.name, 128) &&
+        data.category in ['weapon', 'armor', 'relic', 'elixir', 'world_beacon'] &&
+        data.rarity in ['Masterwork', 'Ascendant', 'Mythic', '1-of-1 Sovereign'] &&
+        isValidStr(data.crafterName, 128) &&
+        data.crafterSkillLevel is number && data.crafterSkillLevel >= 1 && data.crafterSkillLevel <= 999 &&
+        isValidStr(data.signatureHash, 64) &&
+        isValidStr(data.uniqueMakerTrait, 256) &&
+        isValidStr(data.itemSpecJson, 50000) &&
+        isValidStr(data.createdAt, 64);
     }
 
     // Authenticated connection health probe
@@ -253,6 +317,77 @@ service cloud.firestore {
           incoming().timestamp == existing().timestamp &&
           isAdmin();
         allow delete: if isValidId(userId) && isValidId(ledgerId) && isAdmin();
+      }
+
+      match /game_runs/{runId} {
+        allow get: if isValidId(userId) && isValidId(runId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(runId) &&
+          isOwner(userId) &&
+          isValidGameRun(incoming(), userId);
+        allow update: if isValidId(userId) && isValidId(runId) &&
+          isValidGameRun(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isAdmin();
+        allow delete: if isValidId(userId) && isValidId(runId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /spatial_blueprints/{blueprintId} {
+        allow get: if isValidId(userId) && isValidId(blueprintId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(blueprintId) &&
+          isOwner(userId) &&
+          isValidSpatialBlueprint(incoming(), userId);
+        allow update: if isValidId(userId) && isValidId(blueprintId) &&
+          isValidSpatialBlueprint(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().createdByAgent == existing().createdByAgent &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['title', 'engineKind', 'blueprintJson', 'updatedAt'])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(blueprintId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /detected_games/{gameId} {
+        allow get: if isValidId(userId) && isValidId(gameId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(gameId) &&
+          isOwner(userId) &&
+          isValidDetectedGameMod(incoming(), userId);
+        allow update: if isValidId(userId) && isValidId(gameId) &&
+          isValidDetectedGameMod(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().gameKey == existing().gameKey &&
+          incoming().detectedAt == existing().detectedAt &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['title', 'engine', 'sourcePath', 'status', 'modCount', 'modStateJson', 'updatedAt'])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(gameId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /crafted_items/{itemId} {
+        allow get: if isValidId(userId) && isValidId(itemId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(itemId) &&
+          isOwner(userId) &&
+          isValidCraftedItem(incoming(), userId);
+        allow update: if isValidId(userId) && isValidId(itemId) &&
+          isValidCraftedItem(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().signatureHash == existing().signatureHash &&
+          incoming().createdAt == existing().createdAt &&
+          isAdmin();
+        allow delete: if isValidId(userId) && isValidId(itemId) && (isOwner(userId) || isAdmin());
       }
     }
   }

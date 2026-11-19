@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertOctagon, RefreshCw, Terminal, ShieldCheck } from 'lucide-react';
 
@@ -47,7 +58,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="max-w-xl w-full bg-zinc-900/90 border border-amber-500/30 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/80 space-y-6">
             <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                <AlertOctagon className="w-5 h-5 animate-pulse" />
+                <AlertOctagon className="w-5 h-5" />
               </div>
               <div>
                 <h1 className="text-base font-bold text-zinc-100 uppercase tracking-wider">

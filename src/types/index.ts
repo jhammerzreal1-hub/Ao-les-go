@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 export type ModuleType = 
   | 'war-room'
   | 'browser'
@@ -31,7 +42,18 @@ export type ModuleType =
   | 'download-models'
   | 'universal-installer'
   | 'api-secrets'
-  | 'integrations';
+  | 'integrations'
+  | 'spatial-arena'
+  | 'agent-dev-kit'
+  | 'ai-genesis-distillery'
+  | 'emulator-modder'
+  | 'macro-telemetry'
+  | 'world-start'
+  | 'file-manager'
+  | 'terminal'
+  | 'task-manager'
+  | 'os-settings'
+  | 'crypto-wallet';
 
 export type ChatModel =
   | 'gemini-4-hydrogen'
@@ -164,7 +186,7 @@ export interface ChatMessage {
 
 export interface Artifact {
   id: string;
-  type: 'music' | 'image' | 'video' | 'transcription' | 'knowledge' | 'dossier';
+  type: 'music' | 'image' | 'video' | 'transcription' | 'voice' | 'spatial' | 'knowledge' | 'dossier';
   title: string;
   prompt: string;
   model: string;
@@ -369,7 +391,7 @@ export interface MicroTool {
   defaultInput: string;
   author: string;
   usageCount: number;
-  category: 'string' | 'crypto' | 'network' | 'data' | 'utility' | 'sovereign' | 'stealth' | 'hypervisor' | 'behavioral' | 'refactor';
+  category: 'string' | 'crypto' | 'network' | 'data' | 'utility' | 'sovereign' | 'stealth' | 'hypervisor' | 'behavioral' | 'refactor' | 'spatial' | 'audio';
   endpoint?: string;
   useCase?: string;
   createdAt: string;

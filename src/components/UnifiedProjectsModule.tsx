@@ -1,3 +1,12 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { safeCopyToClipboard } from '../utils/clipboard.js';
 import {
@@ -134,13 +143,33 @@ export const UnifiedProjectsModule: React.FC = () => {
     setLoadingDir(true);
     try {
       const res = await executeSovereignFunction('listDirectory', { dirPath }, 'unified-projects');
-      if (res.success && res.output?.entries) {
-        setDirEntries(res.output.entries);
+      const rawEntries = Array.isArray(res.output)
+        ? res.output
+        : res.output && typeof res.output === 'object' && Array.isArray((res.output as any).entries)
+        ? (res.output as any).entries
+        : null;
+      if (res.success && rawEntries) {
+        const normalized: WorkspaceEntry[] = rawEntries.map((entry: any) => ({
+          name: String(entry?.name || ''),
+          path: String(entry?.path || entry?.name || ''),
+          isDirectory:
+            typeof entry?.isDirectory === 'boolean'
+              ? entry.isDirectory
+              : entry?.type === 'directory' || entry?.type === 'dir',
+          sizeBytes:
+            typeof entry?.sizeBytes === 'number'
+              ? entry.sizeBytes
+              : typeof entry?.size === 'number'
+              ? entry.size
+              : undefined
+        }));
+        setDirEntries(normalized);
         setCurrentDir(dirPath);
-      } else if (res.success && Array.isArray(res.output)) {
-        setDirEntries(res.output);
-        setCurrentDir(dirPath);
+      } else if (!res.success) {
+        setEditorStatus({ ok: false, msg: res.error || `Failed to list ${dirPath}` });
       }
+    } catch (err: any) {
+      setEditorStatus({ ok: false, msg: err?.message || `Failed to list ${dirPath}` });
     } finally {
       setLoadingDir(false);
     }
@@ -148,18 +177,22 @@ export const UnifiedProjectsModule: React.FC = () => {
 
   const loadFile = useCallback(async (filePath: string) => {
     setEditorStatus(null);
-    const res = await executeSovereignFunction('readFile', { filePath }, 'unified-projects');
-    if (res.success) {
-      const text = typeof res.output === 'string'
-        ? res.output
-        : typeof res.output?.content === 'string'
-        ? res.output.content
-        : JSON.stringify(res.output, null, 2);
-      setActiveFilePath(filePath);
-      setFileContent(text);
-      setOriginalContent(text);
-    } else {
-      setEditorStatus({ ok: false, msg: res.error || `Failed to read ${filePath}` });
+    try {
+      const res = await executeSovereignFunction('readFile', { filePath }, 'unified-projects');
+      if (res.success) {
+        const text = typeof res.output === 'string'
+          ? res.output
+          : typeof res.output?.content === 'string'
+          ? res.output.content
+          : JSON.stringify(res.output, null, 2);
+        setActiveFilePath(filePath);
+        setFileContent(text);
+        setOriginalContent(text);
+      } else {
+        setEditorStatus({ ok: false, msg: res.error || `Failed to read ${filePath}` });
+      }
+    } catch (err: any) {
+      setEditorStatus({ ok: false, msg: err?.message || `Failed to read ${filePath}` });
     }
   }, []);
 
@@ -282,6 +315,13 @@ export const UnifiedProjectsModule: React.FC = () => {
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   ATOMIC TRANSACTIONS ACTIVE
                 </span>
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('open-jhammerz-license'))}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 cursor-pointer"
+                >
+                  MIT &amp; JHammerZ TWENTY 47 / H-FID License · jhammerz.github.io
+                </button>
                 {githubStatus?.user?.login && (
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                     GitHub: {githubStatus.user.login} ({githubStatus.user.publicRepos} repos)

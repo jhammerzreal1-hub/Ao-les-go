@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Mail, 
@@ -60,10 +71,12 @@ export interface BurnerMessageItem {
   hasAttachments?: boolean;
   size?: number;
   otpCode?: string | null;
+  otpCandidates?: string[];
   verificationLinks?: string[];
   text?: string;
   html?: string;
   allUrls?: string[];
+  archivedLocally?: boolean;
 }
 
 interface BurnerMailModuleProps {
@@ -81,6 +94,90 @@ interface BurnerMailModuleProps {
 
 const STORAGE_KEY = 'aurelius_burner_inboxes_v2';
 const ACTIVE_ID_KEY = 'aurelius_burner_active_id_v2';
+const MESSAGES_STORAGE_KEY = 'aurelius_burner_messages_v2';
+const DELETED_IDS_STORAGE_KEY = 'aurelius_burner_deleted_ids_v1';
+
+// Non-destructive merge: keeps every previously received message unless explicitly deleted by the user,
+// and always prefers the richest hydrated fields (text, html, otpCode, otpCandidates, verificationLinks).
+function mergeMessageRecords(
+  existing: BurnerMessageItem,
+  incoming: BurnerMessageItem
+): BurnerMessageItem {
+  const bestText =
+    (incoming.text && incoming.text.trim().length >= (existing.text || '').trim().length)
+      ? incoming.text
+      : (existing.text || incoming.text);
+  const bestHtml =
+    (incoming.html && incoming.html.trim().length >= (existing.html || '').trim().length)
+      ? incoming.html
+      : (existing.html || incoming.html);
+  const bestIntro =
+    (incoming.intro && incoming.intro.trim().length > (existing.intro || '').trim().length)
+      ? incoming.intro
+      : (existing.intro || incoming.intro);
+
+  const otpCandidates = Array.from(
+    new Set([...(incoming.otpCandidates || []), ...(existing.otpCandidates || [])].filter(Boolean))
+  );
+  const verificationLinks = Array.from(
+    new Set([...(incoming.verificationLinks || []), ...(existing.verificationLinks || [])].filter(Boolean))
+  );
+  const allUrls = Array.from(
+    new Set([...(incoming.allUrls || []), ...(existing.allUrls || [])].filter(Boolean))
+  );
+
+  return {
+    ...existing,
+    ...incoming,
+    id: existing.id,
+    subject:
+      incoming.subject && incoming.subject !== '(No Subject)'
+        ? incoming.subject
+        : (existing.subject || incoming.subject || '(No Subject)'),
+    intro: bestIntro,
+    text: bestText,
+    html: bestHtml,
+    recipientAddress: incoming.recipientAddress || existing.recipientAddress,
+    otpCode: incoming.otpCode || existing.otpCode || otpCandidates[0] || null,
+    otpCandidates,
+    verificationLinks,
+    allUrls,
+    archivedLocally: Boolean(existing.archivedLocally || incoming.archivedLocally || true)
+  };
+}
+
+function mergeInboxMessageList(
+  existingList: BurnerMessageItem[],
+  incomingList: BurnerMessageItem[],
+  deletedIds: Set<string>
+): { merged: BurnerMessageItem[]; newlyArrived: BurnerMessageItem[] } {
+  const map = new Map<string, BurnerMessageItem>();
+  const existingIds = new Set<string>();
+
+  for (const msg of existingList) {
+    if (!msg?.id || deletedIds.has(msg.id)) continue;
+    map.set(msg.id, msg);
+    existingIds.add(msg.id);
+  }
+
+  const newlyArrived: BurnerMessageItem[] = [];
+  for (const msg of incomingList) {
+    if (!msg?.id || deletedIds.has(msg.id)) continue;
+    const prev = map.get(msg.id);
+    if (prev) {
+      map.set(msg.id, mergeMessageRecords(prev, msg));
+    } else {
+      map.set(msg.id, { ...msg, archivedLocally: true });
+      newlyArrived.push(msg);
+    }
+  }
+
+  const merged = Array.from(map.values()).sort(
+    (a, b) => (new Date(b.createdAt).getTime() || 0) - (new Date(a.createdAt).getTime() || 0)
+  );
+
+  return { merged, newlyArrived };
+}
 
 export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
   userId,
@@ -115,11 +212,49 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
   // Providers & domains info
   const [providersInfo, setProvidersInfo] = useState<any[]>([]);
 
-  // Messages per identity: key is inbox.id, value is BurnerMessageItem[]
-  const [messagesByInbox, setMessagesByInbox] = useState<Record<string, BurnerMessageItem[]>>({});
-  
+  // Messages per identity: persisted to localStorage so received OTP emails NEVER disappear on refresh or upstream expiry
+  const [messagesByInbox, setMessagesByInbox] = useState<Record<string, BurnerMessageItem[]>>(() => {
+    try {
+      const saved = localStorage.getItem(MESSAGES_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return parsed;
+        }
+      }
+    } catch (_) {}
+    return {};
+  });
+  const messagesByInboxRef = useRef<Record<string, BurnerMessageItem[]>>(messagesByInbox);
+  useEffect(() => {
+    messagesByInboxRef.current = messagesByInbox;
+  }, [messagesByInbox]);
+
+  // Explicitly user-deleted message IDs (only these are filtered out during non-destructive sync)
+  const [deletedMessageIds, setDeletedMessageIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(DELETED_IDS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+  const deletedIdsRef = useRef<Set<string>>(new Set(deletedMessageIds));
+  useEffect(() => {
+    deletedIdsRef.current = new Set(deletedMessageIds);
+    try {
+      localStorage.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(deletedMessageIds.slice(0, 500)));
+    } catch (_) {}
+  }, [deletedMessageIds]);
+
   // Selection and reading state
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const selectedMessageIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedMessageIdRef.current = selectedMessageId;
+  }, [selectedMessageId]);
   const [activeMessageDetail, setActiveMessageDetail] = useState<BurnerMessageItem | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailViewMode, setDetailViewMode] = useState<'html' | 'text' | 'security' | 'ai'>('html');
@@ -204,12 +339,33 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
   };
 
   const handleCopy = (text: string, label: string = 'Copied') => {
-    navigator.clipboard.writeText(text);
+    if (!text) return;
+    const fallbackCopy = () => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        ta.style.pointerEvents = 'none';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (_) {}
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(fallbackCopy);
+    } else {
+      fallbackCopy();
+    }
+
     setCopiedText(text);
     showToast(`${label} copied to clipboard!`);
     setTimeout(() => {
       setCopiedText(prev => (prev === text ? null : prev));
-    }, 2000);
+    }, 2200);
   };
 
   // Sync inboxes to localStorage
@@ -219,6 +375,24 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
       localStorage.setItem(ACTIVE_ID_KEY, activeInboxId);
     } catch (_) {}
   }, [inboxes, activeInboxId]);
+
+  // Sync received messages archive to localStorage (quota-safe: preserves text & OTP even if HTML is huge)
+  useEffect(() => {
+    try {
+      localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(messagesByInbox));
+    } catch (_) {
+      try {
+        const compact: Record<string, BurnerMessageItem[]> = {};
+        Object.entries(messagesByInbox).forEach(([k, list]) => {
+          compact[k] = (list || []).slice(0, 60).map(m => ({
+            ...m,
+            html: m.html && m.html.length > 40000 ? undefined : m.html
+          }));
+        });
+        localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(compact));
+      } catch (_) {}
+    }
+  }, [messagesByInbox]);
 
   // Load available providers and initial domains
   useEffect(() => {
@@ -304,7 +478,7 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
     }
   };
 
-  // Fetch messages for a specific inbox
+  // Fetch messages for a specific inbox (NON-DESTRUCTIVE additive merge so upstream empty polls NEVER wipe emails!)
   const fetchMessagesForInbox = async (inbox: BurnerIdentity, notifyIfNew: boolean = false) => {
     try {
       const res = await fetch('/api/burner/messages', {
@@ -320,7 +494,7 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
 
       if (res.ok) {
         const data = await res.json();
-        
+
         // Auto-update token if backend refreshed it
         if (data.newToken && data.newToken !== inbox.token) {
           setInboxes(prev => prev.map(i => i.id === inbox.id ? { ...i, token: data.newToken } : i));
@@ -331,17 +505,45 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
           recipientAddress: inbox.address
         }));
 
+        const existingForInbox = messagesByInboxRef.current[inbox.id] || [];
+        const { merged: previewMerged, newlyArrived } = mergeInboxMessageList(
+          existingForInbox,
+          incomingList,
+          deletedIdsRef.current
+        );
+
+        const upgradedActive: BurnerMessageItem | null = selectedMessageIdRef.current
+          ? (previewMerged.find(m => m.id === selectedMessageIdRef.current) || null)
+          : null;
+
         setMessagesByInbox(prev => {
           const oldList = prev[inbox.id] || [];
-          if (notifyIfNew && incomingList.length > oldList.length) {
-            playChime();
-            showToast(`New email received for ${inbox.address}!`);
-          }
-          return {
+          const { merged } = mergeInboxMessageList(oldList, incomingList, deletedIdsRef.current);
+          const next = {
             ...prev,
-            [inbox.id]: incomingList
+            [inbox.id]: merged
           };
+          messagesByInboxRef.current = next;
+          return next;
         });
+
+        if (newlyArrived.length > 0) {
+          const newest = newlyArrived[0];
+          if (notifyIfNew) {
+            playChime();
+            const otpSuffix = newest.otpCode ? ` · OTP: ${newest.otpCode}` : '';
+            showToast(`New email from ${newest.from?.name || newest.from?.address || 'Sender'}${otpSuffix}`);
+          }
+          // Auto-open the newly received email if user hasn't opened a message yet so OTP is immediately visible
+          if (!selectedMessageIdRef.current) {
+            setSelectedMessageId(newest.id);
+            setActiveMessageDetail(newest);
+          }
+        } else if (upgradedActive) {
+          setActiveMessageDetail(prev =>
+            prev && prev.id === upgradedActive.id ? mergeMessageRecords(prev, upgradedActive) : prev
+          );
+        }
       }
     } catch (e) {
       console.warn(`Failed fetching messages for ${inbox.address}:`, e);
@@ -404,14 +606,16 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
     let list: BurnerMessageItem[] = [];
     if (activeInboxId === 'all') {
       // Collect messages across all inboxes
-      Object.entries(messagesByInbox).forEach(([inboxId, msgs]) => {
+      Object.entries(messagesByInbox || {}).forEach(([inboxId, msgs]) => {
         const found = inboxes.find(i => i.id === inboxId);
-        msgs.forEach(m => {
-          list.push({
-            ...m,
-            recipientAddress: m.recipientAddress || found?.address
+        if (Array.isArray(msgs)) {
+          msgs.forEach(m => {
+            list.push({
+              ...m,
+              recipientAddress: m.recipientAddress || found?.address
+            });
           });
-        });
+        }
       });
     } else {
       list = [...(messagesByInbox[activeInboxId] || [])];
@@ -445,10 +649,13 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
     return Object.values(messagesByInbox).reduce((acc, msgs) => acc + msgs.length, 0);
   }, [messagesByInbox]);
 
-  // Fetch Message Detail when a message is selected
+  // Fetch Message Detail when a message is selected (never wipes already-hydrated message on upstream 404)
   const handleSelectMessage = async (msg: BurnerMessageItem) => {
     setSelectedMessageId(msg.id);
     setActiveMessageDetail(msg);
+    setAiAnalysis(null);
+
+    const alreadyHydrated = Boolean((msg.html && msg.html.trim().length > 0) || (msg.text && msg.text.trim().length > 0));
 
     // Determine target inbox to get provider & token
     let targetInbox = currentInbox;
@@ -461,7 +668,9 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
 
     if (!targetInbox) return;
 
-    setLoadingDetail(true);
+    if (!alreadyHydrated) {
+      setLoadingDetail(true);
+    }
     try {
       const res = await fetch('/api/burner/message-detail', {
         method: 'POST',
@@ -478,9 +687,20 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.message) {
-          setActiveMessageDetail({
+          const hydrated: BurnerMessageItem = mergeMessageRecords(msg, {
             ...data.message,
             recipientAddress: msg.recipientAddress || targetInbox.address
+          });
+          setActiveMessageDetail(prev => (prev && prev.id === msg.id ? hydrated : prev));
+          // Also save hydrated body + OTP back into messagesByInbox so it stays persisted locally
+          const inboxIdToUpdate = targetInbox.id;
+          setMessagesByInbox(prev => {
+            const list = prev[inboxIdToUpdate] || [];
+            const exists = list.some(m => m.id === hydrated.id);
+            const nextList = exists
+              ? list.map(m => (m.id === hydrated.id ? mergeMessageRecords(m, hydrated) : m))
+              : [hydrated, ...list];
+            return { ...prev, [inboxIdToUpdate]: nextList };
           });
         }
       }
@@ -491,7 +711,7 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
     }
   };
 
-  // Delete message
+  // Delete message (explicit user action — tombstones ID so it won't resurrect on poll)
   const handleDeleteMessage = async (msgId: string) => {
     const target = activeMessageDetail || currentMessages.find(m => m.id === msgId);
     let targetInbox = currentInbox;
@@ -499,6 +719,9 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
       targetInbox = inboxes.find(i => i.address.toLowerCase() === target.recipientAddress?.toLowerCase()) || null;
     }
     if (!targetInbox && inboxes.length > 0) targetInbox = inboxes[0];
+
+    setDeletedMessageIds(prev => (prev.includes(msgId) ? prev : [msgId, ...prev]));
+    deletedIdsRef.current.add(msgId);
 
     try {
       await fetch('/api/burner/delete-message', {
@@ -515,8 +738,8 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
       // Remove from local state
       setMessagesByInbox(prev => {
         const updated: Record<string, BurnerMessageItem[]> = {};
-        Object.entries(prev).forEach(([key, list]) => {
-          updated[key] = list.filter(m => m.id !== msgId);
+        Object.entries(prev || {}).forEach(([key, list]) => {
+          updated[key] = Array.isArray(list) ? list.filter(m => m.id !== msgId) : [];
         });
         return updated;
       });
@@ -1117,6 +1340,46 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
             </div>
           </div>
 
+          {/* Sticky Latest Captured OTP Quick-Copy Bar */}
+          {(() => {
+            const latestOtpMsg = currentMessages.find(m => Boolean(m.otpCode));
+            if (!latestOtpMsg?.otpCode) return null;
+            return (
+              <div className="px-3 py-2.5 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-zinc-900 border-b border-amber-500/40 flex items-center justify-between gap-2">
+                <div
+                  onClick={() => handleSelectMessage(latestOtpMsg)}
+                  className="min-w-0 flex-1 cursor-pointer"
+                  title="Click to open this OTP email"
+                >
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-1.5">
+                    <Key className="w-3 h-3 shrink-0" />
+                    <span className="truncate">Latest OTP · {latestOtpMsg.from?.name || latestOtpMsg.from?.address}</span>
+                  </div>
+                  <div className="text-base font-mono font-bold text-amber-200 tracking-widest mt-0.5">
+                    {latestOtpMsg.otpCode}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(latestOtpMsg.otpCode!, 'OTP Code')}
+                  className="px-2.5 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-mono font-bold text-[11px] flex items-center gap-1.5 shrink-0 shadow transition-colors"
+                >
+                  {copiedText === latestOtpMsg.otpCode ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy OTP</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            );
+          })()}
+
           {/* Messages List Feed */}
           <div className="flex-1 overflow-y-auto divide-y divide-zinc-800/60 p-2 space-y-1">
             {currentMessages.length === 0 ? (
@@ -1126,7 +1389,7 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
                 </div>
                 <p className="font-semibold text-zinc-400">Waiting for incoming emails...</p>
                 <p className="text-[11px] text-zinc-600 mt-1 max-w-xs mx-auto">
-                  Copy the address above and use it to register on any platform, or click below to simulate an immediate verification message.
+                  Copy the address above and use it to register on any platform. All incoming OTP emails are permanently archived locally so they never auto-delete.
                 </p>
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   <button
@@ -1160,15 +1423,28 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-semibold text-zinc-200 truncate">
                             {msg.from?.name || msg.from?.address || 'Unknown Sender'}
                           </span>
                           {msg.otpCode && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopy(msg.otpCode!, 'OTP Code');
+                              }}
+                              title="Click to copy OTP code immediately"
+                              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 hover:bg-amber-500/35 text-amber-300 border border-amber-500/50 shrink-0 flex items-center gap-1 transition-colors"
+                            >
                               <Key className="w-2.5 h-2.5" />
-                              OTP: {msg.otpCode}
-                            </span>
+                              <span>OTP: {msg.otpCode}</span>
+                              {copiedText === msg.otpCode ? (
+                                <Check className="w-2.5 h-2.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-2.5 h-2.5 opacity-80" />
+                              )}
+                            </button>
                           )}
                         </div>
                         <div className="text-[11px] text-zinc-500 font-mono truncate">
@@ -1248,39 +1524,70 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
                   </div>
                 </div>
 
-                {/* ⚡ High-Priority Extracted OTP Banner */}
+                {/* ⚡ High-Priority Extracted OTP Banner + Additional Codes + Vault Protection Badge */}
                 {activeMessageDetail.otpCode && (
-                  <div className="p-3 rounded-lg bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/40 flex flex-wrap items-center justify-between gap-3 shadow-inner">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                        <Key className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-semibold">
-                          Detected Verification Code
+                  <div className="p-3 rounded-lg bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/40 space-y-2.5 shadow-inner">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                          <Key className="w-4 h-4" />
                         </div>
-                        <div className="text-xl font-mono font-bold text-amber-200 tracking-widest">
-                          {activeMessageDetail.otpCode}
+                        <div>
+                          <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-2">
+                            <span>Detected One-Time Password</span>
+                            <span className="text-emerald-400 flex items-center gap-1 normal-case">
+                              <ShieldCheck className="w-3 h-3" />
+                              Vault Protected
+                            </span>
+                          </div>
+                          <div className="text-xl font-mono font-bold text-amber-200 tracking-widest select-all">
+                            {activeMessageDetail.otpCode}
+                          </div>
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(activeMessageDetail.otpCode!, 'OTP Code')}
+                        className="px-3.5 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-mono font-bold text-xs flex items-center gap-1.5 shadow transition-all"
+                      >
+                        {copiedText === activeMessageDetail.otpCode ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy OTP</span>
+                          </>
+                        )}
+                      </button>
                     </div>
 
-                    <button
-                      onClick={() => handleCopy(activeMessageDetail.otpCode!, 'OTP Code')}
-                      className="px-3.5 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-mono font-bold text-xs flex items-center gap-1.5 shadow transition-all"
-                    >
-                      {copiedText === activeMessageDetail.otpCode ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy OTP</span>
-                        </>
-                      )}
-                    </button>
+                    {/* Additional detected codes (if email contains more than one code / backup code) */}
+                    {activeMessageDetail.otpCandidates && activeMessageDetail.otpCandidates.length > 1 && (
+                      <div className="pt-2 border-t border-amber-500/20 flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+                        <span className="text-zinc-400 text-[10px] uppercase">Other Detected Codes:</span>
+                        {activeMessageDetail.otpCandidates
+                          .filter(c => c !== activeMessageDetail.otpCode)
+                          .map((code, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleCopy(code, 'Secondary Code')}
+                              className="px-2 py-0.5 rounded bg-zinc-900/90 hover:bg-zinc-800 text-amber-200 border border-amber-500/30 flex items-center gap-1 transition-colors"
+                            >
+                              <span>{code}</span>
+                              {copiedText === code ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-amber-400" />
+                              )}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1540,7 +1847,7 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
                         title="email-preview"
                         sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
                         srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:16px;font-family:sans-serif;word-break:break-word;}</style></head><body>${activeMessageDetail.html}</body></html>`}
-                        className="w-full min-h-[500px] border-none"
+                        className="w-full min-h-[320px] sm:min-h-[500px] border-none"
                       />
                     </div>
                   ) : (
@@ -1622,18 +1929,25 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
 
       {/* MODAL 1: Batch Burner Generator Drawer */}
       {showBatchModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Layers className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isGenerating) setShowBatchModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Layers className="w-5 h-5 text-amber-400 shrink-0" />
+                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide truncate">
                   Batch Burner Generator
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowBatchModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
+                aria-label="Close Batch Generator"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1710,18 +2024,25 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
 
       {/* MODAL 2: Send Live Test Email Simulator */}
       {showTestModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Send className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isSendingTest) setShowTestModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Send className="w-5 h-5 text-amber-400 shrink-0" />
+                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide truncate">
                   Send Live Test Email
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowTestModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
+                aria-label="Close Live Test Email Modal"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1850,18 +2171,25 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
 
       {/* MODAL 3: Domain & MX Deliverability Health Matrix */}
       {showDomainHealthModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-2xl w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowDomainHealthModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-2xl w-full max-h-[90dvh] overflow-y-auto p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Globe className="w-5 h-5 text-cyan-400 shrink-0" />
+                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide truncate">
                   Live DNS MX & Domain Deliverability Matrix
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowDomainHealthModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
+                aria-label="Close Domain Health Matrix"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1950,18 +2278,25 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
 
       {/* MODAL 4: Automated Webhook & Termux Relay Configuration */}
       {showRelayModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Radio className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowRelayModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Radio className="w-5 h-5 text-emerald-400 shrink-0" />
+                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide truncate">
                   Automated Webhook & Termux Relay
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowRelayModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
+                aria-label="Close Webhook Relay Modal"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2057,18 +2392,25 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
 
       {/* MODAL 5: Outbound Disposable Message Dispatcher */}
       {showReplyModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Send className="w-5 h-5 text-sky-400" />
-                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !sendingReply) setShowReplyModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Send className="w-5 h-5 text-sky-400 shrink-0" />
+                <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wide truncate">
                   Outbound Disposable Dispatcher
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowReplyModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
+                aria-label="Close Outbound Dispatcher Modal"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect } from 'react';
 import { 
   HardDrive, 
@@ -19,7 +30,8 @@ import {
   Upload,
   Eye,
   LogOut,
-  UserCheck
+  UserCheck,
+  X
 } from 'lucide-react';
 import { 
   initDriveAuth, 
@@ -112,6 +124,17 @@ export const GoogleDriveModule: React.FC<GoogleDriveModuleProps> = ({ onSaveToVa
       fetchFiles();
     }
   }, [accessToken]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (fileToDelete && !deletingFile) setFileToDelete(null);
+      else if (showCreateModal && !creatingFile) setShowCreateModal(false);
+      else if (previewFile) setPreviewFile(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fileToDelete, deletingFile, showCreateModal, creatingFile, previewFile]);
 
   const handleSignIn = async () => {
     setIsSigningIn(true);
@@ -460,16 +483,32 @@ export const GoogleDriveModule: React.FC<GoogleDriveModuleProps> = ({ onSaveToVa
 
       {/* MANDATORY Explicit User Confirmation Modal for Destructive Operations */}
       {fileToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-zinc-950 border border-rose-500/40 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl font-mono text-xs">
-            <div className="flex items-center gap-3 text-rose-400">
-              <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5" />
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deletingFile) setFileToDelete(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-zinc-950 border border-rose-500/40 rounded-3xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-5 shadow-2xl font-mono text-xs">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3 text-rose-400 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-zinc-100">Confirm File Deletion</h3>
+                  <p className="text-[11px] text-zinc-400">Permanent Google Drive Action</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100">Confirm File Deletion</h3>
-                <p className="text-[11px] text-zinc-400">Permanent Google Drive Action</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => !deletingFile && setFileToDelete(null)}
+                disabled={deletingFile}
+                className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer shrink-0"
+                aria-label="Close confirmation dialog"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-300 space-y-2">
@@ -513,12 +552,27 @@ export const GoogleDriveModule: React.FC<GoogleDriveModuleProps> = ({ onSaveToVa
 
       {/* New File Creation Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl font-mono text-xs">
-            <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-              <Plus className="w-4 h-4 text-amber-400" />
-              <span>Create New Google Drive File</span>
-            </h3>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !creatingFile) setShowCreateModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 shadow-2xl font-mono text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-amber-400" />
+                <span>Create New Google Drive File</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                aria-label="Close Create File Modal"
+                className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
             <form onSubmit={handleCreateFile} className="space-y-4">
               <div className="space-y-1">
@@ -577,16 +631,22 @@ export const GoogleDriveModule: React.FC<GoogleDriveModuleProps> = ({ onSaveToVa
 
       {/* File Content Preview Modal */}
       {previewFile && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden font-mono text-xs">
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-400" />
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewFile(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-2xl w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden font-mono text-xs">
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-900/60 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="w-4 h-4 text-amber-400 shrink-0" />
                 <span className="font-bold text-zinc-100 truncate">{previewFile.name}</span>
               </div>
               <button
                 onClick={() => setPreviewFile(null)}
-                className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                aria-label="Close File Preview"
+                className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 shrink-0 cursor-pointer"
               >
                 ✕
               </button>
@@ -607,7 +667,7 @@ export const GoogleDriveModule: React.FC<GoogleDriveModuleProps> = ({ onSaveToVa
               )}
             </div>
 
-            <div className="p-4 border-t border-zinc-800 flex justify-between items-center bg-zinc-900/60">
+            <div className="p-4 border-t border-zinc-800 flex justify-between items-center gap-2 flex-wrap bg-zinc-900/60 shrink-0">
               {previewFile.webViewLink && (
                 <a
                   href={previewFile.webViewLink}
@@ -621,7 +681,7 @@ export const GoogleDriveModule: React.FC<GoogleDriveModuleProps> = ({ onSaveToVa
               )}
               <button
                 onClick={() => setPreviewFile(null)}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold"
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold ml-auto cursor-pointer"
               >
                 Close
               </button>

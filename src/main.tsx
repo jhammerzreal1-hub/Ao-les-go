@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -33,25 +44,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );
 
-// Register Service Worker for offline PWA installation only in production
+// Register Service Worker for Android WebAPK / Cross-Mobile PWA support
 if ('serviceWorker' in navigator) {
-  if (import.meta.env.DEV) {
-    // In dev mode, unregister any active service workers so preview loads cleanly
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (const registration of registrations) {
-        registration.unregister();
-      }
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('ServiceWorker registration error:', err);
     });
-  } else {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').then(
-        (reg) => {
-          console.log('Aurelius Swarm ServiceWorker registered:', reg.scope);
-        },
-        (err) => {
-          console.warn('ServiceWorker registration error:', err);
-        }
-      );
-    });
-  }
+  });
 }

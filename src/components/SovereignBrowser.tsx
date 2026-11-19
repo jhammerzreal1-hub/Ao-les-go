@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { UltraVideoPlayer } from './UltraVideoPlayer';
 import { 
@@ -56,7 +67,12 @@ import {
   Smartphone,
   Tablet,
   Film,
-  PictureInPicture2
+  PictureInPicture2,
+  Bot,
+  Send,
+  Cookie,
+  MessageSquarePlus,
+  Link2
 } from 'lucide-react';
 
 interface BrowserProps {
@@ -65,6 +81,8 @@ interface BrowserProps {
   userId?: string;
   onSaveToVault?: (artifact: any) => void;
   initialUrl?: string;
+  onInjectToChat?: (content: string, immediate?: boolean) => void;
+  onSelectModule?: (mod: any) => void;
 }
 
 export interface BrowserTab {
@@ -116,14 +134,38 @@ interface BookmarkItem {
   folder?: string;
 }
 
+const ChromeEmblem: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+    <circle cx="24" cy="24" r="22" fill="#202124" />
+    <path fill="#EA4335" d="M24 2C15.1 2 7.5 7.3 4.1 14.9L14.6 33l.9-1.1A10.9 10.9 0 0 1 24 13h20.5A22 22 0 0 0 24 2z" />
+    <path fill="#34A853" d="M4.1 14.9A22 22 0 0 0 22 45.9l10.2-17.7-1.1-.5A11 11 0 0 1 14.5 29L4.1 14.9z" />
+    <path fill="#FBBC05" d="M24 13a11 11 0 0 1 9.5 16.5L22 45.9c.7.1 1.3.1 2 .1a22 22 0 0 0 20.5-33H24z" />
+    <circle cx="24" cy="24" r="10.5" fill="#202124" />
+    <circle cx="24" cy="24" r="8" fill="#4285F4" />
+  </svg>
+);
+
 export const SovereignBrowser: React.FC<BrowserProps> = ({
   agentInternetAllowed,
   onToggleAgentInternet,
   userId = 'anonymous_sovereign',
   onSaveToVault,
-  initialUrl
+  initialUrl,
+  onInjectToChat,
+  onSelectModule
 }) => {
   const [detectedMediaUrl, setDetectedMediaUrl] = useState<string | null>(null);
+  const [sessionId] = useState<string>(() => {
+    try {
+      const existing = localStorage.getItem('sovereign_browser_sid_v1');
+      if (existing) return existing;
+      const created = `sid-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem('sovereign_browser_sid_v1', created);
+      return created;
+    } catch {
+      return 'default';
+    }
+  });
 
   // Tabs State (Full Chrome-style Multi-Tabs)
   const [tabs, setTabs] = useState<BrowserTab[]>([
@@ -222,9 +264,39 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
   const [showSiteInfoModal, setShowSiteInfoModal] = useState<boolean>(false);
   const [showGlobalMediaHub, setShowGlobalMediaHub] = useState<boolean>(false);
   const [showDevTools, setShowDevTools] = useState<boolean>(false);
-  const [devToolsTab, setDevToolsTab] = useState<'elements' | 'console' | 'network' | 'security'>('network');
+  const [devToolsTab, setDevToolsTab] = useState<'elements' | 'console' | 'network' | 'security' | 'cookies'>('network');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Add Bookmark Inline Modal State (replaces browser prompt())
+  const [showAddBookmarkModal, setShowAddBookmarkModal] = useState<boolean>(false);
+  const [bookmarkDraftTitle, setBookmarkDraftTitle] = useState<string>('');
+  const [bookmarkDraftUrl, setBookmarkDraftUrl] = useState<string>('');
+  const [bookmarkDraftFolder, setBookmarkDraftFolder] = useState<string>('Custom');
+
+  // Real AI Web Copilot Drawer State (User + AI with full live internet & DOM)
+  interface CopilotMessage {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    model?: string;
+    elapsedMs?: number;
+    sha256?: string;
+    discoveredUrls?: Array<{ title: string; url: string; source: string }>;
+    pageLinks?: Array<{ text: string; href: string }>;
+  }
+  const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(false);
+  const [copilotInput, setCopilotInput] = useState<string>('');
+  const [copilotLoading, setCopilotLoading] = useState<boolean>(false);
+  const [copilotAutoBrowse, setCopilotAutoBrowse] = useState<boolean>(true);
+  const [livePageText, setLivePageText] = useState<string>('');
+  const [copilotMessages, setCopilotMessages] = useState<CopilotMessage[]>([
+    {
+      id: 'copilot-welcome',
+      role: 'assistant',
+      content: 'Sovereign Web AI Copilot is online with real internet access and live page inspection. Ask me to summarize the open tab, extract links/tables, fact-check claims against live web search, or navigate to any site.'
+    }
+  ]);
 
   // Global Audio / Video Media Player State
   const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
@@ -243,7 +315,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
   const [audioPreset, setAudioPreset] = useState<'master' | 'bass' | 'clarity'>('master');
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Network Inspector Data
+  // Live Network Inspector Data (Synced from Server Proxy Audit Log)
   const [networkLogs, setNetworkLogs] = useState<Array<{
     id: string;
     url: string;
@@ -253,19 +325,59 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     size: string;
     timeMs: number;
     sha256: string;
-  }>>([
-    { id: 'net-1', url: 'https://jhammerz.github.io/index.html', status: 200, method: 'GET', type: 'document', size: '14.2 KB', timeMs: 42, sha256: '7f38fa8ce6a6d3abd6e6d116x' },
-    { id: 'net-2', url: 'https://jhammerz.github.io/ops.html', status: 200, method: 'GET', type: 'document', size: '28.6 KB', timeMs: 51, sha256: '8836e9c9888f4b00aa19e3b0c' },
-    { id: 'net-3', url: '/api/browser/stream-media', status: 206, method: 'GET', type: 'media/audio', size: '1.4 MB', timeMs: 18, sha256: '992a01bfca8892100e47b3' }
-  ]);
+  }>>([]);
 
-  // Console Logs
-  const [consoleLogs, setConsoleLogs] = useState<Array<{ type: 'log' | 'info' | 'warn' | 'error'; msg: string; time: string }>>([
-    { type: 'info', msg: '[Sovereign-Kernel] Bare-metal browser instance spawned with Tor/Sovereign proxy', time: '12:00:01' },
-    { type: 'log', msg: '[Zero-Token-Audit] Substrate search verified: 0 LLM tokens burned', time: '12:00:03' },
-    { type: 'info', msg: '[Media-Engine] HTML5 Audio & Video pipeline loaded with hardware acceleration', time: '12:00:04' },
-    { type: 'info', msg: '[Shield] Blocked 14 third-party trackers & fingerprint beacons', time: '12:00:05' }
-  ]);
+  // Session Cookies Inspector State
+  const [sessionCookies, setSessionCookies] = useState<Array<{
+    name: string;
+    value: string;
+    domain: string;
+    path: string;
+    httpOnly?: boolean;
+    secure?: boolean;
+  }>>([]);
+
+  // Console Logs (Live runtime events)
+  const [consoleLogs, setConsoleLogs] = useState<Array<{ type: 'log' | 'info' | 'warn' | 'error'; msg: string; time: string }>>([]);
+
+  const pushConsoleLog = (type: 'log' | 'info' | 'warn' | 'error', msg: string) => {
+    const time = new Date().toLocaleTimeString([], { hour12: false });
+    setConsoleLogs((prev) => [{ type, msg, time }, ...prev.slice(0, 79)]);
+  };
+
+  const syncLiveTelemetry = async () => {
+    try {
+      const [netRes, cookieRes] = await Promise.all([
+        fetch('/api/browser/network-log?limit=40'),
+        fetch(`/api/browser/cookies?sid=${encodeURIComponent(sessionId)}`)
+      ]);
+      if (netRes.ok) {
+        const netJson = await netRes.json();
+        if (Array.isArray(netJson.records)) {
+          setNetworkLogs(
+            netJson.records.map((r: any) => ({
+              id: r.id,
+              url: r.finalUrl || r.url,
+              status: r.status || 0,
+              method: r.method || 'GET',
+              type: r.contentType || 'text/html',
+              size: r.bytes >= 1024 ? `${(r.bytes / 1024).toFixed(1)} KB` : `${r.bytes || 0} B`,
+              timeMs: r.elapsedMs || 0,
+              sha256: r.sha256 || 'n/a'
+            }))
+          );
+        }
+      }
+      if (cookieRes.ok) {
+        const cookieJson = await cookieRes.json();
+        if (Array.isArray(cookieJson.cookies)) {
+          setSessionCookies(cookieJson.cookies);
+        }
+      }
+    } catch {
+      // ignore transient network sync errors
+    }
+  };
 
   // Search Engine State (0 Tokens)
   const [searchQuery, setSearchQuery] = useState<string>('JHammerZ Aurelius orchestrator zero volatility');
@@ -352,28 +464,48 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     }
   }, [initialUrl]);
 
-  // Handle postMessage navigation & video extraction from iframe
+  // Initial live proxy telemetry fetch on mount
+  useEffect(() => {
+    pushConsoleLog('info', `[Sovereign-Web-Engine] Real HTTP/HTTPS proxy & session (${sessionId}) initialized`);
+    syncLiveTelemetry();
+  }, []);
+
+  // Handle postMessage navigation, new-tab opens, AI Copilot trigger & media detection from iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!event.data) return;
       if (event.data.type === 'SOVEREIGN_NAVIGATE' && event.data.url) {
         navigateTo(event.data.url);
+      } else if (event.data.type === 'SOVEREIGN_OPEN_NEW_TAB' && event.data.url) {
+        createNewTab(event.data.url);
+      } else if (event.data.type === 'SOVEREIGN_AI_SEARCH' && event.data.query) {
+        setIsCopilotOpen(true);
+        handleAskCopilot(String(event.data.query));
       } else if (event.data.type === 'SOVEREIGN_URL_RESOLVED' && event.data.url) {
-        let clean = event.data.url;
+        let clean = String(event.data.url);
         if (clean.includes('/api/browser/render?url=')) {
           try {
             const u = new URL(clean, window.location.origin);
             clean = u.searchParams.get('url') || clean;
           } catch {}
         }
+        const resolvedTitle =
+          (typeof event.data.title === 'string' && event.data.title.trim())
+            ? event.data.title.trim()
+            : (clean.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || clean);
+        if (typeof event.data.liveText === 'string' && event.data.liveText.trim()) {
+          setLivePageText(event.data.liveText.trim());
+        }
         updateActiveTab({
           url: clean,
-          title: clean.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || clean,
+          title: resolvedTitle,
           isLoading: false
         });
         if (!isOmniboxFocused) {
           setOmniboxInput(clean);
         }
+        pushConsoleLog('log', `Loaded ${clean} (${resolvedTitle})`);
+        syncLiveTelemetry();
       } else if (event.data.type === 'SOVEREIGN_POP_VIDEO' && event.data.url) {
         openInUnifiedCinemaPlayer(event.data.url, event.data.title || 'Decoded High-Definition Video Stream');
       } else if (event.data.type === 'SOVEREIGN_MEDIA_DETECTED' && event.data.mediaUrl) {
@@ -390,11 +522,11 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [tabs, activeTabId, activeTab, selectedSearchEngine]);
+  }, [tabs, activeTabId, activeTab, selectedSearchEngine, isOmniboxFocused, sessionId]);
 
   // Tab Management Functions
   const createNewTab = (initialUrl: string = 'sovereign://newtab') => {
-    const newTabId = `tab-${Date.now()}`;
+    const newTabId = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const isNewTab = initialUrl === 'sovereign://newtab';
     const newTab: BrowserTab = {
       id: newTabId,
@@ -402,13 +534,13 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
       url: initialUrl,
       history: [initialUrl],
       historyIndex: 0,
-      isLoading: false,
+      isLoading: !isNewTab,
       isMuted: false,
       hasAudio: isVideoOrAudioUrl(initialUrl),
       zoom: 100,
       viewMode: isNewTab ? 'newtab' : 'viewport'
     };
-    setTabs([...tabs, newTab]);
+    setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTabId);
     setOmniboxInput(isNewTab ? '' : initialUrl);
     if (!isNewTab) {
@@ -420,8 +552,9 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     if (e) e.stopPropagation();
     if (tabs.length === 1) {
       // Keep at least one tab, reset to newtab
+      const freshId = `tab-${Date.now()}`;
       setTabs([{
-        id: `tab-${Date.now()}`,
+        id: freshId,
         title: 'New Tab',
         url: 'sovereign://newtab',
         history: ['sovereign://newtab'],
@@ -432,7 +565,8 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
         zoom: 100,
         viewMode: 'newtab'
       }]);
-      setActiveTabId(tabs[0].id);
+      setActiveTabId(freshId);
+      setOmniboxInput('');
       return;
     }
 
@@ -553,7 +687,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     // Imperatively reload iframe if mounted
     if (iframeRef.current && url !== 'sovereign://newtab') {
       try {
-        iframeRef.current.src = `/api/browser/render?url=${encodeURIComponent(url)}`;
+        iframeRef.current.src = `/api/browser/render?url=${encodeURIComponent(url)}&sid=${encodeURIComponent(sessionId)}`;
       } catch {}
     }
 
@@ -563,21 +697,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
       ...prev.slice(0, 49)
     ]);
 
-    // Network log
-    setNetworkLogs(prev => [
-      {
-        id: `net-${Date.now()}`,
-        url,
-        status: 200,
-        method: 'GET',
-        type: hasMedia ? 'media/stream' : 'document',
-        size: hasMedia ? 'Streamable' : '24.8 KB',
-        timeMs: Math.floor(Math.random() * 40) + 15,
-        sha256: Math.random().toString(16).substring(2, 18)
-      },
-      ...prev
-    ]);
-
+    pushConsoleLog('info', `Navigating to ${url}`);
     fetchProxyData(url);
   };
 
@@ -589,13 +709,17 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     if (activeTab.historyIndex > 0) {
       const nextIndex = activeTab.historyIndex - 1;
       const prevUrl = activeTab.history[nextIndex];
+      const isNew = prevUrl === 'sovereign://newtab';
+      setRefreshKey(prev => prev + 1);
       updateActiveTab({
         historyIndex: nextIndex,
         url: prevUrl,
-        title: prevUrl.split('/')[2] || prevUrl
+        title: isNew ? 'New Tab' : prevUrl.split('/')[2] || prevUrl,
+        viewMode: isNew ? 'newtab' : 'viewport',
+        isLoading: !isNew
       });
-      setOmniboxInput(prevUrl === 'sovereign://newtab' ? '' : prevUrl);
-      fetchProxyData(prevUrl);
+      setOmniboxInput(isNew ? '' : prevUrl);
+      if (!isNew) fetchProxyData(prevUrl);
     }
   };
 
@@ -603,13 +727,17 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     if (activeTab.historyIndex < activeTab.history.length - 1) {
       const nextIndex = activeTab.historyIndex + 1;
       const nextUrl = activeTab.history[nextIndex];
+      const isNew = nextUrl === 'sovereign://newtab';
+      setRefreshKey(prev => prev + 1);
       updateActiveTab({
         historyIndex: nextIndex,
         url: nextUrl,
-        title: nextUrl.split('/')[2] || nextUrl
+        title: isNew ? 'New Tab' : nextUrl.split('/')[2] || nextUrl,
+        viewMode: isNew ? 'newtab' : 'viewport',
+        isLoading: !isNew
       });
-      setOmniboxInput(nextUrl === 'sovereign://newtab' ? '' : nextUrl);
-      fetchProxyData(nextUrl);
+      setOmniboxInput(isNew ? '' : nextUrl);
+      if (!isNew) fetchProxyData(nextUrl);
     }
   };
 
@@ -620,7 +748,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
       try {
         iframeRef.current.contentWindow?.location?.reload();
       } catch {
-        iframeRef.current.src = `/api/browser/render?url=${encodeURIComponent(activeTab.url)}&_t=${Date.now()}`;
+        iframeRef.current.src = `/api/browser/render?url=${encodeURIComponent(activeTab.url)}&sid=${encodeURIComponent(sessionId)}&_t=${Date.now()}`;
       }
     }
     fetchProxyData(activeTab.url);
@@ -649,7 +777,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     navigateTo(omniboxInput.trim());
   };
 
-  // Search Engine Query Trigger (0 Token Substrate Search)
+  // Search Engine Query Trigger (Real Multi-Engine Web Index)
   const handleSearchQuery = async (queryText: string) => {
     const q = queryText.trim();
     if (!q) return;
@@ -672,15 +800,39 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
       if (data.success && Array.isArray(data.results)) {
         setSearchResults(data.results);
         setSearchMeta(data);
+        pushConsoleLog('log', `Multi-engine search "${q}" returned ${data.results.length} real results`);
       }
     } catch (err: any) {
-      console.error('Search error:', err);
+      pushConsoleLog('error', `Web search failed: ${err?.message || 'network error'}`);
     } finally {
       setIsSearching(false);
     }
   };
 
-  // Fetch Proxy Data for Reader & Inspector
+  const osHandlersRef = useRef<{
+    navigateTo: (u: string) => void;
+    createNewTab: (u?: string) => void;
+    handleSearchQuery: (q: string) => void;
+  }>({ navigateTo, createNewTab, handleSearchQuery });
+  osHandlersRef.current = { navigateTo, createNewTab, handleSearchQuery };
+
+  useEffect(() => {
+    const onOsCommand = (e: Event) => {
+      const detail = (e as CustomEvent<any>)?.detail;
+      if (!detail || !detail.action) return;
+      if (detail.action === 'browser_navigate' && detail.url) {
+        osHandlersRef.current.navigateTo(String(detail.url));
+      } else if (detail.action === 'browser_new_tab') {
+        osHandlersRef.current.createNewTab(detail.url ? String(detail.url) : 'sovereign://newtab');
+      } else if (detail.action === 'browser_search' && (detail.url || detail.command)) {
+        osHandlersRef.current.handleSearchQuery(String(detail.url || detail.command));
+      }
+    };
+    window.addEventListener('sovereign_os_command', onOsCommand);
+    return () => window.removeEventListener('sovereign_os_command', onOsCommand);
+  }, []);
+
+  // Fetch Real Proxy Data for Reader, Inspector & AI Copilot DOM Awareness
   const fetchProxyData = async (targetUrl: string) => {
     if (!targetUrl || targetUrl.startsWith('sovereign://')) return;
     setIsProxyLoading(true);
@@ -688,16 +840,92 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
       const res = await fetch('/api/browser/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl, agentAllowed: isAgentAllowed })
+        body: JSON.stringify({ url: targetUrl, sessionId, agentAllowed: isAgentAllowed })
       });
       const data = await res.json();
       setProxyData(data);
+      if (data?.textContent) setLivePageText(data.textContent);
+      if (data?.title && data.title.trim()) {
+        updateActiveTab({ title: data.title.trim() });
+      }
+      if (data?.success) {
+        pushConsoleLog('info', `Proxy ${data.status || 200} · ${data.url || targetUrl} (${data.elapsedMs || 0}ms, SHA-256 ${String(data.sha256 || '').slice(0, 12)})`);
+      } else if (data?.error) {
+        pushConsoleLog('warn', `Proxy warning for ${targetUrl}: ${data.error}`);
+      }
+      syncLiveTelemetry();
     } catch (err: any) {
-      console.warn('Proxy metadata notice:', err?.message);
+      pushConsoleLog('warn', `Proxy metadata error: ${err?.message || 'unreachable'}`);
     } finally {
       setIsProxyLoading(false);
       updateActiveTab({ isLoading: false });
     }
+  };
+
+  // Real AI Web Copilot Action (Reads live DOM + Crawls/Searches Real Internet)
+  const handleAskCopilot = async (overridePrompt?: string) => {
+    const promptText = (overridePrompt ?? copilotInput).trim();
+    if (!promptText || copilotLoading) return;
+    if (!overridePrompt) setCopilotInput('');
+
+    const userMsg: CopilotMessage = {
+      id: `cop-u-${Date.now()}`,
+      role: 'user',
+      content: promptText
+    };
+    setCopilotMessages((prev) => [...prev, userMsg]);
+    setCopilotLoading(true);
+    pushConsoleLog('info', `[AI Copilot] Investigating "${promptText.slice(0, 80)}"...`);
+
+    try {
+      const res = await fetch('/api/browser/ai-copilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: promptText,
+          currentUrl: activeTab.url.startsWith('http') ? activeTab.url : '',
+          pageTitle: activeTab.title,
+          pageText: livePageText || proxyData?.textContent || '',
+          pageLinks: proxyData?.links || [],
+          history: copilotMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+          autoBrowse: copilotAutoBrowse,
+          sessionId
+        })
+      });
+      const data = await res.json();
+      const assistantMsg: CopilotMessage = {
+        id: `cop-a-${Date.now()}`,
+        role: 'assistant',
+        content: data.reply || data.error || 'No response returned by AI Web Copilot.',
+        model: data.model,
+        elapsedMs: data.elapsedMs,
+        sha256: data.sha256,
+        discoveredUrls: Array.isArray(data.discoveredUrls) ? data.discoveredUrls : [],
+        pageLinks: Array.isArray(data.pageLinks) ? data.pageLinks : []
+      };
+      setCopilotMessages((prev) => [...prev, assistantMsg]);
+      pushConsoleLog('log', `[AI Copilot] Completed via ${data.model || 'engine'} in ${data.elapsedMs || 0}ms`);
+      syncLiveTelemetry();
+    } catch (err: any) {
+      setCopilotMessages((prev) => [
+        ...prev,
+        {
+          id: `cop-err-${Date.now()}`,
+          role: 'assistant',
+          content: `AI Copilot network error: ${err?.message || 'Unable to reach /api/browser/ai-copilot'}`
+        }
+      ]);
+    } finally {
+      setCopilotLoading(false);
+    }
+  };
+
+  const handleClearCookies = async () => {
+    try {
+      await fetch(`/api/browser/cookies?sid=${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+      setSessionCookies([]);
+      pushConsoleLog('warn', `Cleared session cookies for ${sessionId}`);
+    } catch {}
   };
 
   // Bookmark Management
@@ -773,24 +1001,37 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!isFullscreen && !showSiteInfoModal && !showAddBookmarkModal && !isCopilotOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showAddBookmarkModal) setShowAddBookmarkModal(false);
+        else if (showSiteInfoModal) setShowSiteInfoModal(false);
+        else if (isFullscreen) setIsFullscreen(false);
+        else if (isCopilotOpen && window.innerWidth < 1024) setIsCopilotOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isFullscreen, showSiteInfoModal, showAddBookmarkModal, isCopilotOpen]);
+
   return (
     <div className={`flex flex-col bg-zinc-950 text-zinc-100 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 ${
-      isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none' : 'min-h-[750px] w-full flex-1'
+      isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none' : 'min-h-[420px] sm:min-h-[540px] w-full flex-1'
     }`}>
       
-      {/* 1. CHROME TITLE BAR & MULTI-TAB STRIP */}
-      <div className="bg-zinc-900 border-b border-zinc-800/80 px-2 pt-2 pb-0 flex items-center justify-between select-none">
+      {/* 1. CUSTOM SOVEREIGN GOOGLE CHROME TAB BAR */}
+      <div className="bg-[#202124] border-b border-zinc-800/90 px-2 pt-2 pb-0 flex items-center justify-between gap-2 select-none">
         
-        {/* Left: Window Controls & Tab Strip */}
+        {/* Left: Chrome Emblem & Multi-Tab Strip */}
         <div className="flex items-center gap-1.5 flex-1 overflow-x-auto scrollbar-none">
-          {/* macOS / Chrome Window dots */}
-          <div className="flex items-center gap-1.5 px-2 mr-1 shrink-0">
-            <span className="w-3 h-3 rounded-full bg-red-500/80 border border-red-600/40 inline-block"></span>
-            <span className="w-3 h-3 rounded-full bg-amber-500/80 border border-amber-600/40 inline-block"></span>
-            <span className="w-3 h-3 rounded-full bg-emerald-500/80 border border-emerald-600/40 inline-block"></span>
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 mb-1 rounded-full bg-zinc-900/90 border border-zinc-700/70 text-[10px] font-sans shrink-0 whitespace-nowrap">
+            <ChromeEmblem className="w-4 h-4 shrink-0" />
+            <span className="font-bold tracking-wide text-zinc-100">Chrome</span>
+            <span className="text-[9px] font-mono text-sky-400">OS</span>
           </div>
 
-          {/* Tab Strip Items */}
+          {/* Chrome Tab Strip Items */}
           <div className="flex items-center gap-1 flex-1 min-w-0">
             {tabs.map((tab) => {
               const isActive = tab.id === activeTabId;
@@ -800,11 +1041,14 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                   onClick={() => {
                     setActiveTabId(tab.id);
                     setOmniboxInput(tab.url === 'sovereign://newtab' ? '' : tab.url);
+                    if (tab.url !== 'sovereign://newtab') {
+                      fetchProxyData(tab.url);
+                    }
                   }}
-                  className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-t-xl text-xs cursor-pointer transition-all max-w-[200px] min-w-[120px] shrink-0 border-t border-x ${
+                  className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-t-xl text-xs cursor-pointer transition-all max-w-[210px] min-w-[110px] shrink-0 border-t border-x ${
                     isActive 
-                      ? 'bg-zinc-950 text-zinc-100 border-zinc-800 shadow-sm font-semibold' 
-                      : 'bg-zinc-900/90 text-zinc-400 hover:bg-zinc-850 hover:text-zinc-200 border-transparent'
+                      ? 'bg-[#292a2d] text-zinc-100 border-zinc-700/70 shadow-sm font-semibold' 
+                      : 'bg-transparent text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200 border-transparent'
                   }`}
                 >
                   {/* Tab Icon */}
@@ -814,10 +1058,10 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                       title={tab.isMuted ? 'Unmute tab audio' : 'Mute tab audio'}
                       className="text-emerald-400 hover:text-emerald-300 shrink-0"
                     >
-                      {tab.isMuted ? <VolumeX className="w-3.5 h-3.5 text-zinc-500" /> : <Volume2 className="w-3.5 h-3.5 animate-pulse" />}
+                      {tab.isMuted ? <VolumeX className="w-3.5 h-3.5 text-zinc-500" /> : <Volume2 className="w-3.5 h-3.5" />}
                     </button>
                   ) : tab.viewMode === 'newtab' ? (
-                    <Compass className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    <ChromeEmblem className="w-3.5 h-3.5 shrink-0" />
                   ) : (
                     <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   )}
@@ -830,8 +1074,9 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                   {/* Close Tab Button */}
                   <button
                     onClick={(e) => closeTab(tab.id, e)}
-                    className="opacity-0 group-hover:opacity-100 hover:bg-zinc-800 p-0.5 rounded text-zinc-400 hover:text-zinc-100 transition-opacity shrink-0"
-                    title="Close tab (Ctrl+W)"
+                    aria-label={`Close tab ${tab.title}`}
+                    className="opacity-80 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-zinc-700 p-1 rounded-full text-zinc-400 hover:text-zinc-100 transition-opacity shrink-0"
+                    title="Close tab"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -842,34 +1087,60 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
             {/* New Tab Button (+) */}
             <button
               onClick={() => createNewTab()}
-              className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 ml-0.5"
-              title="New Tab (Ctrl+T)"
+              className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 ml-0.5 cursor-pointer"
+              title="New Chrome Tab"
             >
               <Plus className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Right: Stealth Indicator & Permission Clearance */}
-        <div className="flex items-center gap-2 shrink-0 pb-1.5">
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>0 TOKENS BURNED</span>
+        {/* Right: AI Web Copilot Toggle, UID 0 Profile Pill & Fullscreen */}
+        <div className="flex items-center gap-1.5 shrink-0 pb-1.5">
+          <button
+            type="button"
+            onClick={() => setIsCopilotOpen((prev) => !prev)}
+            className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+              isCopilotOpen
+                ? 'bg-sky-500/20 text-sky-200 border-sky-500/40'
+                : 'bg-[#292a2d] text-zinc-200 border-zinc-700 hover:border-sky-500/40 hover:text-white'
+            }`}
+            title="Toggle Chrome AI Web Copilot (Live Internet + DOM Access)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <span>AI Copilot</span>
+          </button>
+
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+            <Wifi className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span>UID 0 · LIVE NET</span>
           </div>
 
           {/* Fullscreen Toggle */}
           <button
+            type="button"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className={`px-2 py-1.5 rounded-full transition-colors flex items-center gap-1 text-[11px] font-mono font-bold cursor-pointer ${
+              isFullscreen
+                ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40'
+                : 'hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+            }`}
             title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
           >
-            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            {isFullscreen ? (
+              <>
+                <Minimize2 className="w-3.5 h-3.5" />
+                <span>Exit</span>
+              </>
+            ) : (
+              <Maximize2 className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
       </div>
 
-      {/* 2. CHROME OMNIBOX & NAVIGATION TOOLBAR */}
-      <div className="bg-zinc-950 px-3 py-2 border-b border-zinc-800 flex items-center gap-2">
+      {/* 2. GOOGLE CHROME OMNIBOX & NAVIGATION TOOLBAR */}
+      <div className="bg-[#292a2d] px-3 py-2 border-b border-zinc-800 flex items-center gap-2">
         {/* Navigation Buttons: Back, Forward, Reload, Home */}
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -947,19 +1218,19 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                 setOmniboxInput(e.target.value);
                 setShowOmniboxSuggestions(true);
               }}
-              placeholder="Search Google or type any web address (e.g. google.com, youtube.com, wikipedia.org)..."
+              placeholder="Search Google Chrome or type a URL (e.g. google.com, youtube.com, github.com)..."
               style={{ direction: 'ltr', textAlign: 'left', unicodeBidi: 'normal' }}
-              className="w-full bg-zinc-900 border border-zinc-700/80 hover:border-zinc-500 focus:border-sky-500 rounded-xl pl-8 sm:pl-9 pr-24 py-1.5 text-xs text-zinc-100 font-sans tracking-normal selection:bg-sky-500/30 focus:outline-none transition-all shadow-inner text-left"
+              className="w-full bg-[#202124] border border-zinc-700/80 hover:border-zinc-500 focus:border-sky-500 rounded-full pl-8 sm:pl-9 pr-24 py-1.5 text-xs text-zinc-100 font-sans tracking-normal selection:bg-sky-500/30 focus:outline-none transition-all shadow-inner text-left"
             />
 
             {/* Right Omnibox Actions: Clear, Bookmark Star, Go */}
-            <div className="absolute right-2 flex items-center gap-1">
+            <div className="absolute right-1.5 flex items-center gap-1">
               {/* Clear Input */}
               {omniboxInput && (
                 <button
                   type="button"
                   onClick={() => setOmniboxInput('')}
-                  className="p-1 rounded-md text-zinc-500 hover:text-zinc-200 transition-colors"
+                  className="p-1 rounded-full text-zinc-500 hover:text-zinc-200 transition-colors"
                   title="Clear address bar"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -970,7 +1241,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
               <button
                 type="button"
                 onClick={toggleBookmarkCurrentPage}
-                className={`p-1 rounded-md transition-colors ${
+                className={`p-1 rounded-full transition-colors ${
                   isCurrentPageBookmarked ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
                 title={isCurrentPageBookmarked ? 'Remove bookmark' : 'Bookmark this tab'}
@@ -988,7 +1259,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                     navigateTo(omniboxInput.trim());
                   }
                 }}
-                className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
               >
                 <span>GO</span>
                 <ArrowRight className="w-3 h-3" />
@@ -1368,14 +1639,14 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
           ))}
           
           <button
+            type="button"
             onClick={() => {
-              const url = prompt('Enter Bookmark URL:', activeTab.url);
-              const title = prompt('Enter Bookmark Title:', activeTab.title);
-              if (url && title) {
-                setBookmarks([...bookmarks, { id: `bm-${Date.now()}`, title, url, folder: 'Custom' }]);
-              }
+              setBookmarkDraftUrl(activeTab.url.startsWith('http') ? activeTab.url : 'https://');
+              setBookmarkDraftTitle(activeTab.title || 'New Bookmark');
+              setBookmarkDraftFolder('Custom');
+              setShowAddBookmarkModal(true);
             }}
-            className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 shrink-0 ml-1"
+            className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 shrink-0 ml-1 cursor-pointer"
             title="Add bookmark"
           >
             <Plus className="w-3 h-3" />
@@ -1562,28 +1833,26 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
         </div>
       )}
 
-      {/* 5. MAIN BROWSER VIEWPORT CONTAINER */}
-      <div className="flex-1 relative bg-zinc-950 flex flex-col overflow-hidden min-h-[560px]">
+      {/* 5. MAIN BROWSER VIEWPORT CONTAINER (+ OPTIONAL DOCKED AI COPILOT SIDEBAR) */}
+      <div className="flex-1 flex min-h-0 overflow-hidden bg-zinc-950">
+      <div className="flex-1 relative bg-zinc-950 flex flex-col overflow-hidden min-h-[340px] sm:min-h-[500px] min-w-0">
         
-        {/* VIEW A: CHROME NEW TAB PAGE (Speed Dial / Sovereign Dashboard) */}
+        {/* VIEW A: CUSTOM GOOGLE CHROME NEW TAB DASHBOARD */}
         {activeTab.viewMode === 'newtab' && (
-          <div className="flex-1 p-6 md:p-12 overflow-y-auto flex flex-col items-center justify-center max-w-4xl mx-auto w-full">
-            {/* Google / Chrome style centered brand */}
+          <div className="flex-1 p-5 md:p-10 overflow-y-auto flex flex-col items-center justify-center max-w-4xl mx-auto w-full bg-[#202124]">
             <div className="flex flex-col items-center mb-8 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-500 via-indigo-500 to-emerald-500 p-0.5 shadow-2xl mb-4">
-                <div className="w-full h-full bg-zinc-950 rounded-2xl flex items-center justify-center">
-                  <Globe className="w-8 h-8 text-sky-400 animate-pulse" />
-                </div>
+              <div className="w-16 h-16 rounded-full bg-[#292a2d] border border-zinc-700/80 shadow-2xl mb-4 flex items-center justify-center">
+                <ChromeEmblem className="w-11 h-11" />
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-zinc-100 tracking-tight">
-                Sovereign Chrome
+                Sovereign Google Chrome
               </h1>
               <p className="text-xs text-zinc-400 mt-1 font-mono">
-                Bare-Metal Speed • Tor Mesh Privacy • 0 Tokens Burned
+                Live Full-Internet Proxy • Persistent Cookies • Integrated AI Web Copilot
               </p>
             </div>
 
-            {/* Central Omnisearch Bar */}
+            {/* Central Google Chrome + AI Omnisearch Pill */}
             <div className="w-full max-w-2xl mb-10">
               <form 
                 onSubmit={(e) => {
@@ -1597,15 +1866,29 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search the web or type a URL..."
-                  className="w-full bg-zinc-900/90 border border-zinc-700 hover:border-zinc-500 focus:border-sky-500 rounded-full pl-11 pr-24 py-3 text-sm text-zinc-100 placeholder-zinc-500 shadow-xl focus:outline-none transition-all"
+                  placeholder="Search Google or type a URL..."
+                  className="w-full bg-[#292a2d] border border-zinc-700 hover:border-zinc-500 focus:border-sky-500 rounded-full pl-11 pr-44 py-3 text-sm text-zinc-100 placeholder-zinc-400 shadow-xl focus:outline-none transition-all"
                 />
-                <button
-                  type="submit"
-                  className="absolute right-2 px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-full text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Search
-                </button>
+                <div className="absolute right-2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCopilotOpen(true);
+                      if (searchQuery.trim()) handleAskCopilot(searchQuery.trim());
+                    }}
+                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600/70 text-sky-300 rounded-full text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    title="Research with live AI Web Copilot"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>AI Mode</span>
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-full text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Search
+                  </button>
+                </div>
               </form>
             </div>
 
@@ -1644,9 +1927,9 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
           }`}>
             <div className={`flex flex-col relative transition-all duration-300 ${
               deviceMode === 'mobile' 
-                ? 'w-full max-w-[390px] h-[780px] bg-black rounded-[44px] border-[8px] border-zinc-800 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] overflow-hidden ring-1 ring-zinc-700/60 shrink-0'
+                ? 'w-full max-w-[390px] h-[65dvh] max-h-[780px] min-h-[400px] bg-black rounded-[36px] sm:rounded-[44px] border-[6px] sm:border-[8px] border-zinc-800 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] overflow-hidden ring-1 ring-zinc-700/60 shrink-0'
                 : deviceMode === 'tablet'
-                ? 'w-full max-w-[768px] h-[820px] bg-black rounded-[28px] border-[6px] border-zinc-800 shadow-2xl overflow-hidden ring-1 ring-zinc-700/60 shrink-0'
+                ? 'w-full max-w-[768px] h-[68dvh] max-h-[820px] min-h-[420px] bg-black rounded-[24px] sm:rounded-[28px] border-[6px] border-zinc-800 shadow-2xl overflow-hidden ring-1 ring-zinc-700/60 shrink-0'
                 : 'w-full h-full flex-1'
             }`}>
               {/* Mobile Smartphone Status Bar & Dynamic Island */}
@@ -1676,9 +1959,9 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
               <iframe
                 ref={iframeRef}
                 key={`${activeTab.id}-${activeTab.url}-${refreshKey}`}
-                src={`/api/browser/render?url=${encodeURIComponent(activeTab.url)}`}
+                src={`/api/browser/render?url=${encodeURIComponent(activeTab.url)}&sid=${encodeURIComponent(sessionId)}`}
                 title={activeTab.title}
-                className="w-full flex-1 border-0 bg-white dark:bg-zinc-950 min-h-[600px] h-full"
+                className="w-full flex-1 border-0 bg-white dark:bg-zinc-950 min-h-[320px] sm:min-h-[460px] h-full"
                 style={{
                   transform: `scale(${activeTab.zoom / 100})`,
                   transformOrigin: 'top left',
@@ -2075,73 +2358,300 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
         )}
       </div>
 
-      {/* 6. CHROME DEVTOOLS DRAWER (Inspect / F12) */}
+      {/* RIGHT / MOBILE DRAWER: LIVE AI WEB COPILOT */}
+      {isCopilotOpen && (
+        <aside className="fixed inset-0 z-50 lg:static lg:z-auto lg:w-[360px] xl:w-[400px] lg:shrink-0 bg-zinc-950/95 lg:bg-zinc-900/60 lg:border-l border-zinc-800 flex flex-col backdrop-blur-md lg:backdrop-blur-none">
+          {/* Copilot Header */}
+          <div className="px-3.5 py-2.5 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <Bot className="w-4 h-4 text-sky-400 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-zinc-100 truncate">AI Web Copilot (Live Net + DOM)</div>
+                <div className="text-[10px] font-mono text-zinc-400 truncate">
+                  {activeTab.url.startsWith('http') ? activeTab.url : 'Ready for open-web query'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setCopilotAutoBrowse((prev) => !prev)}
+                className={`px-2 py-1 rounded text-[10px] font-mono font-bold border cursor-pointer whitespace-nowrap ${
+                  copilotAutoBrowse
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                }`}
+                title="Automatically run live multi-engine web search and crawl cited pages"
+              >
+                {copilotAutoBrowse ? 'Auto-Browse ON' : 'Page Only'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCopilotOpen(false)}
+                aria-label="Close AI Copilot"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Actions Bar */}
+          <div className="px-3 py-2 border-b border-zinc-800/80 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 bg-zinc-950/60">
+            {[
+              { label: 'Summarize Page', prompt: 'Summarize the key points, facts, and structure of this open page.' },
+              { label: 'Extract Links & Data', prompt: 'Extract the most important data points, entities, and clickable links from this page.' },
+              { label: 'Verify on Live Web', prompt: `Verify claims on ${activeTab.title || activeTab.url} against live multi-engine web search sources.` },
+              { label: 'Latest Market News', prompt: 'Search live news for today’s top global financial, macro, and AI technology developments.' }
+            ].map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => handleAskCopilot(chip.prompt)}
+                disabled={copilotLoading}
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] font-semibold text-zinc-300 hover:text-sky-300 whitespace-nowrap shrink-0 cursor-pointer transition-colors disabled:opacity-50"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Messages Thread */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            {copilotMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`rounded-xl p-3 text-xs leading-relaxed border ${
+                  msg.role === 'user'
+                    ? 'bg-sky-950/35 border-sky-500/30 text-sky-100 ml-6'
+                    : 'bg-zinc-900/90 border-zinc-800 text-zinc-200 mr-2'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1 text-[10px] font-mono text-zinc-400">
+                  <span className="font-bold uppercase">{msg.role === 'user' ? 'Operator' : (msg.model || 'AI Copilot')}</span>
+                  {msg.elapsedMs !== undefined && <span className="tabular-nums">{msg.elapsedMs}ms</span>}
+                </div>
+                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+
+                {msg.discoveredUrls && msg.discoveredUrls.length > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-zinc-800 space-y-1">
+                    <div className="text-[10px] font-mono uppercase text-zinc-400">Live Discovered Sources:</div>
+                    {msg.discoveredUrls.slice(0, 6).map((u, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 bg-zinc-950/90 px-2 py-1.5 rounded-lg border border-zinc-800/80">
+                        <button
+                          type="button"
+                          onClick={() => navigateTo(u.url)}
+                          className="text-left text-[11px] text-sky-400 hover:text-sky-300 truncate flex-1 cursor-pointer"
+                          title={u.url}
+                        >
+                          <Link2 className="w-3 h-3 inline mr-1" />
+                          {u.title || u.url}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => createNewTab(u.url)}
+                          className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] text-zinc-300 whitespace-nowrap shrink-0 cursor-pointer"
+                          title="Open in new tab"
+                        >
+                          New Tab
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {msg.role === 'assistant' && msg.id !== 'copilot-welcome' && (
+                  <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex flex-wrap items-center gap-1.5">
+                    {onInjectToChat && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onInjectToChat(`[Browser Web Intel · ${activeTab.url}]\n\n${msg.content}`, false);
+                          if (onSelectModule) onSelectModule('chat');
+                        }}
+                        className="px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-[10px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer"
+                      >
+                        <MessageSquarePlus className="w-3 h-3" />
+                        <span>Send to Chat</span>
+                      </button>
+                    )}
+                    {onSaveToVault && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSaveToVault({
+                            type: 'knowledge',
+                            title: `Web Copilot: ${activeTab.title || activeTab.url}`,
+                            prompt: msg.content,
+                            model: msg.model || 'ai-web-copilot',
+                            mediaUrl: activeTab.url
+                          })
+                        }
+                        className="px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-[10px] font-semibold text-emerald-300 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Database className="w-3 h-3" />
+                        <span>Save Vault</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {copilotLoading && (
+              <div className="rounded-xl p-3 bg-zinc-900 border border-zinc-800 text-xs text-sky-300 flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                <span>Inspecting live DOM & querying open web...</span>
+              </div>
+            )}
+          </div>
+
+          {/* Copilot Input Form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleAskCopilot();
+            }}
+            className="p-3 border-t border-zinc-800 bg-zinc-900/90 flex items-center gap-2 shrink-0"
+          >
+            <input
+              type="text"
+              value={copilotInput}
+              onChange={(e) => setCopilotInput(e.target.value)}
+              placeholder="Ask AI to read page, research live web, or find links..."
+              className="flex-1 min-w-0 bg-zinc-950 border border-zinc-700 focus:border-sky-500 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={copilotLoading || !copilotInput.trim()}
+              className="p-2 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white cursor-pointer shrink-0"
+              title="Send to AI Web Copilot"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
+        </aside>
+      )}
+      </div>
+
+      {/* 6. BROWSER DEVTOOLS DRAWER (Real Network + Live Cookies + Console + Security) */}
       {showDevTools && (
         <div className="h-64 bg-zinc-950 border-t-2 border-zinc-800 flex flex-col z-30">
           {/* DevTools Tab Bar */}
-          <div className="bg-zinc-900 px-3 py-1.5 border-b border-zinc-800 flex items-center justify-between text-xs select-none">
-            <div className="flex items-center gap-2 font-mono">
+          <div className="bg-zinc-900 px-3 py-1.5 border-b border-zinc-800 flex items-center justify-between text-xs select-none overflow-x-auto scrollbar-none gap-2">
+            <div className="flex items-center gap-2 font-mono shrink-0">
               <span className="text-sky-400 font-bold flex items-center gap-1.5">
                 <Code className="w-3.5 h-3.5" /> DevTools
               </span>
               <span className="text-zinc-600">|</span>
-              {(['network', 'console', 'elements', 'security'] as const).map(tab => (
+              {(['network', 'cookies', 'console', 'elements', 'security'] as const).map(tab => (
                 <button
                   key={tab}
-                  onClick={() => setDevToolsTab(tab)}
-                  className={`px-2 py-0.5 rounded uppercase text-[10px] font-bold ${
+                  type="button"
+                  onClick={() => {
+                    setDevToolsTab(tab);
+                    if (tab === 'network' || tab === 'cookies') syncLiveTelemetry();
+                  }}
+                  className={`px-2 py-0.5 rounded uppercase text-[10px] font-bold cursor-pointer ${
                     devToolsTab === tab
                       ? 'bg-zinc-800 text-sky-300'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  {tab}
+                  {tab === 'cookies' ? `cookies (${sessionCookies.length})` : tab}
                 </button>
               ))}
             </div>
 
-            <button
-              onClick={() => setShowDevTools(false)}
-              className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={syncLiveTelemetry}
+                className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-mono cursor-pointer"
+              >
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDevTools(false)}
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* DevTools Body */}
           <div className="flex-1 p-3 overflow-y-auto font-mono text-[11px] bg-zinc-950 text-zinc-300">
             {devToolsTab === 'network' && (
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-[520px]">
                 <div className="grid grid-cols-6 text-[10px] font-bold text-zinc-500 border-b border-zinc-800 pb-1 mb-1">
-                  <span className="col-span-2">Name / URL</span>
+                  <span className="col-span-2">URL</span>
                   <span>Status</span>
                   <span>Type</span>
                   <span>Size</span>
-                  <span>Time (ms)</span>
+                  <span>Elapsed</span>
                 </div>
-                {networkLogs.map(log => (
-                  <div key={log.id} className="grid grid-cols-6 py-1 hover:bg-zinc-900 rounded px-1">
-                    <span className="col-span-2 truncate text-zinc-200">{log.url}</span>
-                    <span className="text-emerald-400">{log.status} OK</span>
-                    <span className="text-zinc-400">{log.type}</span>
-                    <span className="text-zinc-400">{log.size}</span>
-                    <span className="text-sky-400">{log.timeMs}ms</span>
-                  </div>
-                ))}
+                {networkLogs.length === 0 ? (
+                  <div className="text-zinc-500 py-4">Navigate to a live URL to record real server proxy HTTP/HTTPS traffic.</div>
+                ) : (
+                  networkLogs.map(log => (
+                    <div key={log.id} className="grid grid-cols-6 py-1 hover:bg-zinc-900 rounded px-1 tabular-nums">
+                      <span className="col-span-2 truncate text-zinc-200 pr-2" title={log.url}>{log.url}</span>
+                      <span className={log.status >= 400 || log.status === 0 ? 'text-rose-400' : 'text-emerald-400'}>{log.status}</span>
+                      <span className="text-zinc-400 truncate pr-2">{log.type}</span>
+                      <span className="text-zinc-400">{log.size}</span>
+                      <span className="text-sky-400">{log.timeMs}ms</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {devToolsTab === 'cookies' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-zinc-800">
+                  <span className="text-zinc-400 flex items-center gap-1.5">
+                    <Cookie className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Active Session Jar: <strong className="text-zinc-200">{sessionId}</strong></span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearCookies}
+                    className="px-2.5 py-1 rounded bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[10px] font-bold cursor-pointer"
+                  >
+                    Clear Session Cookies
+                  </button>
+                </div>
+                {sessionCookies.length === 0 ? (
+                  <div className="text-zinc-500 py-3">No active cookies stored for this session yet.</div>
+                ) : (
+                  sessionCookies.map((c, idx) => (
+                    <div key={`${c.domain}-${c.name}-${idx}`} className="grid grid-cols-4 gap-2 py-1 border-b border-zinc-900 text-[10px]">
+                      <span className="text-sky-300 truncate">{c.name}</span>
+                      <span className="text-zinc-400 truncate">{c.domain}{c.path}</span>
+                      <span className="text-zinc-300 truncate">{c.value}</span>
+                      <span className="text-emerald-400">{[c.httpOnly ? 'HttpOnly' : '', c.secure ? 'Secure' : 'Standard'].filter(Boolean).join(' ')}</span>
+                    </div>
+                  ))
+                )}
               </div>
             )}
 
             {devToolsTab === 'console' && (
               <div className="space-y-1">
-                {consoleLogs.map((log, i) => (
-                  <div key={i} className="flex items-start gap-2 py-0.5">
-                    <span className="text-zinc-500">[{log.time}]</span>
-                    <span className={log.type === 'error' ? 'text-red-400' : log.type === 'warn' ? 'text-amber-400' : 'text-emerald-400'}>
-                      [{log.type.toUpperCase()}]
-                    </span>
-                    <span className="text-zinc-200">{log.msg}</span>
-                  </div>
-                ))}
+                {consoleLogs.length === 0 ? (
+                  <div className="text-zinc-500 py-3">Waiting for browser runtime events...</div>
+                ) : (
+                  consoleLogs.map((log, i) => (
+                    <div key={i} className="flex items-start gap-2 py-0.5">
+                      <span className="text-zinc-500">[{log.time}]</span>
+                      <span className={log.type === 'error' ? 'text-red-400' : log.type === 'warn' ? 'text-amber-400' : 'text-emerald-400'}>
+                        [{log.type.toUpperCase()}]
+                      </span>
+                      <span className="text-zinc-200">{log.msg}</span>
+                    </div>
+                  ))
+                )}
               </div>
             )}
 
@@ -2149,10 +2659,9 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
               <div className="text-xs text-emerald-400 space-y-1 font-mono">
                 <div>{'<!DOCTYPE html>'}</div>
                 <div className="pl-3">{'<html lang="en">'}</div>
-                <div className="pl-6">{'<head> <title>'}{activeTab.title}{'</title> </head>'}</div>
-                <div className="pl-6">{'<body class="sovereign-bare-metal">'}</div>
-                <div className="pl-9">{`<iframe src="/api/browser/render?url=${activeTab.url}" />`}</div>
-                <div className="pl-6">{'</body>'}</div>
+                <div className="pl-6">{'<head><title>'}{activeTab.title}{'</title></head>'}</div>
+                <div className="pl-6">{`<iframe src="/api/browser/render?url=${activeTab.url}&sid=${sessionId}" />`}</div>
+                <div className="pl-6 text-zinc-400">{`<!-- Headings detected: ${proxyData?.headings?.length || 0} | Links: ${proxyData?.links?.length || 0} | Images: ${proxyData?.images?.length || 0} -->`}</div>
                 <div className="pl-3">{'</html>'}</div>
               </div>
             )}
@@ -2160,10 +2669,10 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
             {devToolsTab === 'security' && (
               <div className="space-y-2">
                 <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-300">
-                  ✔ Connection is encrypted with Sovereign Tor-Mesh TLS 1.3
+                  Real HTTP/HTTPS Proxy Relay Active · TLS Verification Enabled · SHA-256 Digest: {proxyData?.sha256 || 'ready'}
                 </div>
                 <div className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg">
-                  Trackers Blocked: <strong>14</strong> • Canvas Fingerprinting: <strong>Protected</strong> • WebRTC IP Leaks: <strong>Shielded</strong>
+                  Session Cookies: <strong>{sessionCookies.length}</strong> · Last Response: <strong>{proxyData?.status || 200}</strong> · Latency: <strong>{proxyData?.elapsedMs || 0}ms</strong>
                 </div>
               </div>
             )}
@@ -2171,16 +2680,113 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
         </div>
       )}
 
-      {/* 7. SITE INFORMATION & PROVENANCE MODAL */}
-      {showSiteInfoModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
+      {/* 7. ADD BOOKMARK INLINE MODAL (Zero window.prompt) */}
+      {showAddBookmarkModal && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddBookmarkModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!bookmarkDraftUrl.trim() || !bookmarkDraftTitle.trim()) return;
+              setBookmarks((prev) => [
+                ...prev,
+                {
+                  id: `bm-${Date.now()}`,
+                  title: bookmarkDraftTitle.trim(),
+                  url: bookmarkDraftUrl.trim(),
+                  folder: bookmarkDraftFolder.trim() || 'Custom'
+                }
+              ]);
+              setShowAddBookmarkModal(false);
+            }}
+            className="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3"
+          >
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-sm font-bold text-zinc-100">Site Information & Privacy Shield</h3>
+                <Bookmark className="w-4 h-4 text-amber-400" />
+                <h3 className="text-sm font-bold text-zinc-100">Add Browser Bookmark</h3>
               </div>
-              <button onClick={() => setShowSiteInfoModal(false)} className="text-zinc-400 hover:text-white">
+              <button
+                type="button"
+                onClick={() => setShowAddBookmarkModal(false)}
+                aria-label="Close Add Bookmark"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Title</label>
+              <input
+                type="text"
+                value={bookmarkDraftTitle}
+                onChange={(e) => setBookmarkDraftTitle(e.target.value)}
+                required
+                className="w-full bg-zinc-950 border border-zinc-700 focus:border-sky-500 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">URL</label>
+              <input
+                type="text"
+                value={bookmarkDraftUrl}
+                onChange={(e) => setBookmarkDraftUrl(e.target.value)}
+                required
+                className="w-full bg-zinc-950 border border-zinc-700 focus:border-sky-500 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Folder</label>
+              <input
+                type="text"
+                value={bookmarkDraftFolder}
+                onChange={(e) => setBookmarkDraftFolder(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 focus:border-sky-500 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
+              />
+            </div>
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddBookmarkModal(false)}
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer"
+              >
+                Save Bookmark
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 8. SITE INFORMATION & PROVENANCE MODAL */}
+      {showSiteInfoModal && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSiteInfoModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 shadow-2xl">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                <h3 className="text-sm font-bold text-zinc-100">Site Information & Proxy Telemetry</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSiteInfoModal(false)}
+                aria-label="Close Site Information"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white cursor-pointer"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -2193,35 +2799,36 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
-                  <div className="text-[10px] text-zinc-500 uppercase font-mono">TLS Security:</div>
-                  <div className="font-bold text-emerald-400 mt-0.5">TLS 1.3 (Valid)</div>
+                  <div className="text-[10px] text-zinc-500 uppercase font-mono">HTTP Status:</div>
+                  <div className="font-bold text-emerald-400 mt-0.5">{proxyData?.status || 'Ready'}</div>
                 </div>
                 <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
-                  <div className="text-[10px] text-zinc-500 uppercase font-mono">Tokens Burned:</div>
-                  <div className="font-bold text-emerald-400 mt-0.5">0 Tokens (Zero)</div>
+                  <div className="text-[10px] text-zinc-500 uppercase font-mono">Proxy Latency:</div>
+                  <div className="font-bold text-sky-400 mt-0.5 tabular-nums">{proxyData?.elapsedMs || 0} ms</div>
                 </div>
               </div>
 
               <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Audio & Video Autoplay:</span>
-                  <span className="text-emerald-400 font-bold">Allowed</span>
+                  <span className="text-zinc-400">Session Cookies:</span>
+                  <span className="text-emerald-400 font-bold tabular-nums">{sessionCookies.length} active</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Third-Party Trackers:</span>
-                  <span className="text-red-400 font-bold">Blocked (14)</span>
+                  <span className="text-zinc-400">Extracted Links:</span>
+                  <span className="text-sky-400 font-bold tabular-nums">{proxyData?.links?.length || 0}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Fingerprinting Guard:</span>
-                  <span className="text-emerald-400 font-bold">Active</span>
+                  <span className="text-zinc-400">SHA-256 Digest:</span>
+                  <span className="text-zinc-300 font-mono text-[10px] truncate max-w-[160px]">{proxyData?.sha256 || 'pending'}</span>
                 </div>
               </div>
             </div>
 
             <div className="mt-5 flex justify-end">
               <button
+                type="button"
                 onClick={() => setShowSiteInfoModal(false)}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold"
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold cursor-pointer"
               >
                 Close
               </button>

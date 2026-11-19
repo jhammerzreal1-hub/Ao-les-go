@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   MessageSquare,
@@ -36,7 +47,15 @@ import {
   Download,
   Key,
   Phone,
-  ListTodo
+  ListTodo,
+  Box,
+  Play,
+  Gamepad2,
+  FlaskConical,
+  TrendingUp,
+  Folder,
+  Settings,
+  Wallet
 } from 'lucide-react';
 import type { ModuleType } from '../types';
 
@@ -86,6 +105,58 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
     description: 'Primary autonomous orchestrator chat with multi-model cascade, agent wardrobe & live workspace tools'
   },
   {
+    id: 'ai-genesis-distillery',
+    label: 'AI Genesis & Molecular Distillery',
+    shortLabel: 'AI Distillery',
+    group: 'core',
+    category: 'command',
+    icon: FlaskConical,
+    accentColor: 'text-cyan-400',
+    activeBg: 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200',
+    description: 'Create custom AI & autonomous agents, forge neural weights (.safetensors), run autonomous training & molecularly distill ideal agent states'
+  },
+  {
+    id: 'macro-telemetry',
+    label: 'Macro-Telemetry & Capital Flows',
+    shortLabel: 'Macro Telemetry',
+    group: 'core',
+    category: 'command',
+    icon: TrendingUp,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
+    description: 'Real-time mapping of capital flight, liquidity velocity, geopolitical friction, and structural anomalies.'
+  },
+  {
+    id: 'agent-dev-kit',
+    label: 'Agent Dev Kit & Engine Builder',
+    group: 'core',
+    category: 'command',
+    icon: Cpu,
+    accentColor: 'text-fuchsia-400',
+    activeBg: 'bg-fuchsia-500/12 border-fuchsia-500/35 text-fuchsia-200',
+    description: 'Autonomously control games, forge tools, synthesize infinite quests & build orchestrator features'
+  },
+  {
+    id: 'world-start',
+    label: 'World Load & Cinematic Start',
+    group: 'core',
+    category: 'command',
+    icon: Play,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Cinematic world loading screen, direct engine launcher, and universal artifact file download'
+  },
+  {
+    id: 'emulator-modder',
+    label: 'Emulator & Game Modder Hub',
+    group: 'creative',
+    category: 'creative',
+    icon: Gamepad2,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Universal ROM emulator with multiplayer & gamepad support, plus zero-downtime modder for OSRS, RuneScape, etc.'
+  },
+  {
     id: 'autonomy-supervisor',
     label: 'Autonomy Supervisor',
     group: 'core',
@@ -104,6 +175,50 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
     accentColor: 'text-cyan-400',
     activeBg: 'bg-cyan-500/12 border-cyan-500/35 text-cyan-200',
     description: 'Workspace files, multi-file code editor, and repository consolidation'
+  },
+  {
+    id: 'file-manager',
+    label: 'Sovereign Files (OS Explorer)',
+    shortLabel: 'OS Files',
+    group: 'system',
+    category: 'data',
+    icon: Folder,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Real host filesystem explorer, editor, upload/download, permissions & disk inspector'
+  },
+  {
+    id: 'terminal',
+    label: 'Root Terminal (UID 0 Shell)',
+    shortLabel: 'Terminal',
+    group: 'system',
+    category: 'command',
+    icon: Terminal,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Native stateful host OS bash/PowerShell command terminal with UID 0 & Ring -3 environment'
+  },
+  {
+    id: 'task-manager',
+    label: 'Process & Kernel Monitor',
+    shortLabel: 'Activity Monitor',
+    group: 'system',
+    category: 'command',
+    icon: Activity,
+    accentColor: 'text-sky-400',
+    activeBg: 'bg-sky-500/12 border-sky-500/35 text-sky-200',
+    description: 'Live OS PIDs, CPU/RAM utilization, network ports, toolchains & signal controls'
+  },
+  {
+    id: 'os-settings',
+    label: 'OS Control Center & Multi-OS',
+    shortLabel: 'OS Settings',
+    group: 'system',
+    category: 'command',
+    icon: Settings,
+    accentColor: 'text-zinc-300',
+    activeBg: 'bg-zinc-700/30 border-zinc-500/40 text-zinc-100',
+    description: 'Desktop window mode, wallpaper themes, Windows/macOS/Linux native app launchers & Ring -3 controls'
   },
   {
     id: 'tool-shed',
@@ -306,6 +421,16 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
     description: 'Video motion generator with procedural offline canvas render'
   },
   {
+    id: 'spatial-arena',
+    label: 'Spatial Arena 3D',
+    group: 'creative',
+    category: 'creative',
+    icon: Box,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
+    description: 'Aegis Skylane procedural 3D canyon game & interactive PBR scene studio'
+  },
+  {
     id: 'termux',
     label: 'Termux Android',
     group: 'system',
@@ -367,13 +492,25 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
   },
   {
     id: 'swarm-test',
-    label: 'Swarm Diagnostic',
+    label: 'Forensic Audit & Manual',
+    shortLabel: 'Forensic Manual',
     group: 'system',
     category: 'command',
     icon: Activity,
     accentColor: 'text-amber-400',
     activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
-    description: 'Automated multi-subsystem verification & benchmark suite'
+    description: 'Deep SHA-256 forensic audit, 46+ subfunction technical manual, and 1-click self-repair'
+  },
+  {
+    id: 'crypto-wallet',
+    label: 'Sovereign Crypto Wallets',
+    shortLabel: 'Crypto Wallets',
+    group: 'core',
+    category: 'command',
+    icon: Wallet,
+    accentColor: 'text-emerald-400',
+    activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
+    description: 'Real secp256k1 & Ed25519 BTC/ETH/SOL wallets for personal investing & UID 0 autonomous trading'
   },
   {
     id: 'packager',
@@ -397,13 +534,14 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
   },
   {
     id: 'universal-installer',
-    label: 'Universal Installer',
+    label: 'Universal App & Game Store',
+    shortLabel: 'App Store',
     group: 'system',
     category: 'command',
     icon: Download,
     accentColor: 'text-amber-400',
     activeBg: 'bg-amber-500/12 border-amber-500/35 text-amber-200',
-    description: 'Cross-platform bootstrap scripts & deployment runner'
+    description: 'Install games, Steam, Discord, native software, apt/brew/winget/npm/pip & direct URL binaries'
   }
 ];
 
@@ -417,6 +555,8 @@ interface NavigationProps {
   artifactCount?: number;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
+  hiddenOnDesktop?: boolean;
+  hideMobileDock?: boolean;
 }
 
 type CategoryType = 'all' | 'command' | 'creative' | 'intelligence' | 'data';
@@ -426,7 +566,9 @@ export const Navigation: React.FC<NavigationProps> = ({
   onSelectModule,
   artifactCount = 0,
   mobileOpen = false,
-  onCloseMobile
+  onCloseMobile,
+  hiddenOnDesktop = false,
+  hideMobileDock = false
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -521,6 +663,18 @@ export const Navigation: React.FC<NavigationProps> = ({
     const timer = setInterval(() => setTick(t => t + 1), 4000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showAllModulesModal) setShowAllModulesModal(false);
+        if (showTelemetryModal) setShowTelemetryModal(false);
+        if (mobileOpen && onCloseMobile) onCloseMobile();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAllModulesModal, showTelemetryModal, mobileOpen, onCloseMobile]);
 
   useEffect(() => {
     setSubAgents(prev =>
@@ -763,13 +917,15 @@ export const Navigation: React.FC<NavigationProps> = ({
   return (
     <>
       {/* Desktop Persistent Collapsible Workspace Sidebar */}
-      <aside
-        className={`hidden lg:flex flex-col shrink-0 transition-[width] duration-150 ${
-          sidebarCollapsed ? 'w-[64px]' : 'w-[244px]'
-        }`}
-      >
-        {renderSidebarContent(false)}
-      </aside>
+      {!hiddenOnDesktop && (
+        <aside
+          className={`hidden lg:flex flex-col shrink-0 transition-[width] duration-150 ${
+            sidebarCollapsed ? 'w-[64px]' : 'w-[244px]'
+          }`}
+        >
+          {renderSidebarContent(false)}
+        </aside>
+      )}
 
       {/* Mobile & Tablet Slide-Over Navigation Drawer */}
       {mobileOpen && (
@@ -784,76 +940,93 @@ export const Navigation: React.FC<NavigationProps> = ({
         </div>
       )}
 
-      {/* Mobile Compact Bottom Thumb Dock (<= 56px, < 10% viewport height) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800/80 px-1 pb-safe-nav flex items-center justify-around text-[10px] font-medium">
-        <button
-          onClick={() => handleSelect('chat')}
-          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg transition-colors ${
-            activeModule === 'chat' ? 'text-amber-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span className="whitespace-nowrap">Chat</span>
-        </button>
+      {/* Mobile Compact Bottom Thumb Dock (<= 48px + safe-area, fits all Android & iOS phones) */}
+      {!hideMobileDock && (
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 min-h-12 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800/80 px-1 pb-safe-nav flex items-center justify-around text-[10px] font-medium">
+          <button
+            onClick={() => handleSelect('chat')}
+            className={`flex flex-col items-center justify-center min-h-[42px] flex-1 max-w-[84px] gap-0.5 px-1 rounded-lg transition-colors ${
+              activeModule === 'chat' ? 'text-amber-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span className="whitespace-nowrap">Chat</span>
+          </button>
 
-        <button
-          onClick={() => handleSelect('tasks')}
-          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg transition-colors ${
-            activeModule === 'tasks' ? 'text-emerald-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
-          }`}
-        >
-          <ListTodo className="w-4 h-4" />
-          <span className="whitespace-nowrap">Tasks</span>
-        </button>
+          <button
+            onClick={() => handleSelect('file-manager')}
+            className={`flex flex-col items-center justify-center min-h-[42px] flex-1 max-w-[84px] gap-0.5 px-1 rounded-lg transition-colors ${
+              activeModule === 'file-manager' ? 'text-amber-300 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
+            }`}
+          >
+            <Folder className="w-4 h-4" />
+            <span className="whitespace-nowrap">Files</span>
+          </button>
 
-        <button
-          onClick={() => handleSelect('projects')}
-          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg transition-colors ${
-            activeModule === 'projects' ? 'text-cyan-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
-          }`}
-        >
-          <FolderGit2 className="w-4 h-4" />
-          <span className="whitespace-nowrap">Projects</span>
-        </button>
+          <button
+            onClick={() => handleSelect('terminal')}
+            className={`flex flex-col items-center justify-center min-h-[42px] flex-1 max-w-[84px] gap-0.5 px-1 rounded-lg transition-colors ${
+              activeModule === 'terminal' ? 'text-emerald-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
+            }`}
+          >
+            <Terminal className="w-4 h-4" />
+            <span className="whitespace-nowrap">Shell</span>
+          </button>
 
-        <button
-          onClick={() => handleSelect('browser')}
-          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg transition-colors ${
-            activeModule === 'browser' ? 'text-sky-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
-          }`}
-        >
-          <Globe className="w-4 h-4" />
-          <span className="whitespace-nowrap">Browser</span>
-        </button>
+          <button
+            onClick={() => handleSelect('browser')}
+            className={`flex flex-col items-center justify-center min-h-[42px] flex-1 max-w-[84px] gap-0.5 px-1 rounded-lg transition-colors ${
+              activeModule === 'browser' ? 'text-sky-400 font-semibold' : 'text-zinc-500 hover:text-zinc-200'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span className="whitespace-nowrap">Chrome</span>
+          </button>
 
-        <button
-          onClick={() => setShowAllModulesModal(true)}
-          className="flex flex-col items-center justify-center min-h-[44px] min-w-[56px] gap-0.5 px-2 rounded-lg text-amber-300 font-semibold"
-        >
-          <Grid className="w-4 h-4 text-amber-400" />
-          <span className="whitespace-nowrap tabular-nums">All ({ALL_MODULES.length})</span>
-        </button>
-      </nav>
+          <button
+            onClick={() => setShowAllModulesModal(true)}
+            className="flex flex-col items-center justify-center min-h-[42px] flex-1 max-w-[84px] gap-0.5 px-1 rounded-lg text-amber-300 font-semibold"
+          >
+            <Grid className="w-4 h-4 text-amber-400" />
+            <span className="whitespace-nowrap tabular-nums">All ({ALL_MODULES.length})</span>
+          </button>
+        </nav>
+      )}
 
       {/* Full Modules Directory Modal */}
       {showAllModulesModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-6"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAllModulesModal(false);
+          }}
+        >
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-6xl w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden text-xs">
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900/70">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/35 flex items-center justify-center text-amber-400 shrink-0">
-                  <Grid className="w-5 h-5" />
+            <div className="p-3.5 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900/70 shrink-0">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/15 border border-amber-500/35 flex items-center justify-center text-amber-400 shrink-0">
+                    <Grid className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-zinc-100 text-sm truncate">
+                      Operational Modules Directory
+                    </h3>
+                    <p className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5 truncate">
+                      <span className="tabular-nums">{ALL_MODULES.length} Active Subsystems</span>
+                      <span aria-hidden="true" className="hidden sm:inline">·</span>
+                      <span className="hidden sm:inline">Switch workspace view instantly</span>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-zinc-100 text-sm">
-                    Operational Modules Directory
-                  </h3>
-                  <p className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
-                    <span className="tabular-nums">{ALL_MODULES.length} Active Subsystems</span>
-                    <span aria-hidden="true">·</span>
-                    <span>Switch workspace view instantly</span>
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAllModulesModal(false)}
+                  className="sm:hidden p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition-colors cursor-pointer shrink-0"
+                  aria-label="Close directory"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
               <div className="flex items-center gap-2">
@@ -869,8 +1042,9 @@ export const Navigation: React.FC<NavigationProps> = ({
                   />
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowAllModulesModal(false)}
-                  className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                  className="hidden sm:inline-flex p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer shrink-0"
                   aria-label="Close directory"
                 >
                   <X className="w-5 h-5" />
@@ -878,7 +1052,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               </div>
             </div>
 
-            <div className="px-4 sm:px-6 py-2.5 border-b border-zinc-800/70 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            <div className="px-4 sm:px-6 py-2.5 border-b border-zinc-800/70 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
               {(['all', 'command', 'creative', 'intelligence', 'data'] as CategoryType[]).map(cat => (
                 <button
                   key={cat}
@@ -902,7 +1076,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               ))}
             </div>
 
-            <div className="p-4 sm:p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="p-3.5 sm:p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1 min-h-0">
               {filteredModalTabs.map(tab => {
                 const Icon = tab.icon;
                 const isActive = activeModule === tab.id;
@@ -945,15 +1119,33 @@ export const Navigation: React.FC<NavigationProps> = ({
                 );
               })}
             </div>
+
+            <div className="px-4 py-2.5 border-t border-zinc-800 bg-zinc-900/70 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-zinc-500 font-mono">
+                Showing {filteredModalTabs.length} of {ALL_MODULES.length} modules
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAllModulesModal(false)}
+                className="px-4 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Close Directory
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Sub-Agent Telemetry Modal */}
       {showTelemetryModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowTelemetryModal(false);
+          }}
+        >
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-3xl w-full max-h-[85dvh] flex flex-col shadow-2xl overflow-hidden text-xs">
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/70">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/70 shrink-0">
               <div className="flex items-center gap-2.5">
                 <Activity className="w-4 h-4 text-amber-400" />
                 <div>
@@ -962,6 +1154,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowTelemetryModal(false)}
                 className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 cursor-pointer"
                 aria-label="Close telemetry"

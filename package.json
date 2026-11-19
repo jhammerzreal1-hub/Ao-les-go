@@ -2,6 +2,13 @@
   "name": "react-example",
   "private": true,
   "version": "6.1.0",
+  "author": "Joshua Hamilton (JHammerZ) <https://jhammerz.github.io>",
+  "license": "MIT AND LicenseRef-JHammerZ-Sovereign-Twenty47-H-FID",
+  "homepage": "https://jhammerz.github.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JHammerZ/jhammerz.github.io"
+  },
   "type": "module",
   "bin": {
     "ai": "./bin/ai",
@@ -32,6 +39,7 @@
     "@google/genai": "^2.32.0",
     "@mlc-ai/web-llm": "^0.2.86",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
@@ -44,6 +52,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tar": "^7.5.22",
+    "three": "^0.187.0",
     "vite": "^8.3.0",
     "ws": "^8.22.0"
   },

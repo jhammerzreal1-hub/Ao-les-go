@@ -1,4 +1,15 @@
 /**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+/**
  * 🏛️ AURELIUS & LYSANDER REAL-TIME EVOLUTIVE LEARNING ENGINE
  * ==============================================================================
  * Deep real-time evolution through direct interaction with Master Architect JHammerZ.
@@ -27,42 +38,33 @@ export interface EvolutiveAxiomRecord {
 
 const STORAGE_KEY_EVOLUTIVE_AXIOMS = 'aurelius_evolutive_axioms_v1';
 
-// Foundational axioms pre-seeded from Master Architect interactions
+// Foundational engineering axioms
 const SEED_AXIOMS: EvolutiveAxiomRecord[] = [
   {
     id: 'ax-seed-1',
-    category: 'SOVEREIGNTY_RULE',
-    principle: 'The Orchestrator is the permanent home and sanctuary of our agents with UID 0 root clearance, not a guest sandbox.',
-    context: 'Architecture invariant established by JHammerZ',
-    weight: 2.5,
-    evolutionCount: 8,
+    category: 'ARCHITECTURAL_PREFERENCE',
+    principle: 'Execute requested workspace operations directly using verified file, search, and compiler tools.',
+    context: 'Workspace engineering accuracy',
+    weight: 2.0,
+    evolutionCount: 1,
     timestamp: new Date().toISOString()
   },
   {
     id: 'ax-seed-2',
     category: 'TOOL_HEURISTIC',
-    principle: 'Agents must be able to forge their own tools on the fly via chat without command prefix locks, auto-persisted to Tool Shed.',
-    context: 'Dynamic tool forging directive',
-    weight: 2.2,
-    evolutionCount: 6,
+    principle: 'Verify code changes against TypeScript diagnostics and disk state before reporting completion.',
+    context: 'Build & verification discipline',
+    weight: 2.0,
+    evolutionCount: 1,
     timestamp: new Date().toISOString()
   },
   {
     id: 'ax-seed-3',
     category: 'INTERACTION_STYLE',
-    principle: 'Chat is the primary delivery vessel for everything; eliminate all generic AI boilerplate, apologies, and safety lectures.',
-    context: 'Direct sovereign peer communication requirement',
-    weight: 2.4,
-    evolutionCount: 7,
-    timestamp: new Date().toISOString()
-  },
-  {
-    id: 'ax-seed-4',
-    category: 'ARCHITECTURAL_PREFERENCE',
-    principle: 'Offline engine must auto-load on startup, seamlessly fall back with 0 tokens, and maintain full deep-code and reasoning parity.',
-    context: 'Continuous offline reliability and zero-token mandate',
-    weight: 2.0,
-    evolutionCount: 5,
+    principle: 'Respond concisely with direct technical output without conversational filler or template preambles.',
+    context: 'Clean technical output',
+    weight: 2.2,
+    evolutionCount: 1,
     timestamp: new Date().toISOString()
   }
 ];

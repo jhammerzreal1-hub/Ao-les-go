@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Volume2, VolumeX, X, Radio, Brain, Sparkles, RefreshCw, Play, Pause, ChevronDown } from 'lucide-react';
 import { sovereignAi } from '../utils/sovereignAiDispatcher';
@@ -42,19 +53,27 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
   const autoReArmRef = useRef<boolean>(true);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-start listening on open
+  // Auto-start listening on open + Escape dismissal
   useEffect(() => {
     if (isOpen) {
       autoReArmRef.current = true;
       setLiveState('idle');
       startListening();
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+      };
+      window.addEventListener('keydown', onKey);
+      return () => {
+        window.removeEventListener('keydown', onKey);
+        stopAll();
+      };
     } else {
       stopAll();
     }
     return () => {
       stopAll();
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const stopAll = () => {
     autoReArmRef.current = false;
@@ -273,27 +292,27 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col items-center justify-between p-6 animate-in fade-in duration-200 font-mono">
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col items-center justify-between overflow-y-auto p-3 sm:p-6 animate-in fade-in duration-200 font-mono">
       {/* Header */}
-      <div className="w-full max-w-3xl flex items-center justify-between border-b border-cyan-500/30 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-500/20">
+      <div className="w-full max-w-3xl flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/30 pb-3 sm:pb-4 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-500/20 shrink-0">
             <Radio className="w-5 h-5 animate-pulse" />
           </div>
-          <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <span>🎙️ Gemini Live Voice Mode</span>
-              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-base font-bold text-white flex flex-wrap items-center gap-2">
+              <span>Gemini Live Voice Mode</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
                 CONTINUOUS HANDS-FREE
               </span>
             </h2>
-            <p className="text-[11px] text-cyan-300/80">
+            <p className="text-[11px] text-cyan-300/80 truncate">
               Active Model: <span className="text-amber-400 font-bold">{model}</span> • Sovereign Substrate
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 ml-auto">
           {/* Voice Selector */}
           <select
             value={selectedVoice}
@@ -301,7 +320,7 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
               setSelectedVoice(e.target.value);
               localStorage.setItem('aurelius_selected_voice', e.target.value);
             }}
-            className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs text-purple-300 font-mono font-semibold focus:outline-none focus:border-purple-500 cursor-pointer"
+            className="bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs text-purple-300 font-mono font-semibold focus:outline-none focus:border-purple-500 cursor-pointer max-w-[180px] sm:max-w-none"
           >
             {PRESET_VOICE_PERSONAS.map(p => (
               <option key={p.id} value={p.name}>
@@ -312,8 +331,9 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-700 transition-colors cursor-pointer"
-            title="Exit Gemini Live Voice Mode"
+            aria-label="Exit Gemini Live Voice Mode"
+            className="p-2 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 transition-colors cursor-pointer shrink-0"
+            title="Exit Gemini Live Voice Mode (ESC)"
           >
             <X className="w-5 h-5" />
           </button>
@@ -321,11 +341,11 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
       </div>
 
       {/* Main Interactive Orb & Visualizer */}
-      <div className="flex-1 flex flex-col items-center justify-center my-6 space-y-8 max-w-xl text-center">
+      <div className="flex-1 flex flex-col items-center justify-center my-4 sm:my-6 space-y-6 sm:space-y-8 max-w-xl w-full text-center">
         {/* Animated Visualizer Neural Orb */}
         <div className="relative flex items-center justify-center">
           {/* Outer Pulsing Glow */}
-          <div className={`w-48 h-48 rounded-full blur-2xl transition-all duration-500 ${
+          <div className={`w-40 h-40 sm:w-48 sm:h-48 rounded-full blur-2xl transition-all duration-500 ${
             liveState === 'listening' ? 'bg-cyan-500/40 animate-pulse' :
             liveState === 'processing' ? 'bg-amber-500/40 animate-spin' :
             liveState === 'speaking' ? 'bg-purple-500/50 animate-bounce' :
@@ -333,7 +353,7 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
           }`} />
 
           {/* Central Sphere */}
-          <div className={`relative w-40 h-40 rounded-full border-2 flex items-center justify-center shadow-2xl transition-all duration-300 ${
+          <div className={`relative w-32 h-32 sm:w-40 sm:h-40 rounded-full border-2 flex items-center justify-center shadow-2xl transition-all duration-300 ${
             liveState === 'listening' ? 'bg-gradient-to-br from-cyan-950 via-zinc-900 to-cyan-900 border-cyan-400 scale-105 shadow-cyan-500/50' :
             liveState === 'processing' ? 'bg-gradient-to-br from-amber-950 via-zinc-900 to-amber-900 border-amber-400 shadow-amber-500/50' :
             liveState === 'speaking' ? 'bg-gradient-to-br from-purple-950 via-zinc-900 to-purple-900 border-purple-400 scale-110 shadow-purple-500/60' :
@@ -401,9 +421,9 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
       </div>
 
       {/* Session Turns History & Action Controls */}
-      <div className="w-full max-w-3xl flex flex-col items-center gap-4 border-t border-zinc-800 pt-4">
+      <div className="w-full max-w-3xl flex flex-col items-center gap-3 border-t border-zinc-800 pt-3 sm:pt-4 shrink-0">
         {/* Turns Counter & Controls */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4">
           <button
             onClick={togglePauseResume}
             className={`px-5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer border shadow-lg ${

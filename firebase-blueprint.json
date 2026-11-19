@@ -2,7 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "Authenticated user profile for Aurelius Orchestrator",
+      "description": "Authenticated user profile for Lysander Genesis Orchestrator",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
@@ -17,7 +17,7 @@
     },
     "ChatThread": {
       "title": "ChatThread",
-      "description": "Multi-turn conversation thread in Aurelius Orchestrator",
+      "description": "Multi-turn conversation thread in Lysander Genesis Orchestrator",
       "type": "object",
       "properties": {
         "userId": { "type": "string", "maxLength": 128 },
@@ -61,11 +61,11 @@
     },
     "Artifact": {
       "title": "Artifact",
-      "description": "Generated multimedia artifact (images, videos, music clips, transcriptions, knowledge)",
+      "description": "Generated multimedia, voice, grounding, or spatial 3D artifact",
       "type": "object",
       "properties": {
         "userId": { "type": "string", "maxLength": 128 },
-        "type": { "type": "string", "enum": ["music", "image", "video", "transcription", "knowledge", "dossier"], "maxLength": 64 },
+        "type": { "type": "string", "enum": ["music", "image", "video", "transcription", "knowledge", "dossier", "spatial", "voice"], "maxLength": 64 },
         "title": { "type": "string", "maxLength": 256 },
         "prompt": { "type": "string", "maxLength": 4000 },
         "model": { "type": "string", "maxLength": 128 },
@@ -90,6 +90,78 @@
         "status": { "type": "string", "enum": ["SUCCESS", "FAILED", "HEALED"], "maxLength": 64 }
       },
       "required": ["userId", "timestamp", "subsystem", "action"]
+    },
+    "GameRun": {
+      "title": "GameRun",
+      "description": "Completed 3D Aegis Skylane & autonomous spatial simulation run telemetry record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "mode": { "type": "string", "enum": ["arcade", "aerial_combat", "swarm_logistics", "byzantine_mesh", "orbital_physics", "photoreal_sandbox", "mmorpg_world", "custom_world", "time_trial", "zen_inspect"], "maxLength": 32 },
+        "shipFinish": { "type": "string", "enum": ["titanium-amber", "obsidian-cyan", "ceramic-emerald", "forged-bronze", "titanium", "obsidian", "amber", "sapphire"], "maxLength": 32 },
+        "score": { "type": "number" },
+        "wave": { "type": "number" },
+        "beaconsCollected": { "type": "number" },
+        "durationSec": { "type": "number" },
+        "status": { "type": "string", "enum": ["COMPLETED", "VICTORY", "DEFEAT", "ABORTED"], "maxLength": 32 },
+        "agentsCount": { "type": "number" },
+        "engineTitle": { "type": "string", "maxLength": 128 },
+        "processMetricValue": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "mode", "shipFinish", "score", "wave", "beaconsCollected", "durationSec", "status", "createdAt"]
+    },
+    "SpatialBlueprint": {
+      "title": "SpatialBlueprint",
+      "description": "Autonomous orchestrator or agent-created 3D game engine or simulated process blueprint",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 128 },
+        "engineKind": { "type": "string", "enum": ["aerial_combat", "swarm_logistics", "byzantine_mesh", "orbital_physics", "photoreal_sandbox", "mmorpg_world", "custom_world"], "maxLength": 32 },
+        "createdByAgent": { "type": "string", "maxLength": 128 },
+        "blueprintJson": { "type": "string", "maxLength": 50000 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "title", "engineKind", "createdByAgent", "blueprintJson", "createdAt"]
+    },
+    "DetectedGameMod": {
+      "title": "DetectedGameMod",
+      "description": "Auto-detected existing game signature, hook capabilities, and autonomous mod ledger",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "gameKey": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 128 },
+        "engine": { "type": "string", "enum": ["threejs", "phaser", "godot", "unity", "unreal", "minecraft", "pygame", "love2d", "html5_canvas", "custom_engine"], "maxLength": 32 },
+        "sourcePath": { "type": "string", "maxLength": 512 },
+        "status": { "type": "string", "enum": ["DETECTED", "HOOKED", "MODDED"], "maxLength": 32 },
+        "modCount": { "type": "number" },
+        "modStateJson": { "type": "string", "maxLength": 50000 },
+        "detectedAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "gameKey", "title", "engine", "sourcePath", "status", "modCount", "modStateJson", "detectedAt"]
+    },
+    "CraftedItem": {
+      "title": "CraftedItem",
+      "description": "Bespoke player- or AI-crafted MMORPG weapon, armor, relic, elixir, or world beacon carrying a unique Crafter Signature",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "itemId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["weapon", "armor", "relic", "elixir", "world_beacon"], "maxLength": 32 },
+        "rarity": { "type": "string", "enum": ["Masterwork", "Ascendant", "Mythic", "1-of-1 Sovereign"], "maxLength": 32 },
+        "crafterName": { "type": "string", "maxLength": 128 },
+        "crafterSkillLevel": { "type": "number" },
+        "signatureHash": { "type": "string", "maxLength": 64 },
+        "uniqueMakerTrait": { "type": "string", "maxLength": 256 },
+        "itemSpecJson": { "type": "string", "maxLength": 50000 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "itemId", "name", "category", "rarity", "crafterName", "crafterSkillLevel", "signatureHash", "uniqueMakerTrait", "itemSpecJson", "createdAt"]
     }
   },
   "firestore": {
@@ -125,6 +197,22 @@
     "/users/{userId}/audit_ledger/{ledgerId}": {
       "schema": { "$ref": "#/entities/AuditLedgerItem" },
       "description": "Forensic audit records belonging to a user"
+    },
+    "/users/{userId}/game_runs/{runId}": {
+      "schema": { "$ref": "#/entities/GameRun" },
+      "description": "Aegis Skylane & spatial simulation scores and run records belonging to a user"
+    },
+    "/users/{userId}/spatial_blueprints/{blueprintId}": {
+      "schema": { "$ref": "#/entities/SpatialBlueprint" },
+      "description": "Saved autonomous 3D game engine and simulated process blueprints belonging to a user"
+    },
+    "/users/{userId}/detected_games/{gameId}": {
+      "schema": { "$ref": "#/entities/DetectedGameMod" },
+      "description": "Automatically detected existing games and their autonomous mod hooks & state"
+    },
+    "/users/{userId}/crafted_items/{itemId}": {
+      "schema": { "$ref": "#/entities/CraftedItem" },
+      "description": "Bespoke player- and AI-crafted items with unique Crafter Signatures"
     }
   }
 }

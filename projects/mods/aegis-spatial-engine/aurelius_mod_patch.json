@@ -1,0 +1,17 @@
+{
+  "gameId": "aegis-spatial-engine",
+  "title": "Aegis Hyperion · Resident 3D Spatial Engine",
+  "engine": "threejs",
+  "summary": "Autonomous Engine Override (GodMode=ON, TimeScale=1x, Gravity=9.8, Biome=alpine_archipelago, Weather=rain)",
+  "modState": {
+    "godMode": true,
+    "timeScale": 1,
+    "gravity": 9.8,
+    "speedScale": 1,
+    "biome": "alpine_archipelago",
+    "weather": "rain",
+    "bloomStrength": 0.42,
+    "activeMods": []
+  },
+  "updatedAt": "2026-11-17T19:39:02.285Z"
+}

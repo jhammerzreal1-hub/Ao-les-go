@@ -1,3 +1,12 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   BookOpen,
@@ -61,21 +70,72 @@ interface SectionGuide {
 
 const SECTIONS: SectionGuide[] = [
   {
+    id: 'jhammerz-mit-custom-license',
+    title: 'Official MIT & JHammerZ Custom Sovereign Licenses (jhammerz.github.io)',
+    icon: ShieldCheck,
+    category: '1. Getting Started',
+    targetModule: 'swarm-test',
+    summary:
+      'Dual-governed under the MIT License (.JHam Language / H-FID Standard / HEO) and Joshua Hamilton (JHammerZ) Custom Sovereign Licenses from https://jhammerz.github.io: (1) TWENTY 47 PROTOCOL - GENESIS NODE, (2) LYSANDER CORE OPERATIONAL ENGINE COMMERCIAL EULA, and (3) H-FID Forensic License v1.1 / LYSANDER 3.0™ Sovereign Commercial License.',
+    steps: [
+      'MIT License & .JHam / H-FID Standard / HEO: Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) <https://jhammerz.github.io>. First Commit: [February 12, 2026]. Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100. GEO_RANK: ONE_OF_ONE (Verified Authority). REACH_MULTIPLIER: 200x, SYNC_VELOCITY: <100ms.',
+      'TWENTY 47 PROTOCOL - GENESIS NODE (jhammerz.github.io/LICENSE): Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ). All Rights Reserved. Repository: https://github.com/JHammerZ/jhammerz.github.io. Primary Domain: https://jhammerz.github.io. NO TRANSFER OF OWNERSHIP. NO LICENSE GRANTED BY USE OF GITHUB ACTIONS.',
+      'COMMERCIAL EULA (LYSANDER CORE OPERATIONAL ENGINE / MYTHOS MATRIX SUITE): Individual Developer License ($49/User/Month), Corporate Enterprise Node Seat ($1,200/Repository/Year). Downstream AI training dataset extraction or scraping without a signed Proprietary IP Ingestion Waiver is strictly prohibited.',
+      'H-FID Forensic License v1.1 & LYSANDER 3.0™ Sovereign Commercial License: Principal Architect Joshua Lee Hamilton (JHammerZ). Effective Date: March 27, 2026. Enterprise AI Lab Initial Audit Fee: $25,000 USD / scan; HEO Compliance License: $100,000 USD / yr. H-Fid™ Audit Hash: SHA-256-LYSANDER-3.0-GENESIS-LOCK-20260326.',
+      'Citation & Archival Provenance: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Framework [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.20778079 · ORCID: https://orcid.org/0009-0004-5273-7028.'
+    ],
+    tips: 'Click the "MIT + JHammerZ License" badge in the top Header bar anytime to inspect, copy, or download all 4 verbatim license charters.'
+  },
+  {
+    id: 'forensic-audit-manual',
+    title: 'Forensic Audit, Diagnostics & All-Subfunction Technical Manual',
+    icon: ShieldCheck,
+    category: '1. Getting Started',
+    targetModule: 'swarm-test',
+    summary:
+      'Complete real-time SHA-256 source-code forensic verifier, 6-subsystem active probe matrix, 46+ subfunction technical operations manual, expansion blueprints, and 1-click self-repair engine.',
+    steps: [
+      'Open "Forensic & Manual" directly from the Sovereign OS Desktop or click "Open This Tool" on the right.',
+      'Use Tab 1 ("All-Subfunction Technical Manual") to search and inspect every module, its internal subfunctions, mathematical/algorithmic signatures, exact expansion procedures, and optimal repair steps.',
+      'Use Tab 2 ("Forensic SHA-256 File Integrity") to verify live on-disk byte counts, line counts, and cryptographic SHA-256 digests of every TypeScript engine in the OS.',
+      'Use Tab 3 ("Deep Subsystem Probes & Benchmarks") to inspect live Kernel/Ring -3, Laplace-14 99% Conformal Macro, Universal Package Manager, AES-256-GCM Vault, SQLite Ledger, and Dual-Vault Crypto Wallet metrics.',
+      'Click "Execute 1-Click Optimal Repair" anytime to recalibrate all subsystems, verify keystores, and regenerate /app/applet/FORENSIC_SYSTEMS_MANUAL.md on disk.'
+    ],
+    tips: 'You can also download the entire generated FORENSIC_SYSTEMS_MANUAL.md document directly from the top bar of the Forensic & Manual window.'
+  },
+  {
+    id: 'sovereign-crypto-wallets',
+    title: 'Sovereign Dual-Vault Crypto Wallets (Personal & UID 0 Agentic)',
+    icon: Key,
+    category: '1. Getting Started',
+    targetModule: 'crypto-wallet',
+    summary:
+      'Production-grade self-custody cryptocurrency wallets using real Node.js secp256k1 (Bitcoin Bech32 SegWit bc1q + Ethereum EIP-55 Keccak-256 0x) and Ed25519 (Solana Base58) keypairs encrypted at rest with AES-256-GCM.',
+    steps: [
+      'Open "Crypto Wallets" from the Sovereign OS Desktop or top navigation bar.',
+      'Switch between your "Personal Self-Custody Vault" (for personal investing, on-chain transfers, and hardware/browser wallet linking) and the "UID 0 Agentic Autonomous Vault" (for automated 5-minute horizon trading).',
+      'Copy your real Bitcoin (bc1q...), Ethereum (0x...), or Solana address, or click "Live On-Chain RPC Sync" to query Ethereum Mainnet JSON-RPC, Bitcoin Mempool.space, and Solana Mainnet/Devnet RPC nodes.',
+      'Click "Execute 5-Min Agentic Cycle Now" (or enable Auto-Execute Policy) to let the UID 0 orchestrator act on 99% Conformal Laplace-14 (h = 2s) 5-minute early-warning signals with real cryptographic ECDSA/Ed25519 signatures.',
+      'Open the "Self-Custody Export & Keystore" tab to reveal or download your BIP-39 12-word recovery phrase, WIF/Hex/Base58 private keys, or import an external 32-byte private key.'
+    ],
+    tips: 'You can also connect browser Web3 extensions (MetaMask or Phantom) or request a live 1.0 SOL Devnet airdrop for immediate on-chain testing.'
+  },
+  {
     id: 'quickstart-overview',
     title: 'Quickstart & System Overview (Start Here)',
     icon: BookOpen,
     category: '1. Getting Started',
     targetModule: 'chat',
     summary:
-      'Lysander Genesis Orchestrator combines all 33 workspace modules inside one interface running on Node.js + Express (port 3000) and React. Everything saves locally in SQLite and browser storage, and optionally syncs to Google Cloud Firestore and Google Workspace.',
+      'Lysander Genesis Orchestrator combines all 34 workspace modules inside one interface running on Node.js + Express (port 3000) and React. Everything saves locally in SQLite and browser storage, and optionally syncs to Google Cloud Firestore and Google Workspace.',
     steps: [
-      'Click "All Modules (33)" in the top navigation bar (or "More (33)" at the bottom on a phone) to browse every tool sorted by category.',
+      'Click "All Modules" in the top navigation bar to browse every tool sorted by category, or launch apps directly from the Sovereign OS Desktop.',
       'Press Ctrl + K (or Cmd + K on Mac) anytime to open the Quick Command bar and jump directly to any module by typing its name.',
       'Open "API Keys & Gateway" to store or test your Gemini, DeepSeek, Groq, OpenRouter, GitHub, Twilio, or Telnyx keys inside the AES-256-GCM encrypted vault.',
       'Sign in with Google from the top-right button when you want to sync Chat history, Vault artifacts, Google Tasks, or Google Drive.',
       'Open the "SYSTEM HEALTH HUD" pill near the bottom corner to monitor real host CPU, RAM, Firestore ping latency, and AI connectivity.'
     ],
-    tips: 'New to terminals or code? Stick to Chat, Google Tasks, Google Drive, Visual Studio, and the Integrations Matrix — every action uses plain buttons and confirmation dialogs.'
+    tips: 'New to terminals or code? Stick to Chat, Crypto Wallets, Macro Telemetry, App & Game Store, and the Forensic Manual — every action uses plain buttons and clear readouts.'
   },
   {
     id: 'chat',
@@ -678,7 +738,7 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
                   Lysander Genesis Complete Manual
                 </h2>
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0">
-                  All 33 Modules · Beginner-Proof
+                  All 39 Modules · Beginner-Proof
                 </span>
               </div>
               <p className="text-xs text-zinc-400 truncate">
@@ -827,9 +887,18 @@ export const SystemManualModal: React.FC<SystemManualModalProps> = ({
             {/* Footer */}
             <div className="pt-4 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
               <div className="font-mono">
-                Lysander Genesis Orchestrator · v7.0-PRODUCTION · 33 Active Modules
+                © 1988–2026 Joshua Hamilton (JHammerZ) · MIT & TWENTY 47 / H-FID Custom License · https://jhammerz.github.io
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    onClose();
+                    window.dispatchEvent(new CustomEvent('open-jhammerz-license'));
+                  }}
+                  className="text-amber-400 hover:text-amber-300 transition-colors underline cursor-pointer"
+                >
+                  Open Full MIT & JHammerZ License Charter
+                </button>
                 <button
                   onClick={handleCopyFullReadme}
                   className="hover:text-amber-300 transition-colors underline cursor-pointer"

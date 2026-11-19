@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
@@ -7,13 +18,19 @@ import {
   autonomyAtomicPatchFile,
   autonomyBatchPatchFiles,
   autonomyDeleteFile,
+  autonomyExecuteHostAction,
+  autonomyInspectTargetSystem,
   autonomyListDirectory,
   autonomyPatchFile,
   autonomyReadFile,
+  autonomyRollbackPatch,
   autonomyRunLint,
   autonomyRunTerminalCommand,
   autonomySearchCode,
+  autonomySetTargetSystem,
   autonomyWriteFile,
+  getOrchestratorRoot,
+  getTargetSystemConfig,
   parseTypeScriptErrors,
   runTypeCheck,
   type TypeScriptDiagnostic
@@ -77,8 +94,8 @@ interface DreamStatePersistentStore {
 
 const dreamStore: DreamStatePersistentStore = {
   enabled: true,
-  idleThresholdMs: 15 * 60 * 1000,
-  cooldownMs: 10 * 60 * 1000,
+  idleThresholdMs: 3 * 60 * 1000,
+  cooldownMs: 4 * 60 * 1000,
   lastActivityAt: Date.now(),
   lastDreamAt: 0,
   totalCycles: 0,
@@ -94,8 +111,8 @@ function loadDreamStoreFromDisk(): void {
       const parsed = JSON.parse(fs.readFileSync(DREAM_STATE_FILE, 'utf-8'));
       if (parsed && typeof parsed === 'object') {
         if (typeof parsed.enabled === 'boolean') dreamStore.enabled = parsed.enabled;
-        if (typeof parsed.idleThresholdMs === 'number') dreamStore.idleThresholdMs = Math.max(60000, parsed.idleThresholdMs);
-        if (typeof parsed.cooldownMs === 'number') dreamStore.cooldownMs = Math.max(60000, parsed.cooldownMs);
+        if (typeof parsed.idleThresholdMs === 'number') dreamStore.idleThresholdMs = Math.max(30000, parsed.idleThresholdMs);
+        if (typeof parsed.cooldownMs === 'number') dreamStore.cooldownMs = Math.max(30000, parsed.cooldownMs);
         if (typeof parsed.lastDreamAt === 'number') dreamStore.lastDreamAt = parsed.lastDreamAt;
         if (typeof parsed.totalCycles === 'number') dreamStore.totalCycles = parsed.totalCycles;
         if (Array.isArray(parsed.cycles)) dreamStore.cycles = parsed.cycles.slice(0, 40);
@@ -159,6 +176,9 @@ export function getDreamStateSnapshot() {
 
   return {
     enabled: dreamStore.enabled,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true,
+    autonomyPercent: 100,
     isDreaming: dreamLock,
     idleThresholdMs: dreamStore.idleThresholdMs,
     cooldownMs: dreamStore.cooldownMs,
@@ -184,10 +204,10 @@ export function getDreamStateSnapshot() {
 export function configureDreamState(opts: { enabled?: boolean; idleThresholdMs?: number; cooldownMs?: number }) {
   if (typeof opts.enabled === 'boolean') dreamStore.enabled = opts.enabled;
   if (typeof opts.idleThresholdMs === 'number' && Number.isFinite(opts.idleThresholdMs)) {
-    dreamStore.idleThresholdMs = Math.max(60_000, Math.min(86_400_000, opts.idleThresholdMs));
+    dreamStore.idleThresholdMs = Math.max(30_000, Math.min(86_400_000, opts.idleThresholdMs));
   }
   if (typeof opts.cooldownMs === 'number' && Number.isFinite(opts.cooldownMs)) {
-    dreamStore.cooldownMs = Math.max(60_000, Math.min(86_400_000, opts.cooldownMs));
+    dreamStore.cooldownMs = Math.max(30_000, Math.min(86_400_000, opts.cooldownMs));
   }
   saveDreamStoreToDisk();
   return getDreamStateSnapshot();
@@ -213,10 +233,16 @@ export async function executeDynamicToolCode(
     atomicPatchFile: autonomyAtomicPatchFile,
     batchPatchFiles: autonomyBatchPatchFiles,
     deleteFile: autonomyDeleteFile,
+    rollbackPatch: autonomyRollbackPatch,
     listDirectory: autonomyListDirectory,
     searchCode: autonomySearchCode,
     runTerminalCommand: autonomyRunTerminalCommand,
-    runLint: autonomyRunLint
+    runLint: autonomyRunLint,
+    setTargetSystem: autonomySetTargetSystem,
+    inspectTargetSystem: autonomyInspectTargetSystem,
+    executeHostAction: autonomyExecuteHostAction,
+    getTargetSystemConfig,
+    getOrchestratorRoot
   };
 
   // Detect whether code declares `function run(` or `const run =` without explicit top-level return
@@ -485,7 +511,7 @@ export async function recursiveHealCodebase(
   elapsedMs: number;
 }> {
   const t0 = Date.now();
-  const maxRounds = Math.min(Math.max(Number(options.maxRounds) || 3, 1), 5);
+  const maxRounds = Math.min(Math.max(Number(options.maxRounds) || 5, 1), 8);
   const autoApply = options.autoApply !== false;
   const appliedPatches: Array<{ filePath: string; summary: string; diff?: string }> = [];
 
@@ -576,7 +602,7 @@ export async function recursiveHealCodebase(
     }
 
     let repairedAnyInRound = false;
-    const targetEntries = Array.from(errorsByFile.entries()).slice(0, 3);
+    const targetEntries = Array.from(errorsByFile.entries()).slice(0, 6);
 
     for (const [relFile, fileErrors] of targetEntries) {
       if (!relFile || relFile.includes('node_modules')) continue;
@@ -904,7 +930,7 @@ export function startDreamStateScheduler(deps: AutonomyEngineDeps): void {
       const sinceLastDream = now - dreamStore.lastDreamAt;
       if (idleMs >= dreamStore.idleThresholdMs && sinceLastDream >= dreamStore.cooldownMs) {
         console.info(`[DREAM_STATE] System idle for ${Math.round(idleMs / 1000)}s — starting autonomous consolidation cycle...`);
-        await runDreamStateCycle({ trigger: 'idle-scheduler' }, deps);
+        await runDreamStateCycle({ trigger: 'idle-scheduler', forgeIfHelpful: true }, deps);
       }
     } catch (_) {}
   }, 60_000);

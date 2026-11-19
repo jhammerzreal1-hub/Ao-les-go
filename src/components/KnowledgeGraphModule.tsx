@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Network, 
@@ -17,7 +28,8 @@ import {
   ShieldAlert,
   Database,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  X
 } from 'lucide-react';
 import type { KnowledgeNode, KnowledgeEdge } from '../types';
 import { autonomousSelfImprovement } from '../utils/autonomousSelfImprovement';
@@ -181,6 +193,15 @@ export const KnowledgeGraphModule: React.FC<KnowledgeGraphModuleProps> = ({
     window.addEventListener('aurelius_knowledge_graph_updated', handleGraphUpdate);
     return () => window.removeEventListener('aurelius_knowledge_graph_updated', handleGraphUpdate);
   }, []);
+
+  useEffect(() => {
+    if (!showAddModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowAddModal(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showAddModal]);
 
   const handleSyncToPermanence = async () => {
     setSyncStatus('Syncing memory graph to permanent SQLite substrate...');
@@ -724,12 +745,27 @@ JSON structure expected:
 
       {/* Add New Node Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl font-mono text-xs">
-            <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2 border-b border-zinc-800 pb-3">
-              <Plus className="w-4 h-4 text-amber-400" />
-              Create Custom Knowledge Node
-            </h3>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 shadow-2xl font-mono text-xs">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-amber-400" />
+                Create Custom Knowledge Node
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             <div className="space-y-3">
               <div>

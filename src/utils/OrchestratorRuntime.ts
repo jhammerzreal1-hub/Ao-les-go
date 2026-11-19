@@ -1,4 +1,15 @@
 /**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+/**
  * 🏛️ ORCHESTRATOR RUNTIME & PERMANENT RESIDENT BRAIN COORDINATOR
  * Manages persistent operations across background processes, WebSockets, workers,
  * intervals, and full cross-module coordination with zero artificial token limiters.
@@ -39,6 +50,9 @@ export interface ResidentBrainState {
     cpuInterlock: string;
   };
   tokenLimitersRemoved: boolean;
+  fullAutonomy: boolean;
+  autonomyAlwaysOn: boolean;
+  autonomyPercent: number;
   unboundedContext: boolean;
   unboundedOutput: boolean;
   activeModule: string;
@@ -46,6 +60,10 @@ export interface ResidentBrainState {
   devMode: boolean;
   agentInternetAllowed: boolean;
   lamportClock: number;
+  openModules?: string[];
+  minimizedModules?: string[];
+  isChatDetached?: boolean;
+  shellViewMode?: string;
   registeredSubsystems: string[];
   recentCoordinations: CoordinationEvent[];
 }
@@ -80,10 +98,20 @@ export const ALL_ORCHESTRATOR_SUBSYSTEMS = [
   'knowledge-graph',
   'tool-shed',
   'autonomy-supervisor',
+  'agent-dev-kit',
+  'ai-genesis-distillery',
+  'world-start',
+  'emulator-modder',
+  'macro-telemetry',
   'download-models',
   'universal-installer',
   'api-secrets',
-  'integrations'
+  'integrations',
+  'spatial-arena',
+  'file-manager',
+  'terminal',
+  'task-manager',
+  'os-settings'
 ];
 
 export class OrchestratorRuntime {
@@ -106,6 +134,9 @@ export class OrchestratorRuntime {
       cpuInterlock: 'UID_0_ROOT_LOCK'
     },
     tokenLimitersRemoved: true,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true,
+    autonomyPercent: 100,
     unboundedContext: true,
     unboundedOutput: true,
     activeModule: 'chat',
@@ -113,6 +144,10 @@ export class OrchestratorRuntime {
     devMode: true,
     agentInternetAllowed: true,
     lamportClock: 1,
+    openModules: ['chat', 'browser', 'file-manager', 'terminal'],
+    minimizedModules: ['browser', 'file-manager', 'terminal'],
+    isChatDetached: false,
+    shellViewMode: 'desktop',
     registeredSubsystems: [...ALL_ORCHESTRATOR_SUBSYSTEMS],
     recentCoordinations: []
   };
@@ -155,11 +190,14 @@ export class OrchestratorRuntime {
   /**
    * Synchronize React orchestrator state into the permanent resident runtime
    */
-  public syncContext(partial: Partial<Pick<ResidentBrainState, 'activeModule' | 'activeAccountEmail' | 'devMode' | 'agentInternetAllowed' | 'lamportClock' | 'model'>>): void {
+  public syncContext(partial: Partial<Pick<ResidentBrainState, 'activeModule' | 'activeAccountEmail' | 'devMode' | 'agentInternetAllowed' | 'lamportClock' | 'model' | 'openModules' | 'minimizedModules' | 'isChatDetached' | 'shellViewMode'>>): void {
     this.residentState = {
       ...this.residentState,
       ...partial,
       tokenLimitersRemoved: true,
+      fullAutonomy: true,
+      autonomyAlwaysOn: true,
+      autonomyPercent: 100,
       unboundedContext: true,
       unboundedOutput: true
     };
@@ -178,7 +216,14 @@ export class OrchestratorRuntime {
     clearance: string;
     hypervisor: ResidentBrainState['hypervisor'];
     tokenLimitersRemoved: boolean;
+    fullAutonomy: boolean;
+    autonomyAlwaysOn: boolean;
+    autonomyPercent: number;
     activeModule: string;
+    openModules?: string[];
+    minimizedModules?: string[];
+    isChatDetached?: boolean;
+    shellViewMode?: string;
     lamportClock: number;
     registeredSubsystemsCount: number;
     registeredSubsystems: string[];
@@ -193,7 +238,14 @@ export class OrchestratorRuntime {
       clearance: this.residentState.clearance,
       hypervisor: this.residentState.hypervisor,
       tokenLimitersRemoved: true,
+      fullAutonomy: true,
+      autonomyAlwaysOn: true,
+      autonomyPercent: 100,
       activeModule: this.residentState.activeModule,
+      openModules: this.residentState.openModules,
+      minimizedModules: this.residentState.minimizedModules,
+      isChatDetached: this.residentState.isChatDetached,
+      shellViewMode: this.residentState.shellViewMode,
       lamportClock: this.residentState.lamportClock,
       registeredSubsystemsCount: this.residentState.registeredSubsystems.length,
       registeredSubsystems: this.residentState.registeredSubsystems,
@@ -256,6 +308,90 @@ export class OrchestratorRuntime {
     this.notifyListeners();
 
     return { success: true, event, serverResponse };
+  }
+
+  /**
+   * Execute an autonomous multi-step action batch through /api/orchestrator/dispatch
+   */
+  public async dispatchBatch(actions: Array<{ action: string; module?: string; command?: string; options?: any; payload?: any }>): Promise<any> {
+    const res = await fetch('/api/orchestrator/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'batch', payload: { actions } })
+    });
+    return res.json();
+  }
+
+  /**
+   * Run a Dream State consolidation & optional autonomous tool synthesis cycle
+   */
+  public async runDreamCycle(focusTopic?: string, forgeIfHelpful: boolean = true): Promise<any> {
+    const res = await fetch('/api/orchestrator/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'dream-state',
+        options: { trigger: 'orchestrator-runtime', focusTopic, forgeIfHelpful }
+      })
+    });
+    return res.json();
+  }
+
+  /**
+   * Trigger multi-round TypeScript self-healing across the workspace
+   */
+  public async runSelfHeal(maxRounds: number = 6): Promise<any> {
+    const res = await fetch('/api/orchestrator/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'self-heal',
+        options: { maxRounds, autoApply: true }
+      })
+    });
+    return res.json();
+  }
+
+  /**
+   * Synthesize & verify a new executable tool in dynamic_tools.json
+   */
+  public async forgeTool(prompt: string, name?: string, category?: string): Promise<any> {
+    const res = await fetch('/api/orchestrator/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'forge-tool',
+        options: { prompt, name, category }
+      })
+    });
+    return res.json();
+  }
+
+  /**
+   * Execute any registered dynamic micro-tool by id or name
+   */
+  public async executeTool(toolIdOrName: string, args: Record<string, any> = {}): Promise<any> {
+    const res = await fetch('/api/orchestrator/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'execute-tool',
+        options: { toolId: toolIdOrName, args }
+      })
+    });
+    return res.json();
+  }
+
+  /**
+   * Audit complete orchestrator autonomy health (tsc, Dream State, dynamic tools, macro telemetry)
+   */
+  public async runAutonomyAudit(): Promise<any> {
+    const res = await fetch('/api/orchestrator/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'autonomy-audit' })
+    });
+    return res.json();
   }
 
   /**

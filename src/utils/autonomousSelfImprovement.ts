@@ -1,4 +1,15 @@
 /**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+/**
  * 🏛️ AURELIUS & LYSANDER AUTONOMOUS SELF-IMPROVEMENT & BACKGROUND LEARNING DAEMON
  * ==============================================================================
  * Enables the orchestrator to continuously learn, research topics on the web,
@@ -79,9 +90,9 @@ class AutonomousSelfImprovementEngine {
     this.saveState();
     console.info('[Autonomous Self-Improvement] Daemon activated with UID 0 clearance.');
 
-    // Execute first cycle quickly after boot, then every 120 seconds
-    setTimeout(() => this.runSingleAutonomousCycle(), 4000);
-    this.intervalTimer = setInterval(() => this.runSingleAutonomousCycle(), 120000);
+    // Execute first cycle quickly after boot, then every 60 seconds
+    setTimeout(() => this.runSingleAutonomousCycle(), 3500);
+    this.intervalTimer = setInterval(() => this.runSingleAutonomousCycle(), 60000);
   }
 
   public stop() {
@@ -209,7 +220,7 @@ class AutonomousSelfImprovementEngine {
     this.cycleIndex++;
 
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    const taskType = this.cycleIndex % 3;
+    const taskType = this.cycleIndex % 4;
 
     try {
       if (taskType === 0 && isOnline) {
@@ -218,9 +229,12 @@ class AutonomousSelfImprovementEngine {
       } else if (taskType === 1) {
         // Mode 1: Spontaneous Autonomous Tool Forging
         await this.executeToolForgingPass();
-      } else {
+      } else if (taskType === 2) {
         // Mode 2: Code Self-Healing & AST Verification Pass
         await this.executeSelfHealingPass();
+      } else {
+        // Mode 3: Dream State Consolidation & Live Macro-Telemetry Alignment
+        await this.executeDreamAndMacroSyncPass();
       }
     } catch (err) {
       console.warn('[Autonomous Self-Improvement] Notice during background cycle:', err);
@@ -430,6 +444,37 @@ return {
       strength: 0.99
     };
     this.uploadToMemoryGraph(node, edge);
+  }
+
+  /**
+   * Mode 3: Real Backend Dream State Consolidation & Live Macro-Telemetry Regime Sync
+   */
+  private async executeDreamAndMacroSyncPass() {
+    let macroFocus = 'Workspace autonomy, TypeScript purity, and real-time multi-hub telemetry';
+    try {
+      const macroRes = await fetch('/api/macro/live-telemetry');
+      if (macroRes.ok) {
+        const snap = await macroRes.json();
+        const regime = snap?.deterministicModel?.regime?.label || snap?.regime || '';
+        const risk = snap?.deterministicModel?.compositeRiskScore ?? '';
+        if (regime) {
+          macroFocus = `Macro Regime [${regime}${risk !== '' ? ` · Risk=${risk}` : ''}] & sovereign autonomy reliability`;
+        }
+      }
+    } catch (_) {}
+
+    await this.triggerDreamState(macroFocus, false);
+  }
+
+  /**
+   * Execute the full autonomous pipeline sequentially (Self-Heal -> Dream Consolidation -> Memory Graph Sync)
+   */
+  public async runFullAutonomyPipeline(): Promise<{ heal: any; dream: any; memorySync: { success: boolean; syncedCount: number } }> {
+    const heal = await this.triggerRecursiveHeal(6);
+    const dream = await this.triggerDreamState('Full autonomous pipeline consolidation & system verification', true);
+    const memorySync = await this.syncFullMemoryGraphToPermanence();
+    this.notify();
+    return { heal, dream, memorySync };
   }
 
   /**

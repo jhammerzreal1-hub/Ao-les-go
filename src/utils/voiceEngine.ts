@@ -1,11 +1,27 @@
 /**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+/**
  * 🎙️ AURELIUS & LYSANDER SOVEREIGN ACOUSTIC & VOICE ENGINE
  * ============================================================================
  * Provides rich multi-model neural voice synthesis, Gemini Cloud voices,
  * Free Open-Source Professional Voice Modules (Kokoro-82M, Piper, Orpheus, Bark),
- * real-time pitch/rate/timbre acoustic modulation, and hands-free fluid speech loop.
+ * real-time pitch/rate/timbre acoustic modulation, intelligent oral narrative
+ * extraction (filtering out redundant file numbers, diffs, and code blocks),
+ * and infinite-length coherent sentence chunking.
  * ============================================================================
  */
+
+import { dev_null } from './devNullLogger';
+import { audioSwarm } from './AudioSwarm';
 
 export interface VoicePersona {
   id: string;
@@ -22,218 +38,492 @@ export interface VoicePersona {
 }
 
 export const PRESET_VOICE_PERSONAS: VoicePersona[] = [
-  // --- GEMINI CLOUD VOICES ---
-  {
-    id: 'gemini-puck',
-    name: 'Gemini Puck (Dynamic Studio)',
-    description: 'Upbeat, energetic, crystal-clear Gemini sovereign cloud voice.',
-    badge: 'Gemini Cloud',
-    gender: 'female',
-    preferredLang: 'en-US',
-    defaultPitch: 1.04,
-    defaultRate: 1.05,
-    filterPreset: 'studio',
-    isGemini: true
-  },
-  {
-    id: 'gemini-charon',
-    name: 'Gemini Charon (Deep Authoritative)',
-    description: 'Deep, gravitas-laden resonant sovereign cadence by Gemini.',
-    badge: 'Gemini Cloud',
-    gender: 'male',
-    preferredLang: 'en-US',
-    defaultPitch: 0.82,
-    defaultRate: 0.96,
-    filterPreset: 'subbass',
-    isGemini: true
-  },
-  {
-    id: 'gemini-fenrir',
-    name: 'Gemini Fenrir (Authoritative Executive)',
-    description: 'Balanced, commanding executive presence for technical briefs.',
-    badge: 'Gemini Cloud',
-    gender: 'female',
-    preferredLang: 'en-GB',
-    defaultPitch: 0.94,
-    defaultRate: 1.0,
-    filterPreset: 'crisp',
-    isGemini: true
-  },
-  {
-    id: 'gemini-kore',
-    name: 'Gemini Kore (Warm Narrative)',
-    description: 'Smooth, natural, podcast-grade intimate warmth.',
-    badge: 'Gemini Cloud',
-    gender: 'female',
-    preferredLang: 'en-US',
-    defaultPitch: 1.0,
-    defaultRate: 1.0,
-    filterPreset: 'studio',
-    isGemini: true
-  },
-  {
-    id: 'gemini-aoede',
-    name: 'Gemini Aoede (Harmonic Ethereal)',
-    description: 'Melodic, serene, ambient harmonic cadence.',
-    badge: 'Gemini Cloud',
-    gender: 'female',
-    preferredLang: 'en-US',
-    defaultPitch: 1.12,
-    defaultRate: 0.95,
-    filterPreset: 'studio',
-    isGemini: true
-  },
-
-  // --- FREE OPEN-SOURCE PROFESSIONAL VOICE MODULES (API LIMIT FAILSAFE) ---
+  // --- FREE OPEN-SOURCE NATIVE ENGLISH NEURAL VOICES (DEFAULT · UNLIMITED · ZERO QUOTA) ---
   {
     id: 'kokoro-82m-aurelia',
     name: 'Kokoro-82M Aurelia (Open Weights)',
-    description: 'State-of-the-art open-weights 82M neural model. Ultra-realistic expressive female cadence.',
-    badge: 'Kokoro-82M Neural',
+    description: 'Ultra-realistic native American English female neural voice. 100% Free & Unlimited.',
+    badge: 'Open-Source US Neural',
     gender: 'female',
     preferredLang: 'en-US',
     defaultPitch: 1.0,
     defaultRate: 1.0,
     filterPreset: 'studio',
-    isOpenSourceModule: true
-  },
-  {
-    id: 'kokoro-82m-bella',
-    name: 'Kokoro-82M Bella (British Articulate)',
-    description: 'Crisp Oxford British articulation powered by open-source Kokoro neural architecture.',
-    badge: 'Kokoro-82M Neural',
-    gender: 'female',
-    preferredLang: 'en-GB',
-    defaultPitch: 1.02,
-    defaultRate: 0.98,
-    filterPreset: 'crisp',
     isOpenSourceModule: true
   },
   {
     id: 'orpheus-openvoice-seraphina',
     name: 'Orpheus OpenVoice Seraphina',
-    description: 'Deeply expressive, fluid intonation open-source module with zero rate-limit restrictions.',
-    badge: 'Orpheus OpenVoice',
+    description: 'Warm, expressive native American English female voice with natural human cadence.',
+    badge: 'Open-Source US Neural',
     gender: 'female',
     preferredLang: 'en-US',
-    defaultPitch: 0.96,
-    defaultRate: 1.02,
+    defaultPitch: 1.0,
+    defaultRate: 1.0,
     filterPreset: 'studio',
+    isOpenSourceModule: true
+  },
+  {
+    id: 'orpheus-openvoice-atlas',
+    name: 'Orpheus OpenVoice Atlas',
+    description: 'Resonant, natural native American English male voice for technical briefings.',
+    badge: 'Open-Source US Neural',
+    gender: 'male',
+    preferredLang: 'en-US',
+    defaultPitch: 1.0,
+    defaultRate: 1.0,
+    filterPreset: 'subbass',
     isOpenSourceModule: true
   },
   {
     id: 'piper-neural-alpha',
     name: 'Piper High-Fidelity Alpha',
-    description: 'Fast, clean, local ONNX neural speech synthesis module optimized for termux & web.',
-    badge: 'Piper ONNX Neural',
+    description: 'Crisp, fast native American English neural voice with zero rate limits.',
+    badge: 'Piper US Neural',
     gender: 'female',
     preferredLang: 'en-US',
-    defaultPitch: 1.05,
-    defaultRate: 1.08,
+    defaultPitch: 1.0,
+    defaultRate: 1.02,
+    filterPreset: 'crisp',
+    isOpenSourceModule: true
+  },
+  {
+    id: 'kokoro-82m-bella',
+    name: 'Kokoro-82M Bella (British Articulate)',
+    description: 'Crisp Oxford British English articulation powered by open neural synthesis.',
+    badge: 'Open-Source UK Neural',
+    gender: 'female',
+    preferredLang: 'en-GB',
+    defaultPitch: 1.0,
+    defaultRate: 1.0,
     filterPreset: 'crisp',
     isOpenSourceModule: true
   },
   {
     id: 'bark-sovereign-celeste',
     name: 'Bark Sovereign Celeste',
-    description: 'Transformer-based generative audio module with emotional inflections and breathing cues.',
-    badge: 'Bark Generative',
+    description: 'Expressive native American English narrative voice with smooth intonation.',
+    badge: 'Open-Source US Neural',
     gender: 'female',
     preferredLang: 'en-US',
-    defaultPitch: 0.98,
-    defaultRate: 0.96,
+    defaultPitch: 1.0,
+    defaultRate: 1.0,
     filterPreset: 'studio',
     isOpenSourceModule: true
   },
   {
     id: 'edge-openneural-nova',
     name: 'Edge OpenNeural Nova',
-    description: 'High-speed professional neural module with custom formant and vocal warmth modulation.',
-    badge: 'Edge OpenNeural',
+    description: 'High-clarity native American English studio voice.',
+    badge: 'Open-Source US Neural',
     gender: 'female',
     preferredLang: 'en-US',
-    defaultPitch: 1.1,
-    defaultRate: 1.05,
+    defaultPitch: 1.0,
+    defaultRate: 1.0,
     filterPreset: 'crisp',
     isOpenSourceModule: true
   },
+
+  // --- OPTIONAL GEMINI CLOUD VOICES ---
   {
-    id: 'orpheus-openvoice-atlas',
-    name: 'Orpheus OpenVoice Atlas',
-    description: 'Resonant, authoritative male open-source module for technical briefings.',
-    badge: 'Orpheus OpenVoice',
+    id: 'gemini-kore',
+    name: 'Gemini Kore (Warm Narrative)',
+    description: 'Smooth, natural American English podcast-grade voice (uses Open Neural when quota reached).',
+    badge: 'Gemini Cloud',
+    gender: 'female',
+    preferredLang: 'en-US',
+    defaultPitch: 1.0,
+    defaultRate: 1.0,
+    filterPreset: 'studio',
+    isGemini: true
+  },
+  {
+    id: 'gemini-puck',
+    name: 'Gemini Puck (Dynamic Studio)',
+    description: 'Upbeat, energetic American English cloud voice.',
+    badge: 'Gemini Cloud',
+    gender: 'female',
+    preferredLang: 'en-US',
+    defaultPitch: 1.0,
+    defaultRate: 1.0,
+    filterPreset: 'studio',
+    isGemini: true
+  },
+  {
+    id: 'gemini-charon',
+    name: 'Gemini Charon (Deep Authoritative)',
+    description: 'Deep, authoritative American English male voice.',
+    badge: 'Gemini Cloud',
     gender: 'male',
     preferredLang: 'en-US',
-    defaultPitch: 0.88,
+    defaultPitch: 0.95,
     defaultRate: 1.0,
     filterPreset: 'subbass',
-    isOpenSourceModule: true
+    isGemini: true
+  },
+  {
+    id: 'gemini-fenrir',
+    name: 'Gemini Fenrir (Authoritative Executive)',
+    description: 'Balanced, commanding English executive presence.',
+    badge: 'Gemini Cloud',
+    gender: 'male',
+    preferredLang: 'en-US',
+    defaultPitch: 0.98,
+    defaultRate: 1.0,
+    filterPreset: 'crisp',
+    isGemini: true
+  },
+  {
+    id: 'gemini-aoede',
+    name: 'Gemini Aoede (Harmonic Ethereal)',
+    description: 'Melodic, serene American English cadence.',
+    badge: 'Gemini Cloud',
+    gender: 'female',
+    preferredLang: 'en-US',
+    defaultPitch: 1.0,
+    defaultRate: 1.0,
+    filterPreset: 'studio',
+    isGemini: true
   }
 ];
 
-// Blacklist of novelty, musical, ringtone, and sound effect voice names across macOS, iOS, Windows, Linux, Android
+// Blacklist of novelty, musical, ringtone, and foreign/non-native accented voice patterns
 export const EXCLUDED_NOVELTY_VOICE_PATTERNS = [
   'bad news', 'good news', 'bells', 'boing', 'bubbles', 'cellos',
   'deranged', 'hysterical', 'pipe organ', 'trinoids', 'whisper', 'zarvox',
   'bahh', 'albert', 'junior', 'ralph', 'fred', 'kathy', 'princess', 'wobble',
   'sin-ji', 'tink', 'chime', 'ringtone', 'alert', 'sound', 'tone', 'organ',
-  'basso', 'trill', 'cell', 'echo', 'jester', 'robot', 'alien', 'noise'
+  'basso', 'trill', 'cell', 'echo', 'jester', 'robot', 'alien', 'noise',
+  'espeak', 'festival', 'mbrola', 'french', 'german', 'spanish', 'italian',
+  'portuguese', 'russian', 'hindi', 'chinese', 'japanese', 'korean', 'arabic',
+  'dutch', 'polish', 'turkish', 'swedish', 'norwegian', 'danish', 'finnish',
+  'greek', 'hebrew', 'indonesia', 'vietnam', 'thai', 'czech', 'hungarian',
+  'romanian', 'slovak', 'ukrainian', 'afrikaans', 'catalan', 'filipino', 'malay'
 ];
 
-export const isCleanHumanVoice = (voice: SpeechSynthesisVoice): boolean => {
-  const name = voice.name.toLowerCase();
+export const isStrictNativeEnglishVoice = (voice: SpeechSynthesisVoice): boolean => {
+  const lang = (voice.lang || '').toLowerCase().replace('_', '-');
+  // Strictly allow only native English locales (US, UK, AU, CA, NZ, IE)
+  const isNativeEnLocale =
+    lang === 'en-us' ||
+    lang === 'en-gb' ||
+    lang === 'en-au' ||
+    lang === 'en-ca' ||
+    lang === 'en-nz' ||
+    lang === 'en-ie' ||
+    lang === 'en';
+  if (!isNativeEnLocale) return false;
+
+  const name = (voice.name || '').toLowerCase();
   for (const pattern of EXCLUDED_NOVELTY_VOICE_PATTERNS) {
     if (name.includes(pattern)) return false;
   }
   return true;
 };
 
+export const isCleanHumanVoice = (voice: SpeechSynthesisVoice): boolean => {
+  return isStrictNativeEnglishVoice(voice);
+};
+
 export const selectBestSystemVoice = (
   availableVoices: SpeechSynthesisVoice[],
   preferredNameOrUri?: string,
   preferredGender?: 'female' | 'male' | 'synthetic',
-  preferredLang?: string
+  preferredLang: string = 'en-US'
 ): SpeechSynthesisVoice | null => {
   if (!availableVoices || availableVoices.length === 0) return null;
 
-  const cleanVoices = availableVoices.filter(isCleanHumanVoice);
-  const pool = cleanVoices.length > 0 ? cleanVoices : availableVoices;
+  // 1. Strictly filter to native English voices ONLY so it never speaks with a foreign language accent
+  const nativeEnVoices = availableVoices.filter(isStrictNativeEnglishVoice);
+  const fallbackEnVoices = availableVoices.filter((v) => (v.lang || '').toLowerCase().startsWith('en'));
+  const pool = nativeEnVoices.length > 0 ? nativeEnVoices : fallbackEnVoices.length > 0 ? fallbackEnVoices : availableVoices;
 
-  if (preferredNameOrUri) {
-    const exact = pool.find(v => 
-      v.name.toLowerCase() === preferredNameOrUri.toLowerCase() || 
-      v.name.toLowerCase().includes(preferredNameOrUri.toLowerCase()) || 
-      v.voiceURI === preferredNameOrUri
+  // Infer gender and US/UK preference if preferredNameOrUri is one of our preset personas
+  const matchedPersona = preferredNameOrUri
+    ? PRESET_VOICE_PERSONAS.find(
+        (p) => p.id.toLowerCase() === preferredNameOrUri.toLowerCase() || p.name.toLowerCase() === preferredNameOrUri.toLowerCase()
+      )
+    : undefined;
+
+  const targetGender = preferredGender || matchedPersona?.gender || 'female';
+  const targetLang = (matchedPersona?.preferredLang || preferredLang || 'en-US').toLowerCase().replace('_', '-');
+
+  // 2. If preferredNameOrUri directly matches a real native English browser voice, return it
+  if (preferredNameOrUri && !matchedPersona) {
+    const exact = pool.find(
+      (v) =>
+        v.name.toLowerCase() === preferredNameOrUri.toLowerCase() ||
+        v.name.toLowerCase().includes(preferredNameOrUri.toLowerCase()) ||
+        v.voiceURI === preferredNameOrUri
     );
     if (exact) return exact;
   }
 
-  let langPool = pool;
-  if (preferredLang) {
-    const langFiltered = pool.filter(v => v.lang.toLowerCase().includes(preferredLang.toLowerCase().slice(0, 2)));
-    if (langFiltered.length > 0) langPool = langFiltered;
-  }
+  // 3. Prefer voices matching the target English dialect (e.g. en-US first)
+  const usVoices = pool.filter((v) => (v.lang || '').toLowerCase().replace('_', '-') === 'en-us');
+  const dialectVoices = pool.filter((v) => (v.lang || '').toLowerCase().replace('_', '-') === targetLang);
+  const langPool = dialectVoices.length > 0 ? dialectVoices : usVoices.length > 0 ? usVoices : pool;
 
-  const femaleKeywords = ['female', 'zira', 'samantha', 'victoria', 'karen', 'moira', 'fiona', 'tessa', 'veena', 'allison', 'ava', 'susan', 'google us english', 'google uk english female', 'natural', 'neural', 'en-us'];
-  const maleKeywords = ['male', 'alex', 'fred', 'daniel', 'oliver', 'george', 'thomas', 'google uk english male'];
+  // 4. Ranked priority list of the most realistic native English human system voices
+  const highRealismFemalePriority = [
+    'ava online (natural)',
+    'aria online (natural)',
+    'jenny online (natural)',
+    'michelle online (natural)',
+    'ana online (natural)',
+    'sonia online (natural)',
+    'libby online (natural)',
+    'google us english',
+    'google uk english female',
+    'samantha',
+    'ava',
+    'allison',
+    'susan',
+    'zira',
+    'karen',
+    'moira',
+    'victoria',
+    'natural',
+    'neural'
+  ];
 
-  const keywords = preferredGender === 'male' ? maleKeywords : femaleKeywords;
-  for (const kw of keywords) {
-    const matched = langPool.find(v => v.name.toLowerCase().includes(kw));
+  const highRealismMalePriority = [
+    'andrew online (natural)',
+    'brian online (natural)',
+    'guy online (natural)',
+    'christopher online (natural)',
+    'eric online (natural)',
+    'roger online (natural)',
+    'steffan online (natural)',
+    'ryan online (natural)',
+    'google uk english male',
+    'google us english',
+    'alex',
+    'daniel',
+    'oliver',
+    'david',
+    'mark',
+    'natural',
+    'neural'
+  ];
+
+  const priorityKeywords = targetGender === 'male' ? highRealismMalePriority : highRealismFemalePriority;
+  for (const kw of priorityKeywords) {
+    const matched = langPool.find((v) => v.name.toLowerCase().includes(kw));
     if (matched) return matched;
   }
 
   return langPool[0] || pool[0] || null;
 };
 
-import { dev_null } from './devNullLogger';
-import { audioSwarm } from './AudioSwarm';
+/**
+ * 🧠 INTELLIGENT ORAL NARRATIVE EXTRACTOR
+ * Strips non-oral noise (fenced code blocks, diff hunks, line numbers, file paths with line numbers,
+ * JSON dumps, hex hashes, URLs, and raw CLI syntax) while preserving 100% of the coherent prose
+ * that the model intends to orally convey, regardless of total length.
+ */
+export function extractCoherentOralNarrative(rawText: string): string {
+  if (!rawText || typeof rawText !== 'string') return '';
+
+  let text = rawText;
+
+  // 1. If the model explicitly wrapped spoken segments in <oral>...</oral> or [ORAL]...[/ORAL], extract those
+  const explicitOralMatches = Array.from(
+    text.matchAll(/<(?:oral|speak|voice)>([\s\S]*?)<\/(?:oral|speak|voice)>|\[(?:ORAL|VOICE_SUMMARY)\]([\s\S]*?)\[\/(?:ORAL|VOICE_SUMMARY)\]/gi)
+  );
+  if (explicitOralMatches.length > 0) {
+    text = explicitOralMatches.map((m) => (m[1] || m[2] || '').trim()).filter(Boolean).join('. ');
+  }
+
+  // 2. Remove <think>...</think> reasoning blocks (including unclosed trailing think blocks)
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, ' ');
+  text = text.replace(/<think>[\s\S]*$/gi, ' ');
+
+  // 3. Remove internal tool call XML / JSON trace blocks
+  text = text.replace(/<(?:tool_call|function_calls|tool_result|artifact)>[\s\S]*?<\/(?:tool_call|function_calls|tool_result|artifact)>/gi, ' ');
+  text = text.replace(/\[diff_block_start\][\s\S]*?\[diff_block_end\]/gi, ' ');
+
+  // 4. Remove fenced multi-line code blocks (```...``` and ~~~...~~~) BEFORE any backtick stripping
+  text = text.replace(/```[\s\S]*?```/g, ' ');
+  text = text.replace(/~~~[\s\S]*?~~~/g, ' ');
+  // If there is an unclosed code block at the very end of a streaming message, omit the raw code body
+  text = text.replace(/```[a-zA-Z0-9_-]*\n[\s\S]*$/g, ' ');
+
+  // 5. Filter line-by-line to remove diff hunks, numbered file lines, table borders, and raw code lines
+  const lines = text.split('\n');
+  const spokenLines: string[] = [];
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) {
+      spokenLines.push('');
+      continue;
+    }
+
+    // Skip unified diff markers and hunk headers
+    if (/^@@\s*-\d+/.test(trimmed) || /^(\+\+\+|---)\s+\S+/.test(trimmed)) continue;
+    // Skip numbered source file dump lines like "142: const foo = bar;" or "142 | const foo"
+    if (/^\d{1,5}\s*[:|]\s+/.test(trimmed)) continue;
+    // Skip markdown table border rows like "|---|---|"
+    if (/^\|?[\s\-:|]+\|[\s\-:|]*$/.test(trimmed)) continue;
+    // Skip standalone JSON / object / import / export / shell command lines
+    if (/^(import\s+.*from\s+|export\s+(const|interface|type|function|class)\s+|const\s+\w+\s*=|let\s+\w+\s*=|function\s+\w+\s*\(|\{\s*"|\[\s*\{|\$\s+(npm|npx|git|cd|curl|grep|cat)\s+)/.test(trimmed)) {
+      continue;
+    }
+
+    let line = trimmed;
+
+    // Convert markdown headings and bullets into natural sentence boundaries
+    line = line.replace(/^#{1,6}\s+/, '');
+    line = line.replace(/^(?:[-*•+]|\d+\.)\s+/, '');
+
+    // Ensure lines that were headings or bullet points end with punctuation so they don't run together
+    if (line.length > 0 && !/[.!?:;,]$/.test(line)) {
+      line += '.';
+    }
+
+    spokenLines.push(line);
+  }
+
+  text = spokenLines.join(' ');
+
+  // 6. Handle inline code backticks (`...`):
+  //    - If the backticked content is a file path with line numbers, CLI flag, or code expression, strip or humanize it.
+  //    - If it's a normal name or term (e.g. `Chronicles of Aetherion`), keep the words.
+  text = text.replace(/`([^`]+)`/g, (_match, inner: string) => {
+    const val = inner.trim();
+    // Omit CLI flags, shell commands, or code syntax with braces/semicolons/arrows
+    if (/^--?[a-zA-Z0-9_-]+/.test(val) || /[;{}()=>[\]$\\]/.test(val) || /^(npm|npx|git|tsc|vite)\b/i.test(val)) {
+      return '';
+    }
+    // If it's a file path like "src/components/ChatModule.tsx:1827" or "/api/ui-master-kit/patch-ui"
+    if (val.includes('/') || /\.[a-z]{2,4}(:\d+)?$/i.test(val)) {
+      // Strip line/column numbers like :1827:12
+      const withoutLines = val.replace(/:\d+(:\d+)?/g, '');
+      const segments = withoutLines.split('/').filter(Boolean);
+      const lastSeg = segments[segments.length - 1] || '';
+      // Remove file extension (.tsx, .ts, .json, .md) for natural speech
+      const humanName = lastSeg
+        .replace(/\.(tsx|ts|jsx|js|json|md|css|html)$/i, '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/[-_]/g, ' ');
+      return humanName;
+    }
+    return val;
+  });
+
+  // 7. Strip parenthesized file paths / line number references like "(src/components/Foo.tsx, lines 100-200)" or "(line 142)"
+  text = text.replace(/\(\s*(?:lines?\s*\d+[\s\-\d,]*|(?:\/?[\w.-]+\/)+[\w.-]+(?::\d+)?[^)]*)\s*\)/gi, ' ');
+  text = text.replace(/\b(?:lines?\s+\d+(?:\s*(?:-|to|–)\s*\d+)?)\b/gi, ' ');
+
+  // 8. Replace bare file paths with line numbers in prose (e.g. src/components/Header.tsx:240) with clean component name
+  text = text.replace(/\b(?:\/?[\w.-]+\/)+([\w.-]+)\.(?:tsx|ts|jsx|js|json|md|css|py|sh)(?::\d+(?::\d+)?)?\b/gi, (_m, baseName: string) => {
+    return baseName.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ');
+  });
+
+  // 9. Remove raw URLs, hex/SHA hashes, and UUIDs
+  text = text.replace(/https?:\/\/[^\s)]+/gi, ' ');
+  text = text.replace(/\b0x[a-fA-F0-9]{4,}(?:\.\.\.[a-fA-F0-9]+)?\b/g, ' ');
+  text = text.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, ' ');
+
+  // 10. Remove markdown links [label](url) -> keep label
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  // Remove bracketed telemetry tags like [RELEVANT], [INFO], [0x99a]
+  text = text.replace(/\[[A-Z0-9_:\s-]{2,24}\]/g, ' ');
+
+  // 11. Strip remaining markdown formatting symbols and normalize prosody
+  text = text
+    .replace(/[*_~#|>]/g, ' ')
+    .replace(/\be\.g\.\b/gi, 'for example')
+    .replace(/\bi\.e\.\b/gi, 'that is')
+    .replace(/\bvs\.\b/gi, 'versus')
+    .replace(/\betc\.\b/gi, 'et cetera')
+    .replace(/\s*&\s*/g, ' and ')
+    .replace(/(\w)\/(\w)/g, '$1 or $2')
+    .replace(/\.{2,}/g, '.')
+    .replace(/\s+([.,!?;:])/g, '$1')
+    .replace(/([.,!?;:]){2,}/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return text;
+}
+
+/**
+ * ♾️ INFINITE-LENGTH COHERENT SENTENCE CHUNKER
+ * Splits a sanitized oral narrative of any length (even 100,000+ chars) into natural,
+ * sentence-aligned chunks (~190 chars) so browser SpeechSynthesis and Cloud TTS
+ * never truncate, timeout, or drop words mid-sentence.
+ */
+export function splitIntoCoherentSpeechChunks(oralText: string, maxChunkChars: number = 195): string[] {
+  const cleaned = oralText.trim();
+  if (!cleaned) return [];
+
+  // Split by sentence boundaries (. ! ? ;) while keeping punctuation attached
+  const rawSentences = cleaned.match(/[^.!?;]+[.!?;]+|[^.!?;]+$/g) || [cleaned];
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  const pushClauseSplits = (longSentence: string) => {
+    // Split long sentences on commas, colons, or dashes first
+    const clauses = longSentence.split(/(?<=[,:—–-])\s+/);
+    let temp = '';
+    for (const clause of clauses) {
+      if ((temp + ' ' + clause).trim().length <= maxChunkChars) {
+        temp = (temp + ' ' + clause).trim();
+      } else {
+        if (temp) chunks.push(temp);
+        if (clause.length <= maxChunkChars) {
+          temp = clause.trim();
+        } else {
+          // Word-boundary split for ultra-long single clauses
+          const words = clause.split(/\s+/);
+          let wordBuf = '';
+          for (const w of words) {
+            if ((wordBuf + ' ' + w).trim().length <= maxChunkChars) {
+              wordBuf = (wordBuf + ' ' + w).trim();
+            } else {
+              if (wordBuf) chunks.push(wordBuf);
+              wordBuf = w;
+            }
+          }
+          temp = wordBuf;
+        }
+      }
+    }
+    if (temp) chunks.push(temp);
+  };
+
+  for (const sentence of rawSentences) {
+    const s = sentence.trim();
+    if (!s) continue;
+
+    if (s.length > maxChunkChars) {
+      if (currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = '';
+      }
+      pushClauseSplits(s);
+    } else if ((currentChunk + ' ' + s).trim().length <= maxChunkChars) {
+      currentChunk = (currentChunk + ' ' + s).trim();
+    } else {
+      if (currentChunk) chunks.push(currentChunk);
+      currentChunk = s;
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks.filter((c) => c.length > 0);
+}
 
 export interface AcousticFilterState {
-  pitch: number;      // 0.5 to 2.0
-  rate: number;       // 0.5 to 2.0
-  warmth: number;     // 0.0 to 1.0 (Low-shelf boost)
-  resonance: number;  // 0.0 to 1.0 (Presence Q-filter)
+  pitch: number;        // 0.5 to 2.0
+  rate: number;         // 0.5 to 2.0
+  warmth: number;       // 0.0 to 1.0 (Low-shelf boost)
+  resonance: number;    // 0.0 to 1.0 (Presence Q-filter)
   formantShift: number; // -5 to +5 semitones
 }
 
@@ -269,8 +559,9 @@ export class SovereignAcousticProcessor {
 export const sovereignAcousticProcessor = new SovereignAcousticProcessor();
 
 /**
- * 🛰️ SOVEREIGN VOICE QUEUE (FIFO)
- * Prevents race conditions where multiple neural models attempt to speak simultaneously.
+ * 🛰️ SOVEREIGN VOICE QUEUE (FIFO + INFINITE STREAMING)
+ * Prevents race conditions where multiple neural models attempt to speak simultaneously,
+ * while supporting arbitrarily long multi-chunk reading sessions.
  */
 export interface QueuedUtterance {
   id: string;
@@ -278,7 +569,8 @@ export interface QueuedUtterance {
   personaId: string;
   rate: number;
   pitch: number;
-  audioUrl?: string; // If provided, use Audio element instead of SpeechSynthesis
+  audioUrl?: string;
+  appendToQueue?: boolean;
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (err: any) => void;
@@ -304,16 +596,16 @@ export class SovereignVoiceQueue {
       rate: item.rate,
       pitch: item.pitch,
       personaId: item.personaId,
+      appendToQueue: item.appendToQueue,
       onStart: item.onStart,
       onEnd: item.onEnd,
       onError: item.onError
     });
   }
 
-  public cancel(id?: string) {
+  public cancel(_id?: string) {
     audioSwarm.stopAll();
   }
 }
 
 export const sovereignVoiceQueue = SovereignVoiceQueue.getInstance();
-

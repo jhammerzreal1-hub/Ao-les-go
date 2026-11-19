@@ -1,0 +1,44 @@
+[
+  {
+    "id": "snap-mwmree69-3a133f",
+    "label": "Forensic Supremacy Verification Generation",
+    "createdAt": "2026-11-18T23:35:21.921Z",
+    "merkleRootSha256": "f0bdd7cc382e536e9b1ae821dc78813df9e99d93e21bc7519762b68e8a2ae104",
+    "installedAppsCount": 5,
+    "installedAppIds": [
+      "vlc-media",
+      "obs-studio",
+      "sovereign-arcade",
+      "discord",
+      "steam"
+    ],
+    "activeDaemonsCount": 5,
+    "walletsCount": 2,
+    "customizationProfile": {
+      "themeId": "aurelius-gold",
+      "activeWorkspace": 1
+    },
+    "snapshotDigestSha256": "3a133ff78622fbfef670997004027c5bedbd3f23c2551df4717b7de05d775657"
+  },
+  {
+    "id": "snap-mwmredzt-68882e",
+    "label": "Genesis Baseline Snapshot (H-FID 100/100 · UID 0 Ring -3)",
+    "createdAt": "2026-11-18T23:35:21.689Z",
+    "merkleRootSha256": "23d434e97c431c37494e820d8700ee477986f3ef1c86156cde1f2423adc915c1",
+    "installedAppsCount": 5,
+    "installedAppIds": [
+      "vlc-media",
+      "obs-studio",
+      "sovereign-arcade",
+      "discord",
+      "steam"
+    ],
+    "activeDaemonsCount": 5,
+    "walletsCount": 2,
+    "customizationProfile": {
+      "themeId": "aurelius-gold",
+      "activeWorkspace": 1
+    },
+    "snapshotDigestSha256": "68882e7df8f8e050f49cbf23cd5d297d90a3e5bd569fa252148f532a8ba98f56"
+  }
+]

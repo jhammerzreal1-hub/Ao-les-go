@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Search, 
@@ -42,7 +53,9 @@ import {
   Package,
   ShieldCheck,
   BookmarkPlus,
-  Layers
+  Layers,
+  Folder,
+  Settings
 } from 'lucide-react';
 import type { ModuleType, Artifact } from '../types';
 
@@ -123,13 +136,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       { id: 'api-secrets', title: 'Internal Secrets Vault & Gateway', desc: 'AES-256-GCM encrypted server secrets handler, dynamic masking & proxy workbench', icon: Key, color: 'text-emerald-400', badge: 'AES-256-GCM' },
       { id: 'presets', title: 'Prompt Presets', desc: 'Curated architectural directives, code reviews & creative templates', icon: BookmarkPlus, color: 'text-amber-400', badge: 'Templates' },
       { id: 'audit', title: 'Forensic Audit Ledger', desc: 'Immutable execution audit trail & cryptographic proof hashes', icon: ShieldCheck, color: 'text-emerald-400', badge: 'WORM' },
-      { id: 'swarm-test', title: 'Swarm Diagnostic Matrix', desc: 'Live multi-subsystem health, secrets, linter & endpoint verification', icon: Activity, color: 'text-amber-400', badge: 'Diagnostics' },
+      { id: 'swarm-test', title: 'Forensic Audit, Diagnostics & All-Detail Manual', desc: 'Deep SHA-256 file forensics, 46+ subfunction technical manual, expansion blueprints & 1-click self-repair', icon: Activity, color: 'text-amber-400', badge: 'Forensic' },
+      { id: 'crypto-wallet', title: 'Sovereign Dual-Vault Crypto Wallets', desc: 'Real secp256k1 & Ed25519 BTC/ETH/SOL wallets for Personal Investing & UID 0 Autonomous 5-Min Execution', icon: Key, color: 'text-emerald-400', badge: 'BTC·ETH·SOL' },
+      { id: 'macro-telemetry', title: 'Macro-Telemetry Laplace-14 (h=2s) 99% Engine', desc: '20 global equities & crypto overlapped canvas, 99% conformal band & 5-minute early-warning alerts', icon: Activity, color: 'text-rose-400', badge: '99% Cert' },
       { id: 'packager', title: 'Android APK Packager', desc: 'Package orchestrator modules into Capacitor Android builds', icon: Package, color: 'text-amber-400', badge: 'APK' },
       { id: 'download-models', title: 'Model Wardrobe', desc: 'Offline model downloads & quantized engine management', icon: Download, color: 'text-amber-400', badge: 'GGUF' },
-      { id: 'universal-installer', title: 'Universal Installer', desc: 'Cross-platform bootstrap scripts & environment setup', icon: Download, color: 'text-amber-400', badge: 'Bootstrap' },
+      { id: 'universal-installer', title: 'Universal Software Center & Game Launcher', desc: 'Install games, Steam, Discord, OBS, VLC, apt/brew/winget/npm/pip & direct URL binaries', icon: Download, color: 'text-amber-400', badge: 'Store' },
       { id: 'knowledge-graph', title: 'Autonomous Memory Knowledge Graph', desc: 'Living interactive knowledge topology & session consolidation', icon: Network, color: 'text-amber-400', badge: 'Graph' },
       { id: 'tool-shed', title: 'Dynamic Micro-Tool Shed', desc: 'On-the-fly AI tool generator & client JS sandbox runner', icon: Wrench, color: 'text-emerald-400', badge: 'Sandbox' },
       { id: 'autonomy-supervisor', title: 'Expanded Runtime Autonomy Supervisor', desc: 'Proactive background scratchpad & substrate diagnostics', icon: Activity, color: 'text-cyan-400', badge: 'Autonomy' },
+      { id: 'file-manager', title: 'Sovereign Files (OS Explorer)', desc: 'Real filesystem browser, file editor, SHA-256 verification & downloads', icon: Folder, color: 'text-amber-400', badge: 'Real FS' },
+      { id: 'terminal', title: 'Root Terminal (UID 0 Shell)', desc: 'Interactive native host command shell with cwd & Ring -3 environment', icon: Terminal, color: 'text-emerald-400', badge: 'UID 0' },
+      { id: 'task-manager', title: 'Process & Kernel Monitor', desc: 'Real host processes, PID signals, listening sockets & CPU/RAM metrics', icon: Activity, color: 'text-sky-400', badge: 'Ring -3' },
+      { id: 'os-settings', title: 'OS Control Center & Multi-OS', desc: 'Windows, macOS & Linux standalone launchers, desktop mode & hypervisor settings', icon: Settings, color: 'text-zinc-200', badge: 'Cross-OS' },
     ];
 
     for (const m of modulesConfig) {
@@ -380,53 +399,63 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   let flatCounter = -1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-14 sm:pt-20 px-3 sm:px-4 bg-zinc-950/80 backdrop-blur-md transition-all animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-16 pb-4 px-3 sm:px-4 bg-zinc-950/80 backdrop-blur-md transition-all animate-fadeIn">
       {/* Backdrop click to dismiss */}
       <div className="fixed inset-0" onClick={onClose} />
 
       {/* Main Command Modal Card */}
       <div 
-        className="relative w-full max-w-2xl bg-zinc-900/95 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[82vh] z-10 text-zinc-100 ring-1 ring-white/10"
+        className="relative w-full max-w-2xl bg-zinc-900/95 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] z-10 text-zinc-100 ring-1 ring-white/10"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}
-        <div className="flex items-center px-4 py-3.5 border-b border-zinc-800 bg-zinc-950/70">
-          <Search className="w-5 h-5 text-amber-400 shrink-0 mr-3 animate-pulse" />
+        <div className="flex items-center gap-2 px-3.5 sm:px-4 py-3 border-b border-zinc-800 bg-zinc-950/70 shrink-0">
+          <Search className="w-5 h-5 text-amber-400 shrink-0" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search all modules, vault artifacts, GitHub repos, or type a command... (Ctrl+K)"
-            className="w-full bg-transparent border-none text-sm sm:text-base text-zinc-100 placeholder-zinc-500 focus:outline-none"
+            placeholder="Search modules, artifacts, repos, or commands..."
+            className="flex-1 min-w-0 bg-transparent border-none text-sm sm:text-base text-zinc-100 placeholder-zinc-500 focus:outline-none"
           />
-          {query ? (
+          {query && (
             <button
+              type="button"
               onClick={() => setQuery('')}
-              className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 ml-2"
+              className="px-2 py-1 rounded-md hover:bg-zinc-800 text-[11px] font-mono text-zinc-400 hover:text-zinc-200 shrink-0 cursor-pointer"
+              title="Clear search"
             >
-              <X className="w-4 h-4" />
+              Clear
             </button>
-          ) : (
-            <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800/80 text-[10px] font-mono text-zinc-400 border border-zinc-700">
-              ESC
-            </kbd>
           )}
+          <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800/80 text-[10px] font-mono text-zinc-400 border border-zinc-700 shrink-0">
+            ESC
+          </kbd>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors shrink-0 cursor-pointer"
+            aria-label="Close command palette"
+            title="Close Command Palette"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Results List */}
         <div 
           ref={listRef}
-          className="flex-1 overflow-y-auto p-2 space-y-4 max-h-[58vh] scrollbar-thin scrollbar-thumb-zinc-700"
+          className="flex-1 min-h-0 overflow-y-auto p-2 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700"
         >
           {filteredCommands.length === 0 ? (
-            <div className="py-14 text-center">
+            <div className="py-12 text-center px-4">
               <Command className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
               <p className="text-sm font-semibold text-zinc-300">No matching commands, artifacts, or repositories found.</p>
               <p className="text-xs text-zinc-500 mt-1">Try searching for "browser", "war room", "youtube", "zenodo", or "image".</p>
             </div>
           ) : (
-            Object.entries(groupedCategories).map(([categoryName, items]) => (
+            Object.entries(groupedCategories || {}).map(([categoryName, items]) => (
               <div key={categoryName} className="space-y-1">
                 <div className="px-3 py-1 text-[11px] font-mono uppercase tracking-wider text-zinc-500 font-semibold flex items-center justify-between">
                   <span>{categoryName}</span>
@@ -451,16 +480,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                             : 'hover:bg-zinc-800/70 border border-transparent text-zinc-200'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0 pr-3">
+                        <div className="flex items-center gap-3 min-w-0 pr-2">
                           <div className={`p-2 rounded-lg bg-zinc-800/90 ${item.color || 'text-zinc-300'} shrink-0 group-hover:scale-105 transition-transform`}>
                             <IconComponent className="w-4 h-4" />
                           </div>
 
                           <div className="min-w-0">
                             <div className="text-xs sm:text-sm font-semibold truncate flex items-center gap-2">
-                              <span>{item.title}</span>
+                              <span className="truncate">{item.title}</span>
                               {item.badge && (
-                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-medium ${
+                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-medium shrink-0 ${
                                   isSelected 
                                     ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' 
                                     : 'bg-zinc-800 text-zinc-400'
@@ -493,8 +522,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         </div>
 
         {/* Command Palette Footer */}
-        <div className="px-4 py-2.5 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between text-[11px] font-mono text-zinc-500">
-          <div className="flex items-center gap-3">
+        <div className="px-3.5 sm:px-4 py-2 bg-zinc-950/80 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-zinc-500 shrink-0">
+          <div className="hidden sm:flex items-center gap-3">
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">↑↓</kbd> Navigate
             </span>
@@ -510,6 +539,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             <Sparkles className="w-3 h-3" />
             <span>AURELIUS UNIFIED INDEX</span>
           </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="sm:hidden px-3 py-1 rounded-lg bg-zinc-800 text-zinc-200 font-sans font-semibold text-xs"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

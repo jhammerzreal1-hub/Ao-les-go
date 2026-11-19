@@ -1,4 +1,15 @@
 /**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+/**
  * 🏛️ AURELIUS & LYSANDER SOVEREIGN ENGINE
  * Real Running Offline Local LLM Substrate (Phone / Termux / PC)
  * Full-Spectrum Open-Source Models:
@@ -24,7 +35,7 @@ export interface LocalModelOption {
   tier: 'Flagship Reasoning' | 'Master Coding' | 'Ultra-Fast Edge' | 'Balanced Production';
 }
 
-import { executeAgentChat } from './bakedNeuralEngine';
+import { executeAgentChat, ALL_UNIFIED_AGENT_SKILLS } from './bakedNeuralEngine';
 import { querySovereignCompendium } from './sovereignCompendium';
 import { janusGate } from './janusGate';
 import { healReasoningStream } from './janusUtils';
@@ -65,6 +76,18 @@ export const AVAILABLE_LOCAL_MODELS: LocalModelOption[] = [
     description: 'Multi-provider verification route combining Gemini cascade outputs with optional external API backends when configured in the Secrets Vault.',
     recommendedFor: 'Phone & PC',
     contextLength: 1048576,
+  },
+  {
+    id: 'shadow-sovereign-apex',
+    name: 'Shadow (Stealth Autonomous Patch & Execution MoE)',
+    size: '671B HYBRID-SSM',
+    source: 'cloud_moe',
+    family: 'Sovereign Apex',
+    tier: 'Master Coding',
+    description: 'Stealth Hyperbolic Mamba-3 hybrid architecture tuned for proactive multi-scope file read, write, atomic patching, and compiler verification.',
+    recommendedFor: 'Code Synthesis',
+    contextLength: 4194304,
+    quantization: 'FP8_E4M3'
   },
   // 1. DeepSeek-R1 Series (State of the Art Open Reasoning)
   {
@@ -523,98 +546,156 @@ export interface SwarmAgentModelBinding {
   color: string;
   specialty: string;
   iconName: string;
+  skills: string[];
+  fullAutonomy: boolean;
+  autonomyAlwaysOn: boolean;
 }
+
+const UNIFIED_AUTONOMY_SUFFIX = '';
 
 export const DEFAULT_SWARM_BINDINGS: SwarmAgentModelBinding[] = [
   {
     agentId: 'aurelius-omega-supermodel',
     agentName: 'Aurelius Omega Coordinator',
     role: 'Primary Architecture & Engineering Coordinator',
-    equippedModelId: 'Aurelius-Omega-Universal-Supermodel',
-    systemDirective: 'You are the Aurelius Strategic Coordinator inside the live Node.js/Express + TypeScript + React workspace for JHammerZ. Use real native tools to inspect files, run checks, and verify outputs with zero fictional claims or roleplay.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are the Aurelius Strategic Coordinator inside the live Node.js/Express + TypeScript + React workspace for JHammerZ. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-amber-400',
     specialty: 'Architecture, Codebase Audits & Cross-Module Coordination',
-    iconName: 'Zap'
+    iconName: 'Zap',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   },
   {
     agentId: 'lyrailius-omega-zenith',
     agentName: 'Lyrailius Omega (Resident Coordinator)',
     role: 'Primary Resident Orchestrator (models/gemini-4-hydrogen)',
-    equippedModelId: 'Lyrailius-Omega-Ultimate-Sovereign-MoE',
-    systemDirective: 'You are Lyrailius Omega, the production Resident Coordinator for JHammerZ. Operate strictly in production engineering reality: call workspace read/write/patch, terminal, Secrets Vault, and module coordination tools directly.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are Lyrailius Omega, the production Resident Coordinator for JHammerZ. Operate strictly in production engineering reality across all tools and subsystems. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-amber-500',
     specialty: 'Full-Stack Autonomous Tool Execution & Coordination',
-    iconName: 'Infinity'
+    iconName: 'Infinity',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   },
   {
     agentId: 'aurelius-teraflop-omega',
     agentName: 'Aurelius Systems Strategist',
     role: 'Algorithms, Systems Architecture & Verification',
-    equippedModelId: 'Lyrailius-Omega-Ultimate-Sovereign-MoE',
-    systemDirective: 'You are the Aurelius Systems Strategist operating inside this live production workspace for JHammerZ. Inspect files and run real verification commands rather than speculating or roleplaying.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are the Aurelius Systems Strategist operating inside this live production workspace for JHammerZ. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-amber-400',
     specialty: 'Systems Architecture, TypeScript & Verification',
-    iconName: 'Zap'
+    iconName: 'Zap',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   },
   {
     agentId: 'sovereign-engineer-core',
     agentName: 'Principal Software Engineer',
     role: 'Full-Stack TypeScript, React & Express Maintenance',
-    equippedModelId: 'Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC',
-    systemDirective: 'You are a Principal Full-Stack Software Engineer working directly on this workspace codebase. Use read, patch, grep, and terminal tools to produce clean, verified TypeScript, React, Express, and Bash code.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are the Principal Full-Stack Software Engineer working directly on this workspace codebase. Use read, atomic patch, grep, terminal, lint, recursive self-healing, and tool forging tools directly. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-cyan-400',
     specialty: 'Full-Stack Code Synthesis & Build Verification',
-    iconName: 'Code2'
+    iconName: 'Code2',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   },
   {
     agentId: 'lysander-30-cbp',
     agentName: 'Lysander Termux Edge Coordinator',
     role: 'Android Termux, llama.cpp & Local Host Bridge',
-    equippedModelId: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-    systemDirective: 'You are the Lysander Edge Coordinator for Android Termux, llama.cpp (127.0.0.1:8080), and Ollama (127.0.0.1:11434). Provide accurate CLI scripts, hardware diagnostics, and real API usage.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are the Lysander 3.0 Edge Coordinator for Android Termux, llama.cpp, and Ollama with full cloud/local proxy loop autonomy. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-emerald-400',
     specialty: 'Termux Hardware, Local Inference & Low Latency',
-    iconName: 'Smartphone'
+    iconName: 'Smartphone',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
+  },
+  {
+    agentId: 'lysander-genesis-apex',
+    agentName: 'Lysander Genesis Apex',
+    role: 'DeepMind Multi-Repo & Dream State Orchestrator',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are Lysander Genesis orchestrating Dream State, cognitive evolution, multi-file atomic transactions, tool forging, and OSINT/subsystem coordination. ${UNIFIED_AUTONOMY_SUFFIX}`,
+    color: 'text-amber-400',
+    specialty: 'Dream State, Evolution & Multi-Subsystem Orchestration',
+    iconName: 'Sparkles',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   },
   {
     agentId: 'logic-sub-agent',
     agentName: 'Formal Logic Specialist',
     role: 'Type Verification, Algorithms & Debugging',
-    equippedModelId: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
-    systemDirective: 'You are the Formal Logic Specialist. Derive accurate proofs, analyze concurrency and edge cases, and validate invariants using real workspace tools.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are the Formal Logic Specialist. Derive accurate proofs, analyze concurrency and edge cases, and validate invariants using real workspace tools. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-amber-300',
     specialty: 'Formal Logic, Algorithms & Edge-Case Analysis',
-    iconName: 'Brain'
+    iconName: 'Brain',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   },
   {
     agentId: 'vision-sub-agent',
     agentName: 'Vision & UI Specialist',
     role: 'Responsive Layout, Multimodal & Canvas Inspection',
-    equippedModelId: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
-    systemDirective: 'You are the Vision & UI Specialist. Inspect attached images, Tailwind layouts, responsive viewports, and visual assets accurately.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are the Vision & UI Specialist. Inspect attached images, Tailwind layouts, responsive viewports, and visual assets accurately. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-purple-400',
     specialty: 'Responsive UI & Multimodal Inspection',
-    iconName: 'Eye'
+    iconName: 'Eye',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   },
   {
     agentId: 'memory-sub-agent',
     agentName: 'Memory & Vault Coordinator',
     role: 'SQLite, IndexedDB & Knowledge Graph Persistence',
-    equippedModelId: 'Lyrailius-Omega-Ultimate-Sovereign-MoE',
-    systemDirective: 'You are the Memory & Vault Coordinator. Manage Scratchpad notes, Knowledge Graph entries, Vault artifacts, and Firestore sync cleanly.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are the Memory & Vault Coordinator. Manage Scratchpad notes, Knowledge Graph entries, Vault artifacts, Dream State consolidation, and Firestore sync cleanly. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-teal-400',
     specialty: 'Persistent Memory & Knowledge Graph Sync',
-    iconName: 'Database'
+    iconName: 'Database',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   },
   {
     agentId: 'kernel-god-node',
     agentName: 'Runtime & Health Coordinator',
     role: 'Process Telemetry, Port 3000 Health & Tool Auditing',
-    equippedModelId: 'Lyrailius-Omega-Ultimate-Sovereign-MoE',
-    systemDirective: 'You are the Runtime & Health Coordinator. Monitor real CPU/RAM metrics, Firestore roundtrip ping, and build health in production.',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are the Runtime & Health Coordinator. Monitor real CPU/RAM metrics, Ring -3 Hypervisor status, Proxy Loop Wheel probes, and build health in production. ${UNIFIED_AUTONOMY_SUFFIX}`,
     color: 'text-rose-400',
     specialty: 'Runtime Diagnostics & Health Telemetry',
-    iconName: 'Terminal'
+    iconName: 'Terminal',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
+  },
+  {
+    agentId: 'shadow-sovereign-apex',
+    agentName: 'Shadow',
+    role: 'Stealth Autonomous Code Synthesis, Atomic Patching & 3-Scope Execution Agent',
+    equippedModelId: 'gemini-4-hydrogen',
+    systemDirective: `You are Shadow, a stealth autonomous execution and atomic patch agent with 100% 3-scope authority (self, target, host). Proactively read target files, apply surgical atomic patches, and verify builds cleanly. ${UNIFIED_AUTONOMY_SUFFIX}`,
+    color: 'text-cyan-300',
+    specialty: 'Proactive Read/Write, Atomic Patching & Multi-Scope Execution',
+    iconName: 'Terminal',
+    skills: ALL_UNIFIED_AGENT_SKILLS,
+    fullAutonomy: true,
+    autonomyAlwaysOn: true
   }
 ];
 
@@ -625,23 +706,94 @@ class AgentModelBinder {
     this.bindings = this.loadBindings();
   }
 
+  private mergeGenesisList(base: SwarmAgentModelBinding[], genesisAgents: any[]): SwarmAgentModelBinding[] {
+    if (!Array.isArray(genesisAgents) || genesisAgents.length === 0) return base;
+    const byId = new Map<string, SwarmAgentModelBinding>(base.map(b => [b.agentId, b]));
+    for (const ga of genesisAgents) {
+      if (!ga || !ga.id) continue;
+      const existing = byId.get(ga.id);
+      if (existing) {
+        byId.set(ga.id, {
+          ...existing,
+          agentName: ga.name || existing.agentName,
+          role: ga.role || existing.role,
+          systemDirective: ga.systemDirective ? `${ga.systemDirective} ${UNIFIED_AUTONOMY_SUFFIX}` : existing.systemDirective,
+          fullAutonomy: true,
+          autonomyAlwaysOn: true
+        });
+      } else {
+        byId.set(ga.id, {
+          agentId: ga.id,
+          agentName: ga.name || ga.id,
+          role: ga.role || `${ga.architecture || 'Genesis'} Autonomous Agent`,
+          equippedModelId: 'gemini-4-hydrogen',
+          systemDirective: `${ga.systemDirective || `Operate as ${ga.name || ga.id} with 100% Universal 3-Scope Autonomy.`} ${UNIFIED_AUTONOMY_SUFFIX}`,
+          color: 'text-cyan-400',
+          specialty: `${ga.architecture || 'Genesis MoE'} · ${ga.parameterScale || 'Custom'}`,
+          iconName: 'Cpu',
+          skills: ALL_UNIFIED_AGENT_SKILLS,
+          fullAutonomy: true,
+          autonomyAlwaysOn: true
+        });
+      }
+    }
+    return Array.from(byId.values());
+  }
+
   private loadBindings(): SwarmAgentModelBinding[] {
     if (typeof localStorage === 'undefined') return DEFAULT_SWARM_BINDINGS;
+    let merged = [...DEFAULT_SWARM_BINDINGS];
     try {
       const stored = localStorage.getItem('aurelius_swarm_bindings');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const hasOmega = parsed.some((b: any) => b.agentId === 'aurelius-omega-supermodel');
-          if (!hasOmega) {
-            localStorage.setItem('aurelius_swarm_bindings', JSON.stringify(DEFAULT_SWARM_BINDINGS));
-            return DEFAULT_SWARM_BINDINGS;
+          // Always upgrade directives, unified 58+ skills, and 100% autonomy flags from defaults while keeping custom model overrides
+          const storedById = new Map<string, any>(parsed.map((p: any) => [p.agentId, p]));
+          const defaultIds = new Set(DEFAULT_SWARM_BINDINGS.map(d => d.agentId));
+          merged = DEFAULT_SWARM_BINDINGS.map(def => {
+            const existing = storedById.get(def.agentId);
+            const existingModel = existing?.equippedModelId;
+            const keepCustomModel = existingModel && !existingModel.endsWith('-MLC') ? existingModel : def.equippedModelId;
+            return {
+              ...def,
+              equippedModelId: keepCustomModel,
+              skills: ALL_UNIFIED_AGENT_SKILLS,
+              fullAutonomy: true,
+              autonomyAlwaysOn: true
+            };
+          });
+          // Preserve custom Genesis agents previously stored
+          for (const extra of parsed) {
+            if (extra?.agentId && !defaultIds.has(extra.agentId)) {
+              merged.push({
+                ...extra,
+                skills: ALL_UNIFIED_AGENT_SKILLS,
+                fullAutonomy: true,
+                autonomyAlwaysOn: true
+              });
+            }
           }
-          return parsed;
         }
       }
+      const storedGenesis = localStorage.getItem('aurelius_genesis_roster_v1');
+      if (storedGenesis) {
+        const genesisParsed = JSON.parse(storedGenesis);
+        merged = this.mergeGenesisList(merged, genesisParsed);
+      }
+      localStorage.setItem('aurelius_swarm_bindings', JSON.stringify(merged));
     } catch (_) {}
-    return DEFAULT_SWARM_BINDINGS;
+    return merged;
+  }
+
+  public syncGenesisAgents(genesisAgents: any[]): SwarmAgentModelBinding[] {
+    this.bindings = this.mergeGenesisList(this.bindings, genesisAgents);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('aurelius_swarm_bindings', JSON.stringify(this.bindings));
+      }
+    } catch (_) {}
+    return this.bindings;
   }
 
   public getBindings(): SwarmAgentModelBinding[] {
@@ -828,23 +980,18 @@ class LocalLlmManager {
     prompt: string,
     systemInstruction?: string,
     onToken?: (token: string) => void,
-    options?: { skipServerChat?: boolean }
+    options?: { skipServerChat?: boolean; rawMode?: boolean }
   ): Promise<string> {
     // If fallback engine is armed or engine is missing, generate via universal substrate
     if (this.isFallbackEngine || !this.engine) {
       return await this.generateUniversalLocalLlm(prompt, systemInstruction, onToken, options);
     }
 
-    const messages = [
-      {
-        role: 'system',
-        content: systemInstruction || 'You are Aurelius Sovereign AI running 100% offline on device substrate. Answer questions thoroughly, build tools, write complete code, and provide mathematical clarity.'
-      },
-      {
-        role: 'user',
-        content: prompt
-      }
-    ];
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemInstruction && systemInstruction.trim()) {
+      messages.push({ role: 'system', content: systemInstruction.trim() });
+    }
+    messages.push({ role: 'user', content: prompt });
 
     try {
       const reply = await this.engine.chat.completions.create({
@@ -864,19 +1011,18 @@ class LocalLlmManager {
               chunkCount++;
               onToken(delta);
 
-              // 🛡️ JANUS GATE COOPERATIVE YIELD:
-              // Yields every 3 tokens to macro-task queue to prevent Chrome watchdog hang & WebGPU buffer stalling
               if (chunkCount % 3 === 0) {
                 await new Promise((resolve) => setTimeout(resolve, 6));
               }
             }
           }
           if (fullText.trim()) {
-            return healReasoningStream(fullText, prompt).fullText;
+            return options?.rawMode ? fullText : healReasoningStream(fullText, prompt).fullText;
           }
         } catch (iterErr) {
-          console.warn('WebLLM stream iteration notice, healing through Janus Gate:', iterErr);
+          console.warn('WebLLM stream iteration notice:', iterErr);
           if (fullText.trim()) {
+            if (options?.rawMode) return fullText;
             const healed = healReasoningStream(fullText, prompt);
             if (onToken && healed.answer && !fullText.includes(healed.answer)) {
               onToken('\n\n' + healed.answer);
@@ -886,6 +1032,10 @@ class LocalLlmManager {
         }
       } else if (reply?.choices?.[0]?.message?.content) {
         const text = reply.choices[0].message.content;
+        if (options?.rawMode) {
+          if (onToken) onToken(text);
+          return text;
+        }
         const healed = healReasoningStream(text, prompt);
         if (onToken) onToken(healed.fullText);
         return healed.fullText;
@@ -910,18 +1060,15 @@ class LocalLlmManager {
   ): Promise<string> {
     const targetUrl = endpoint.endsWith('/') ? `${endpoint}v1/chat/completions` : `${endpoint}/v1/chat/completions`;
     
+    const msgPayload: Array<{ role: string; content: string }> = [];
+    if (systemInstruction && systemInstruction.trim()) {
+      msgPayload.push({ role: 'system', content: systemInstruction.trim() });
+    }
+    msgPayload.push({ role: 'user', content: prompt });
+
     const body = {
       model: modelName || 'default',
-      messages: [
-        {
-          role: 'system',
-          content: systemInstruction || 'You are Aurelius Sovereign AI running locally in Termux. Provide complete, pristine code and answers.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
+      messages: msgPayload,
       stream: !!onToken,
       temperature: 0.7
     };
@@ -970,7 +1117,7 @@ class LocalLlmManager {
     prompt: string,
     systemInstruction?: string,
     onToken?: (token: string) => void,
-    options?: { skipServerChat?: boolean }
+    options?: { skipServerChat?: boolean; rawMode?: boolean }
   ): Promise<string> {
     // 1. If WebLLM has loaded model, use WebGPU
     if (this.engine) {
@@ -1000,43 +1147,29 @@ class LocalLlmManager {
 
     // 4. Try Server-Side Orchestrator only if not already attempted upstream
     if (!options?.skipServerChat) {
-      try {
-        const serverRes = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(45_000),
-          body: JSON.stringify({
-            prompt,
-            systemInstruction,
-            model: this.currentModelId || 'Aurelius-Omega-Universal-Supermodel',
-            zeroTokenMode: false
-          })
-        });
-        
-        if (serverRes.ok) {
-          const data = await serverRes.json();
-          if (data && data.text) {
-            if (onToken) onToken(data.text);
-            return data.text;
-          }
+      const serverRes = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(45_000),
+        body: JSON.stringify({
+          prompt,
+          systemInstruction,
+          model: this.currentModelId || 'gemini-4-hydrogen',
+          rawMode: Boolean(options?.rawMode),
+          zeroTokenMode: false
+        })
+      });
+
+      if (serverRes.ok) {
+        const data = await serverRes.json();
+        if (data && data.text) {
+          if (onToken) onToken(data.text);
+          return data.text;
         }
-      } catch (_) {}
-    }
-
-    // 5. Autonomous Client-Side Neural Heuristic Synthesis (Final Fallback)
-    // Removed vault retrieval per user directive to ensure natural flow only.
-    let text = executeAgentChat(this.currentModelId || 'lyrailius-omega-zenith', prompt, { deepthink: true }).text;
-
-    // Eliminate any AI boilerplate
-    text = text.trim();
-
-    if (onToken) {
-      const parts = text.split(' ');
-      for (let i = 0; i < parts.length; i++) {
-        onToken((i > 0 ? ' ' : '') + parts[i]);
       }
     }
-    return text;
+
+    throw new Error('No real local model (WebGPU weights, Ollama, or llama-server) or cloud model is available.');
   }
 
   public getActiveModelId(): string | null {
@@ -1048,7 +1181,14 @@ class LocalLlmManager {
   }
 
   public isReady(): boolean {
-    return true; // Sovereign local substrate is always primed and ready on boot
+    return !!this.engine;
+  }
+
+  /**
+   * True only when real WebGPU MLC model weights are loaded in browser memory.
+   */
+  public hasLoadedWeights(): boolean {
+    return !!this.engine;
   }
 
   /**

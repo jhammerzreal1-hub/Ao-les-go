@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckSquare,
@@ -16,7 +27,8 @@ import {
   Eraser,
   HardDrive,
   Send,
-  Upload
+  Upload,
+  X
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import {
@@ -804,9 +816,24 @@ export const GoogleTasksModule: React.FC<GoogleTasksModuleProps> = ({ onInjectIn
 
       {/* Edit Task Modal */}
       {editingTask && (
-        <div className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-md w-full p-6 space-y-4 font-mono text-xs">
-            <h3 className="text-sm font-bold text-zinc-100">Edit Task</h3>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditingTask(null);
+          }}
+          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 font-mono text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-zinc-100">Edit Task</h3>
+              <button
+                type="button"
+                onClick={() => setEditingTask(null)}
+                aria-label="Close Edit Task Modal"
+                className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <form onSubmit={requestSaveEditTask} className="space-y-3">
               <div>
                 <label className="text-[11px] text-zinc-400 block mb-1">Title</label>
@@ -858,9 +885,24 @@ export const GoogleTasksModule: React.FC<GoogleTasksModuleProps> = ({ onInjectIn
 
       {/* Rename List Modal */}
       {renamingList && (
-        <div className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-sm w-full p-6 space-y-4 font-mono text-xs">
-            <h3 className="text-sm font-bold text-zinc-100">Rename Task List</h3>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRenamingList(null);
+          }}
+          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-sm w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 font-mono text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-zinc-100">Rename Task List</h3>
+              <button
+                type="button"
+                onClick={() => setRenamingList(null)}
+                aria-label="Close Rename Modal"
+                className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <form onSubmit={requestRenameList} className="space-y-3">
               <input
                 type="text"
@@ -891,9 +933,24 @@ export const GoogleTasksModule: React.FC<GoogleTasksModuleProps> = ({ onInjectIn
 
       {/* Bulk Checklist Import Modal */}
       {showBulkModal && (
-        <div className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-lg w-full p-6 space-y-4 font-mono text-xs">
-            <h3 className="text-sm font-bold text-zinc-100">Bulk Import Checklist to Google Tasks</h3>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowBulkModal(false);
+          }}
+          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 font-mono text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-zinc-100">Bulk Import Checklist to Google Tasks</h3>
+              <button
+                type="button"
+                onClick={() => setShowBulkModal(false)}
+                aria-label="Close Bulk Import Modal"
+                className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <p className="text-[11px] text-zinc-400 font-sans">
               Paste Markdown checkboxes or one task title per line. You will review and confirm before tasks are added.
             </p>
@@ -928,29 +985,46 @@ export const GoogleTasksModule: React.FC<GoogleTasksModuleProps> = ({ onInjectIn
 
       {/* MANDATORY Explicit Confirmation Modal for Every Mutating / Destructive Google Tasks Action */}
       {pendingConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`bg-zinc-950 border rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl font-mono text-xs ${
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !executingConfirm) setPendingConfirm(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className={`bg-zinc-950 border rounded-3xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-5 shadow-2xl font-mono text-xs ${
             pendingConfirm.destructive ? 'border-rose-500/50' : 'border-amber-500/50'
           }`}>
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0 ${
-                pendingConfirm.destructive
-                  ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
-                  : 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-              }`}>
-                <AlertTriangle className="w-5 h-5" />
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0 ${
+                  pendingConfirm.destructive
+                    ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
+                    : 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                }`}>
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-zinc-100">{pendingConfirm.title}</h3>
+                  <p className="text-[11px] text-zinc-400">Explicit Google Tasks Action Confirmation</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100">{pendingConfirm.title}</h3>
-                <p className="text-[11px] text-zinc-400">Explicit Google Tasks Action Confirmation</p>
-              </div>
+              {!executingConfirm && (
+                <button
+                  type="button"
+                  onClick={() => setPendingConfirm(null)}
+                  aria-label="Close Confirmation"
+                  className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-200 leading-relaxed">
               {pendingConfirm.description}
             </div>
 
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 flex-wrap">
               <button
                 type="button"
                 onClick={() => setPendingConfirm(null)}

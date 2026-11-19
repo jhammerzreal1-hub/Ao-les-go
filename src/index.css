@@ -4,6 +4,8 @@
   html, body {
     max-width: 100%;
     overflow-x: clip;
+    overscroll-behavior-y: contain;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -11,6 +13,10 @@
     background-color: #09090b;
     color: #f4f4f5;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  button, a, select, summary, [role="button"] {
+    touch-action: manipulation;
   }
   
   code, pre, .font-mono {
@@ -27,12 +33,24 @@
   display: none;
 }
 
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
 .pb-safe-nav {
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
+.px-safe {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 @media (pointer: coarse) {
-  button, select, input, textarea {
+  select,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  .touch-target {
     min-height: 36px;
   }
 }

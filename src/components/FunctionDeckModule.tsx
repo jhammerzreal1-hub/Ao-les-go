@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   Zap,
@@ -961,7 +972,7 @@ export const FunctionDeckModule: React.FC<FunctionDeckModuleProps> = ({ onSaveTo
               {/* Hash Outputs */}
               {cryptoHashes && (
                 <div className="space-y-2 pt-2 border-t border-zinc-800/80">
-                  {Object.entries(cryptoHashes).map(([algo, hashVal]) => (
+                  {Object.entries(cryptoHashes || {}).map(([algo, hashVal]) => (
                     <div key={algo} className="flex items-center justify-between gap-3 bg-zinc-950 px-3 py-2 rounded-lg border border-zinc-800/80 text-xs font-mono">
                       <span className="text-amber-400 uppercase font-bold w-28 shrink-0">{algo}:</span>
                       <span className="text-zinc-300 truncate flex-1">{hashVal}</span>

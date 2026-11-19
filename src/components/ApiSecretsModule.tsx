@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Key,
@@ -530,14 +541,24 @@ export const ApiSecretsModule: React.FC = () => {
 
       {/* Add Custom Secret Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-amber-500/40 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
-                <Key className="w-4 h-4" />
-                <span>Store New Secret in AES-256-GCM Vault</span>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-950 border border-amber-500/40 rounded-3xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2 text-amber-300 font-bold text-sm min-w-0">
+                <Key className="w-4 h-4 shrink-0" />
+                <span className="truncate">Store New Secret in AES-256-GCM Vault</span>
               </div>
-              <button onClick={() => setShowAddModal(false)} className="text-zinc-400 hover:text-white">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                aria-label="Close Add Secret Modal"
+                className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer shrink-0"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -564,7 +585,7 @@ export const ApiSecretsModule: React.FC = () => {
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:border-amber-500"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Display Label</label>
                   <input
@@ -599,12 +620,14 @@ export const ApiSecretsModule: React.FC = () => {
 
             <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
               <button
+                type="button"
                 onClick={() => setShowAddModal(false)}
                 className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() =>
                   handleSaveSecret(newEnvVar, newValue, {
                     name: newName || newEnvVar,

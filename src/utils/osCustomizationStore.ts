@@ -1,0 +1,364 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+export type SovereignThemeId =
+  | 'aurelius-gold'
+  | 'hyprland-matrix'
+  | 'macos-sequoia'
+  | 'win11-mica'
+  | 'qubes-crimson'
+  | 'solarized-quantum'
+  | 'tokyo-night'
+  | 'custom-wallpaper';
+
+export type SovereignAccentColor = 'amber' | 'emerald' | 'sky' | 'violet' | 'rose' | 'cyan';
+
+export interface ClipboardRingEntry {
+  id: string;
+  text: string;
+  label: string;
+  timestamp: string;
+  pinned?: boolean;
+}
+
+export interface SovereignOSCustomizationProfile {
+  themeId: SovereignThemeId;
+  customWallpaperUrl: string;
+  accentColor: SovereignAccentColor;
+  windowBlurPx: number;
+  windowOpacityPct: number;
+  windowRadiusPx: number;
+  borderGlowIntensity: 'subtle' | 'high' | 'neon';
+  iconSize: 'compact' | 'standard' | 'large';
+  fontScalePct: number;
+  showTacticalGrid: boolean;
+  showCrtScanlines: boolean;
+  activeWorkspace: 1 | 2 | 3 | 4;
+  workspaceNames: [string, string, string, string];
+  desktopWidgets: {
+    showKernelHud: boolean;
+    showMarketTickerHud: boolean;
+    showCryptoVaultHud: boolean;
+    showClipboardHud: boolean;
+  };
+  hotkeys: {
+    launcher: string;
+    splitMode: string;
+    tileWindows: string;
+    detachChat: string;
+    workspace1: string;
+    workspace2: string;
+    workspace3: string;
+    workspace4: string;
+    openTerminal: string;
+    openWallets: string;
+    openMarkets: string;
+    openDiagnostics: string;
+  };
+  customCss: string;
+  clipboardHistory: ClipboardRingEntry[];
+}
+
+export interface SovereignThemePreset {
+  id: SovereignThemeId;
+  name: string;
+  inspiredBy: string;
+  description: string;
+  wallpaperCss: string;
+  accentColor: SovereignAccentColor;
+  windowBlurPx: number;
+  windowOpacityPct: number;
+  windowRadiusPx: number;
+  borderGlowIntensity: 'subtle' | 'high' | 'neon';
+  showTacticalGrid: boolean;
+}
+
+export const SOVEREIGN_THEME_PRESETS: SovereignThemePreset[] = [
+  {
+    id: 'aurelius-gold',
+    name: 'Aurelius Sovereign Gold (Ring -3 Default)',
+    inspiredBy: 'Lysander Genesis Node · UID 0 Bare-Metal',
+    description: 'Deep obsidian carbon substrate with gold/emerald telemetry accents and tactical coordinates grid.',
+    wallpaperCss:
+      'radial-gradient(circle at 18% 18%, rgba(245,158,11,0.14), transparent 38%), radial-gradient(circle at 82% 24%, rgba(56,189,248,0.12), transparent 42%), radial-gradient(circle at 50% 82%, rgba(16,185,129,0.10), transparent 48%), linear-gradient(160deg, #05070b 0%, #090d16 55%, #05070b 100%)',
+    accentColor: 'amber',
+    windowBlurPx: 18,
+    windowOpacityPct: 95,
+    windowRadiusPx: 16,
+    borderGlowIntensity: 'high',
+    showTacticalGrid: true
+  },
+  {
+    id: 'hyprland-matrix',
+    name: 'Hyprland Cyber-Emerald Tiling Rice',
+    inspiredBy: 'Arch Linux + Hyprland Wayland Compositor',
+    description: 'Ultra-crisp neon emerald active borders, sharp 6px tiling geometry, and high-contrast terminal clarity.',
+    wallpaperCss:
+      'radial-gradient(circle at 20% 25%, rgba(16,185,129,0.22), transparent 40%), radial-gradient(circle at 80% 75%, rgba(6,182,212,0.18), transparent 45%), linear-gradient(135deg, #020806 0%, #04130e 50%, #020609 100%)',
+    accentColor: 'emerald',
+    windowBlurPx: 22,
+    windowOpacityPct: 90,
+    windowRadiusPx: 6,
+    borderGlowIntensity: 'neon',
+    showTacticalGrid: true
+  },
+  {
+    id: 'macos-sequoia',
+    name: 'Sequoia Midnight Frosted Glass',
+    inspiredBy: 'macOS Sequoia / Aqua Quartz Compositor',
+    description: 'Deep frosted acrylic blur (28px), smooth 20px window corners, and midnight sapphire ambiance.',
+    wallpaperCss:
+      'radial-gradient(circle at 25% 20%, rgba(59,130,246,0.28), transparent 45%), radial-gradient(circle at 75% 30%, rgba(139,92,246,0.24), transparent 48%), radial-gradient(circle at 50% 85%, rgba(14,165,233,0.18), transparent 50%), linear-gradient(160deg, #070b19 0%, #0f172a 55%, #090d16 100%)',
+    accentColor: 'sky',
+    windowBlurPx: 28,
+    windowOpacityPct: 88,
+    windowRadiusPx: 20,
+    borderGlowIntensity: 'subtle',
+    showTacticalGrid: false
+  },
+  {
+    id: 'win11-mica',
+    name: 'Fluent Mica Obsidian Pro',
+    inspiredBy: 'Windows 11 Pro Workstation Acrylic Mica',
+    description: 'Balanced 12px workstation geometry, high-density slate mica surfaces, and cyan focus highlights.',
+    wallpaperCss:
+      'radial-gradient(circle at 50% 35%, rgba(14,165,233,0.22), transparent 42%), radial-gradient(circle at 30% 70%, rgba(37,99,235,0.18), transparent 48%), linear-gradient(180deg, #080c14 0%, #0b1320 60%, #06090f 100%)',
+    accentColor: 'cyan',
+    windowBlurPx: 16,
+    windowOpacityPct: 94,
+    windowRadiusPx: 12,
+    borderGlowIntensity: 'high',
+    showTacticalGrid: false
+  },
+  {
+    id: 'qubes-crimson',
+    name: 'Qubes Air-Gapped Tactical Vault',
+    inspiredBy: 'Qubes OS Xen Hypervisor Security Domains',
+    description: 'Zero-distraction air-gapped crimson domain borders with high-opacity isolated compartments.',
+    wallpaperCss:
+      'radial-gradient(circle at 15% 20%, rgba(244,63,94,0.20), transparent 40%), radial-gradient(circle at 85% 80%, rgba(245,158,11,0.14), transparent 42%), linear-gradient(145deg, #0c0407 0%, #14070b 55%, #060305 100%)',
+    accentColor: 'rose',
+    windowBlurPx: 12,
+    windowOpacityPct: 97,
+    windowRadiusPx: 8,
+    borderGlowIntensity: 'neon',
+    showTacticalGrid: true
+  },
+  {
+    id: 'solarized-quantum',
+    name: 'Solarized Quantum Telemetry',
+    inspiredBy: 'Ethan Schoonover Solarized Dark / Scientific Workstations',
+    description: 'Precision optical contrast engineered for zero eye fatigue during 24/7 quantitative market & code auditing.',
+    wallpaperCss:
+      'radial-gradient(circle at 75% 20%, rgba(42,161,152,0.22), transparent 45%), radial-gradient(circle at 20% 80%, rgba(181,137,0,0.16), transparent 45%), linear-gradient(160deg, #00141a 0%, #002b36 60%, #001b22 100%)',
+    accentColor: 'cyan',
+    windowBlurPx: 16,
+    windowOpacityPct: 95,
+    windowRadiusPx: 12,
+    borderGlowIntensity: 'high',
+    showTacticalGrid: true
+  },
+  {
+    id: 'tokyo-night',
+    name: 'Tokyo Night Neural Hypervisor',
+    inspiredBy: 'Tokyo Night / Neovim & Wayland Developer Suite',
+    description: 'Deep indigo-violet nocturnal glow paired with electric purple/cyan syntax accents.',
+    wallpaperCss:
+      'radial-gradient(circle at 22% 24%, rgba(168,85,247,0.24), transparent 42%), radial-gradient(circle at 80% 70%, rgba(56,189,248,0.18), transparent 45%), linear-gradient(155deg, #0b0c16 0%, #161626 55%, #0a0b12 100%)',
+    accentColor: 'violet',
+    windowBlurPx: 24,
+    windowOpacityPct: 91,
+    windowRadiusPx: 16,
+    borderGlowIntensity: 'neon',
+    showTacticalGrid: true
+  },
+  {
+    id: 'custom-wallpaper',
+    name: 'Custom Sovereign Wallpaper & CSS',
+    inspiredBy: 'User-Defined Image / Shader & Custom Dotfiles',
+    description: 'Uses your custom background image URL and custom CSS rules.',
+    wallpaperCss:
+      'linear-gradient(160deg, #05070b 0%, #0f172a 100%)',
+    accentColor: 'amber',
+    windowBlurPx: 20,
+    windowOpacityPct: 92,
+    windowRadiusPx: 16,
+    borderGlowIntensity: 'high',
+    showTacticalGrid: false
+  }
+];
+
+const STORAGE_KEY = 'sovereign_os_customization_profile_v1';
+
+export const DEFAULT_CUSTOMIZATION_PROFILE: SovereignOSCustomizationProfile = {
+  themeId: 'aurelius-gold',
+  customWallpaperUrl: '',
+  accentColor: 'amber',
+  windowBlurPx: 18,
+  windowOpacityPct: 95,
+  windowRadiusPx: 16,
+  borderGlowIntensity: 'high',
+  iconSize: 'standard',
+  fontScalePct: 100,
+  showTacticalGrid: true,
+  showCrtScanlines: false,
+  activeWorkspace: 1,
+  workspaceNames: [
+    '1: Command & AI',
+    '2: Markets & Crypto',
+    '3: Root Dev & Files',
+    '4: Games & Media'
+  ],
+  desktopWidgets: {
+    showKernelHud: true,
+    showMarketTickerHud: true,
+    showCryptoVaultHud: true,
+    showClipboardHud: false
+  },
+  hotkeys: {
+    launcher: 'Alt+L',
+    splitMode: 'Alt+/',
+    tileWindows: 'Alt+T',
+    detachChat: 'Alt+C',
+    workspace1: 'Alt+1',
+    workspace2: 'Alt+2',
+    workspace3: 'Alt+3',
+    workspace4: 'Alt+4',
+    openTerminal: 'Alt+`',
+    openWallets: 'Alt+W',
+    openMarkets: 'Alt+M',
+    openDiagnostics: 'Alt+D'
+  },
+  customCss: '',
+  clipboardHistory: [
+    {
+      id: 'clip-genesis-1',
+      label: 'JHammerZ Provenance & DOI',
+      text: 'https://jhammerz.github.io | DOI: https://doi.org/10.5281/zenodo.20778079',
+      timestamp: new Date().toISOString(),
+      pinned: true
+    },
+    {
+      id: 'clip-genesis-2',
+      label: 'Forensic Audit CLI Check',
+      text: 'curl -s http://127.0.0.1:3000/api/os/forensic-audit | jq .overallHealthScore',
+      timestamp: new Date().toISOString(),
+      pinned: true
+    }
+  ]
+};
+
+export function loadOSCustomizationProfile(): SovereignOSCustomizationProfile {
+  if (typeof window === 'undefined') return DEFAULT_CUSTOMIZATION_PROFILE;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_CUSTOMIZATION_PROFILE;
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_CUSTOMIZATION_PROFILE,
+      ...parsed,
+      desktopWidgets: {
+        ...DEFAULT_CUSTOMIZATION_PROFILE.desktopWidgets,
+        ...(parsed.desktopWidgets || {})
+      },
+      hotkeys: {
+        ...DEFAULT_CUSTOMIZATION_PROFILE.hotkeys,
+        ...(parsed.hotkeys || {})
+      },
+      workspaceNames:
+        Array.isArray(parsed.workspaceNames) && parsed.workspaceNames.length === 4
+          ? (parsed.workspaceNames as [string, string, string, string])
+          : DEFAULT_CUSTOMIZATION_PROFILE.workspaceNames,
+      clipboardHistory: Array.isArray(parsed.clipboardHistory)
+        ? parsed.clipboardHistory
+        : DEFAULT_CUSTOMIZATION_PROFILE.clipboardHistory
+    };
+  } catch {
+    return DEFAULT_CUSTOMIZATION_PROFILE;
+  }
+}
+
+export function applyOSCustomizationToDOM(profile: SovereignOSCustomizationProfile): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.style.setProperty('--sovereign-window-blur', `${profile.windowBlurPx}px`);
+  root.style.setProperty('--sovereign-window-opacity', `${(profile.windowOpacityPct / 100).toFixed(2)}`);
+  root.style.setProperty('--sovereign-window-radius', `${profile.windowRadiusPx}px`);
+  root.style.setProperty('--sovereign-font-scale', `${profile.fontScalePct}%`);
+
+  let styleTag = document.getElementById('sovereign-custom-dotfiles-css') as HTMLStyleElement | null;
+  if (!styleTag) {
+    styleTag = document.createElement('style');
+    styleTag.id = 'sovereign-custom-dotfiles-css';
+    document.head.appendChild(styleTag);
+  }
+  styleTag.textContent = profile.customCss || '';
+}
+
+export function saveOSCustomizationProfile(
+  next: Partial<SovereignOSCustomizationProfile>
+): SovereignOSCustomizationProfile {
+  const current = loadOSCustomizationProfile();
+  const merged: SovereignOSCustomizationProfile = {
+    ...current,
+    ...next,
+    desktopWidgets: {
+      ...current.desktopWidgets,
+      ...(next.desktopWidgets || {})
+    },
+    hotkeys: {
+      ...current.hotkeys,
+      ...(next.hotkeys || {})
+    }
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    } catch {}
+    applyOSCustomizationToDOM(merged);
+    window.dispatchEvent(
+      new CustomEvent('sovereign_os_customization_changed', { detail: merged })
+    );
+  }
+  return merged;
+}
+
+export function pushToOSClipboardRing(text: string, label = 'OS Clipboard'): SovereignOSCustomizationProfile {
+  const clean = text.trim();
+  if (!clean) return loadOSCustomizationProfile();
+  const current = loadOSCustomizationProfile();
+  const existing = current.clipboardHistory.filter((c) => c.text !== clean);
+  const entry: ClipboardRingEntry = {
+    id: `clip-${Date.now().toString(36)}`,
+    text: clean,
+    label,
+    timestamp: new Date().toISOString()
+  };
+  const updated = [entry, ...existing].slice(0, 24);
+  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    navigator.clipboard.writeText(clean).catch(() => {});
+  }
+  return saveOSCustomizationProfile({ clipboardHistory: updated });
+}
+
+export function getActiveThemeWallpaperStyle(profile: SovereignOSCustomizationProfile): React.CSSProperties {
+  if (profile.themeId === 'custom-wallpaper' && profile.customWallpaperUrl.trim()) {
+    return {
+      backgroundImage: `linear-gradient(rgba(5,7,11,0.55), rgba(5,7,11,0.75)), url("${profile.customWallpaperUrl.trim()}")`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center'
+    };
+  }
+  const preset =
+    SOVEREIGN_THEME_PRESETS.find((t) => t.id === profile.themeId) ||
+    SOVEREIGN_THEME_PRESETS[0];
+  return {
+    backgroundImage: preset.wallpaperCss
+  };
+}

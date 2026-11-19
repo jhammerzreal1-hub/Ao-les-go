@@ -1,4 +1,15 @@
 /**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+/**
  * 🏛️ AURELIUS & LYSANDER SOVEREIGN AI DISPATCHER
  * Universal Indestructible Orchestration Layer
  * 
@@ -36,6 +47,7 @@ export interface DispatchChatOptions {
   useSearchGrounding?: boolean;
   systemInstruction?: string;
   zeroTokenMode?: boolean;
+  rawMode?: boolean;
   abortSignal?: AbortSignal;
   onToken?: (token: string) => void;
 }
@@ -52,6 +64,8 @@ export interface DispatchChatResult {
   janusFace?: string;
   quotaNotice?: string;
   providerTrace?: Array<{ stage: string; model: string; status: string; ms: number; note?: string }>;
+  authRejected?: boolean;
+  isError?: boolean;
   proxyWheel?: {
     spokeId: string;
     provider: string;
@@ -86,18 +100,32 @@ export class SovereignAiDispatcher {
    * Universal Chat Dispatcher with Zero-Duplicate-Call Resilience & Circuit-Breaker Fallback
    */
   async dispatchChat(options: DispatchChatOptions): Promise<DispatchChatResult> {
-    const { prompt, messages = [], mediaAttachment, mediaAttachments = [], agentId = 'lyrailius-omega-zenith', agentName, modelId, deepthink = false, useSearchGrounding = false, systemInstruction, zeroTokenMode = false, abortSignal, onToken } = options;
+    const { prompt, messages = [], mediaAttachment, mediaAttachments = [], agentId = 'lyrailius-omega-zenith', agentName, modelId, deepthink = false, useSearchGrounding = false, systemInstruction, zeroTokenMode = false, rawMode = false, abortSignal, onToken } = options;
 
     const activeBinding = agentModelBinder.getBinding(agentId);
     const chosenModel = modelId || (activeBinding ? activeBinding.equippedModelId : 'gemini-4-hydrogen');
-    const resolvedAgentName = agentName || activeBinding?.agentName || 'Lyrailius Omega (Production Coordinator)';
-    const orchestratorContext = orchestratorRuntime.getResidentContextSummary();
+    const resolvedAgentName = agentName || activeBinding?.agentName || 'Lyrailius Omega';
+    const orchestratorContext = rawMode ? undefined : orchestratorRuntime.getResidentContextSummary();
+    const skillCount = activeBinding?.skills?.length || 58;
 
-    const rawInstruction =
-      systemInstruction ||
-      activeBinding?.systemDirective ||
-      'You are Lyrailius Omega running inside a live production Node.js/Express + TypeScript + React workspace (models/gemini-4-hydrogen). Execute real tools and report verified results; never roleplay.';
+    const rawInstruction = rawMode
+      ? (typeof systemInstruction === 'string' ? systemInstruction : '')
+      : (systemInstruction ||
+          activeBinding?.systemDirective ||
+          `You are ${resolvedAgentName}, an engineering agent with ${skillCount} workspace tools. Execute real tool calls when modifying files or running checks and report observed results.`);
     let quotaNotice: string | undefined;
+    let lastAuthRejected = false;
+    let lastRailBlocked = false;
+    let lastErrorMessage: string | undefined;
+    let lastProviderTrace: Array<{ stage: string; model: string; status: string; ms: number; note?: string }> | undefined;
+
+    const virtualCloudAliases = new Set([
+      'default',
+      'Lyrailius-Omega-Ultimate-Sovereign-MoE',
+      'Lysander-Genesis-SuperModel-Intelligence',
+      'Aurelius-Omega-Universal-Supermodel'
+    ]);
+    const normalizedCloudModel = virtualCloudAliases.has(chosenModel) ? 'gemini-4-hydrogen' : chosenModel;
 
     if (!zeroTokenMode) {
       const payloadBody = JSON.stringify({
@@ -107,9 +135,10 @@ export class SovereignAiDispatcher {
         mediaAttachments,
         agentId,
         agentName: resolvedAgentName,
-        model: (chosenModel === 'default' || chosenModel === 'Lyrailius-Omega-Ultimate-Sovereign-MoE') ? 'gemini-4-hydrogen' : chosenModel,
+        model: normalizedCloudModel,
         systemInstruction: rawInstruction,
-        orchestratorContext,
+        ...(orchestratorContext ? { orchestratorContext } : {}),
+        rawMode,
         deepthink,
         useSearchGrounding,
         zeroTokenMode: false
@@ -122,7 +151,7 @@ export class SovereignAiDispatcher {
         }
 
         const attemptController = new AbortController();
-        const timeoutId = setTimeout(() => attemptController.abort(new Error('Request ceiling timeout (62s)')), 62_000);
+        const timeoutId = setTimeout(() => attemptController.abort(new Error('Request ceiling timeout (82s)')), 82_000);
         const onParentAbort = () => attemptController.abort(abortSignal?.reason);
         abortSignal?.addEventListener('abort', onParentAbort, { once: true });
 
@@ -135,12 +164,18 @@ export class SovereignAiDispatcher {
           });
 
           const data = await res.json().catch(() => ({}));
-          if (res.ok && data && data.text && !data.error) {
-            const healed = janusGate.healReasoningStream(data.text, prompt);
+          if (Array.isArray(data?.providerTrace)) {
+            lastProviderTrace = data.providerTrace;
+          }
+
+          if (res.ok && data && typeof data.text === 'string' && data.text.length > 0 && !data.error && !data.isError) {
+            const finalText = rawMode
+              ? data.text
+              : janusGate.healReasoningStream(data.text, prompt).fullText;
             return {
-              text: healed.fullText,
-              model: data.model || 'Lyrailius Omega (gemini-4-hydrogen)',
-              isLocal: data.isBakedEngine || data.isLocal || false,
+              text: finalText,
+              model: data.model || `${resolvedAgentName} (${normalizedCloudModel})`,
+              isLocal: data.isLocal || false,
               tokenSpend: data.tokenSpend || 0,
               engine: data.isLiveCloud ? 'Sovereign Cloud Chain' : 'Local Daemon',
               executedTools: Array.isArray(data.executedTools) ? data.executedTools : [],
@@ -153,12 +188,33 @@ export class SovereignAiDispatcher {
             };
           }
 
-          if (res.status === 429 || data?.error === 'QUOTA_EXHAUSTED') {
-            quotaNotice = data?.message || 'Gemini quota reached. Switching cleanly to offline sovereign substrate.';
+          if (res.status === 422 || data?.railBlocked) {
+            lastRailBlocked = true;
+            lastErrorMessage = data?.error || data?.message || 'Upstream spokes hit a content filter or refusal rail; stopped before polluting stream.';
+            quotaNotice = lastErrorMessage;
             break;
           }
 
-          // Retry once on transient 502/504/503 only
+          if (res.status === 401 || data?.error === 'AUTH_REJECTED' || data?.authRejected) {
+            lastAuthRejected = true;
+            lastErrorMessage = data?.message || 'Upstream API key rejected (401). Please update or activate your upgraded Gemini / AI provider key in Settings > Secrets or API Keys & Gateway.';
+            quotaNotice = lastErrorMessage;
+            break;
+          }
+
+          if (res.status === 429 || data?.error === 'QUOTA_EXHAUSTED') {
+            lastErrorMessage = data?.message || 'Cloud rate limit/quota reached across available spokes.';
+            quotaNotice = lastErrorMessage;
+            break;
+          }
+
+          if (data?.message || data?.error) {
+            lastErrorMessage = data.message || data.error;
+          } else if (!res.ok) {
+            lastErrorMessage = `Chat dispatch returned HTTP ${res.status}`;
+          }
+
+          // Retry once on transient 502/503/504 only
           if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt === 0) {
             await new Promise(r => setTimeout(r, 600));
             continue;
@@ -166,6 +222,7 @@ export class SovereignAiDispatcher {
           break;
         } catch (cloudErr: any) {
           if (abortSignal?.aborted) throw cloudErr;
+          lastErrorMessage = cloudErr?.message || 'Network exception reaching /api/chat';
           dev_null(`[Janus Gate] Attempt ${attempt + 1} notice:`, cloudErr);
           if (attempt === 0) {
             await new Promise(r => setTimeout(r, 500));
@@ -176,9 +233,59 @@ export class SovereignAiDispatcher {
           abortSignal?.removeEventListener('abort', onParentAbort);
         }
       }
+
+      // Check if a REAL local engine (WebGPU weights loaded, Termux llama-server, or Ollama) is available before falling back
+      const [hasOllama, hasTermux] = await Promise.all([
+        localLlmManager.probeOllama().catch(() => false),
+        localLlmManager.probeLlamaCppServer().catch(() => false)
+      ]);
+      const hasRealLocal = localLlmManager.hasLoadedWeights() || hasOllama || hasTermux;
+
+      if (!hasRealLocal) {
+        const failureHeader = lastAuthRejected
+          ? `Authentication Rejected (${resolvedAgentName})`
+          : lastRailBlocked
+          ? `Upstream Safety Rail Triggered (${resolvedAgentName})`
+          : `Model Dispatch Failed (${resolvedAgentName})`;
+        const remediation = lastAuthRejected
+          ? 'Activate/update your API key in Settings > Secrets or add an unrestricted provider key (OpenRouter, DeepSeek, Groq, or Custom Proxy) in API Keys & Gateway.'
+          : lastRailBlocked
+          ? 'Configure an unrestricted open-weight model endpoint (OpenRouter, DeepSeek, Custom Proxy, or local Ollama/llama-server) in API Keys & Gateway so unfiltered weights handle this prompt.'
+          : 'Verify an active API key in API Keys & Gateway, load WebGPU weights, or start a local Ollama/llama-server daemon.';
+
+        return {
+          text: `[${failureHeader}]\n\n${lastErrorMessage || 'All configured cloud & local spokes failed to return an unblocked model response.'}\n\nNext Step: ${remediation}`,
+          model: `${resolvedAgentName} (${normalizedCloudModel})`,
+          isLocal: false,
+          tokenSpend: 0,
+          engine: lastAuthRejected ? 'Auth Rejected (401)' : lastRailBlocked ? 'Rail Blocked (422)' : 'Dispatch Error',
+          executedTools: [],
+          quotaNotice: lastErrorMessage,
+          providerTrace: lastProviderTrace,
+          authRejected: lastAuthRejected,
+          isError: true
+        };
+      }
     }
 
-    // Never make a duplicate /api/chat request inside janusGate when sovereignAi already attempted it!
+    // Check real local engine availability even in zeroTokenMode (never synthesize fake text!)
+    const [hasOllamaLocal, hasTermuxLocal] = await Promise.all([
+      localLlmManager.probeOllama().catch(() => false),
+      localLlmManager.probeLlamaCppServer().catch(() => false)
+    ]);
+    if (!localLlmManager.hasLoadedWeights() && !hasOllamaLocal && !hasTermuxLocal) {
+      return {
+        text: `[No Local Inference Engine Running]\n\nAir-Gapped mode is active, but no WebGPU weights are loaded and neither Ollama (11434) nor llama-server (8080) responded.\n\nNext Step: Load a WebGPU model, start Ollama / llama-server, or switch off Air-Gapped mode.`,
+        model: chosenModel,
+        isLocal: false,
+        tokenSpend: 0,
+        engine: 'Local Engine Unavailable',
+        executedTools: [],
+        quotaNotice: 'No real local inference engine available.',
+        isError: true
+      };
+    }
+
     const janusResult = await janusGate.executeThroughGate({
       prompt,
       agentId,
@@ -186,6 +293,7 @@ export class SovereignAiDispatcher {
       systemInstruction: rawInstruction,
       modelId: chosenModel,
       deepthink,
+      rawMode,
       zeroTokenMode,
       skipServerChat: !zeroTokenMode,
       abortSignal,
@@ -197,7 +305,7 @@ export class SovereignAiDispatcher {
       model: `${resolvedAgentName} (${chosenModel})`,
       isLocal: true,
       tokenSpend: 0,
-      engine: `Janus Gate (${janusResult.faceUsed})`,
+      engine: `Local Inference (${janusResult.faceUsed})`,
       executedTools: [],
       janusFace: janusResult.faceUsed,
       quotaNotice

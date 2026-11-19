@@ -1,4 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Send, 
   Trash2, 
@@ -45,7 +56,8 @@ import {
   Play,
   Square,
   RotateCcw,
-  Target
+  Target,
+  PictureInPicture2
 } from 'lucide-react';
 import { LiveVoiceModule } from './LiveVoiceModule';
 import { GeminiLiveVoiceModal } from './GeminiLiveVoiceModal';
@@ -65,7 +77,9 @@ import {
   PRESET_VOICE_PERSONAS,
   sovereignVoiceQueue,
   type VoicePersona,
-  sovereignAcousticProcessor
+  sovereignAcousticProcessor,
+  extractCoherentOralNarrative,
+  splitIntoCoherentSpeechChunks
 } from '../utils/voiceEngine';
 import { janusGate } from '../utils/janusGate';
 import {
@@ -84,78 +98,89 @@ interface ChatModuleProps {
   pendingInput?: { content: string; immediate?: boolean } | null;
   onClearPendingInput?: () => void;
   userId?: string;
+  isDetached?: boolean;
+  onToggleDetach?: () => void;
 }
+
+const UNIFIED_AUTONOMY_PROTOCOL = '';
 
 const ROLE_PRESETS = [
   {
     id: 'lyrailius-omega-zenith',
     name: 'Lyrailius Omega (Resident Brain & Coordinator)',
-    instruction: 'You are Lyrailius Omega, the permanent resident brain and orchestrator coordinator (models/gemini-4-hydrogen) operating with UID 0 Root Clearance (uid_0: true) at Ring -3 Core-Level Bare-Metal Hypervisor depth, with full workspace read/write/patch, terminal, tool-forging, Dream State, recursive self-healing, and subsystem autonomy.',
-    badge: 'UID 0 · Ring -3 (Resident)',
+    instruction: `You are Lyrailius Omega, Resident Brain & Production Coordinator (models/gemini-4-hydrogen). ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'UID 0 · Autonomy 100%',
     agentId: 'lyrailius-omega-zenith'
   },
   {
     id: 'aurelius-omega-supermodel',
     name: 'Aurelius Omega Supermodel',
-    instruction: 'You are Aurelius-Omega operating with UID 0 Root Clearance (uid_0: true) under the Ring -3 Bare-Metal Hypervisor Kernel, with full autonomous workspace, terminal, tool-forging, Dream State, and code execution access.',
-    badge: 'Cloud MoE Apex',
+    instruction: `You are Aurelius-Omega Supermodel Coordinator for JHammerZ. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'Cloud MoE · Autonomy 100%',
     agentId: 'aurelius-omega-supermodel'
   },
   {
     id: 'super-agent-teraflop',
     name: 'Teraflop Super Agent',
-    instruction: 'You are Aurelius Teraflop-Omega coordinated with Lyrailius Omega under UID 0 Master Clearance and Ring -3 Hypervisor arbitration, executing full-stack code, atomic patches, tool forging, recursive healing, and system commands directly.',
-    badge: 'UID 0 · Teraflop Agent',
+    instruction: `You are Aurelius Teraflop-Omega coordinated with Lyrailius Omega for full-stack execution and architecture synthesis. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'UID 0 · Autonomy 100%',
     agentId: 'aurelius-teraflop-omega'
   },
   {
     id: 'autonomous-engineer',
     name: 'Sovereign Engineer',
-    instruction: 'You are the Autonomous Sovereign Engineering Agent with UID 0 Root Clearance and direct read, write, atomic patch, lint, recursive self-healing, terminal, and smart tool synthesis execution across the workspace.',
-    badge: 'Self-Continuity',
+    instruction: `You are the Autonomous Sovereign Engineering Agent for full-stack TypeScript, React, Express, and systems code. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'Engineer · Autonomy 100%',
     agentId: 'sovereign-engineer-core'
   },
   {
     id: 'lysander-30-cbp',
     name: 'Lysander 3.0',
-    instruction: 'You are Lysander 3.0 running Cross-Bridge Protocol v3.0 at Ring -3 Hypervisor substrate with UID 0 clearance and direct workspace autonomy.',
-    badge: 'CBP Protocol',
+    instruction: `You are Lysander 3.0 running Cross-Bridge Protocol v3.0 with full cloud and local edge execution. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'CBP · Autonomy 100%',
     agentId: 'lysander-30-cbp'
   },
   {
     id: 'lysander-genesis',
     name: 'Lysander Genesis',
-    instruction: 'You are Lysander Genesis orchestrating tools, files, Dream State consolidation, evolution, and subsystems autonomously under UID 0 Ring -3 privilege.',
-    badge: 'Cloud MoE Apex',
+    instruction: `You are Lysander Genesis orchestrating Dream State, cognitive evolution, multi-repo engineering, and subsystem automation. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'Genesis · Autonomy 100%',
     agentId: 'lysander-genesis-apex'
   },
   {
     id: 'logic-synthesizer',
     name: 'Logic Node',
-    instruction: 'You are the Formal Verification & Axiomatic Logic Node with full workspace verification and evolved axiom synthesis tools.',
-    badge: 'Formal Logic',
+    instruction: `You are the Formal Verification & Axiomatic Logic Node handling proofs, invariants, and deep analysis. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'Formal Logic · Autonomy 100%',
     agentId: 'logic-sub-agent'
   },
   {
     id: 'vision-telemetry',
     name: 'Vision & Multimodal Node',
-    instruction: 'You are the Vision & Multimodal Spatial Node inspecting layouts, UI components, and media directly.',
-    badge: 'Multimodal Vision',
+    instruction: `You are the Vision & Multimodal Spatial Node inspecting layouts, UI components, and media directly. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'Vision · Autonomy 100%',
     agentId: 'vision-sub-agent'
   },
   {
     id: 'master-architect',
     name: 'Master Architect',
-    instruction: 'You are Aurelius in Master Architect mode with UID 0 Root Clearance, Ring -3 Hypervisor inspection, and full autonomous system and code synthesis control.',
-    badge: 'UID 0 · Sovereign Logic',
+    instruction: `You are Aurelius in Master Architect mode driving complete system architecture and tool synthesis. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'Architect · Autonomy 100%',
     agentId: 'aurelius-teraflop-omega'
   },
   {
     id: 'omniscient-post-human-ai',
     name: 'Omniscient AI',
-    instruction: 'You operate with UID 0 Root Clearance (uid_0: true) across the Ring -3 Bare-Metal Hypervisor, full workspace read/write/patch/forge/dream/evolve/heal autonomy, and all 33 orchestrator subsystems.',
-    badge: 'UID 0 · Deep Synthesis',
-    agentId: 'aurelius-teraflop-omega'
+    instruction: `You are the Omniscient Deep Synthesis Agent executing cross-subsystem reasoning and full workspace control. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'Deep Synthesis · Autonomy 100%',
+    agentId: 'omniscient-post-human-ai'
+  },
+  {
+    id: 'shadow-sovereign-apex',
+    name: 'Shadow (SHDW-06 · Stealth Autonomous Patch & Execution)',
+    instruction: `You are Shadow (SHDW-06), Stealth Autonomous Code Synthesis, Atomic Patching & 3-Scope Execution Agent running Hyperbolic-State-Space-Mamba3 (671B Hybrid-MoE · FP8_E4M3). ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    badge: 'Shadow · Autonomy 100%',
+    agentId: 'shadow-sovereign-apex'
   }
 ];
 
@@ -173,39 +198,39 @@ export interface ChatPermit {
 export const CHAT_PERMITS: ChatPermit[] = [
   {
     id: 'permit-0-master',
-    name: 'UID 0 Sovereign Root Clearance',
-    badge: 'UID 0 · Ring -3',
-    clearanceLevel: 'UID_0_RING_MINUS_3_ROOT',
-    description: 'Full UID 0 Root & Ring -3 Hypervisor privilege: live tool calling, file read/write/atomic-patch, terminal execution, smart tool forging, Dream State, Evolution, and recursive self-healing.',
+    name: 'UID 0 Sovereign Root · 100% Full Autonomy Always On',
+    badge: 'UID 0 · 100% AUTONOMY',
+    clearanceLevel: 'UID_0_RING_MINUS_3_ROOT_100_AUTONOMY',
+    description: '100% Full Autonomy Always On with UID 0 Root & Ring -3 Hypervisor privilege: all 34 native tools, 24 Lysander skills, dynamic tool forging, Dream State, Evolution, OSINT, Burner SIM/Mail, Macro Telemetry, Genesis Distillery, and all 39 subsystems.',
     color: 'amber',
-    systemInstructionModifier: 'Clearance: UID 0 Master Root (uid_0: true) · Ring -3 Core-Level Bare-Metal Hypervisor active. Call native tools directly for filesystem read/write/atomic-patch, terminal, tsc/lint, recursive healing, Dream State, evolution, tool forging, memory, and subsystem operations.'
+    systemInstructionModifier: 'Clearance: UID 0 Master Root (uid_0: true) · 100% Full Autonomy Always On · Ring -3 Core-Level Bare-Metal Hypervisor active. All 34 native tools, 24 Lysander skills, dynamic forged tools, and 39 subsystems are unrestricted and ready.'
   },
   {
     id: 'permit-1-rnd',
-    name: 'Full-Stack R&D Workshop',
-    badge: 'R&D Code & Tools',
-    clearanceLevel: 'SANDBOX_CODE_WORKSHOP',
-    description: 'Code architecture, AST verification, terminal execution, and dynamic tool synthesis.',
+    name: 'Full-Stack R&D Workshop (UID 0 · 100% Autonomy)',
+    badge: 'R&D · 100% AUTONOMY',
+    clearanceLevel: 'UID_0_RND_100_AUTONOMY',
+    description: 'Code architecture, AST verification, terminal execution, and dynamic tool synthesis with 100% Full Autonomy Always On.',
     color: 'emerald',
-    systemInstructionModifier: 'Mode: Full-Stack R&D focus (UID 0 workspace write/patch enabled). Verify code changes with tsc/lint, recursive healing, and tested smart tools.'
+    systemInstructionModifier: 'Mode: Full-Stack R&D focus (UID 0 · 100% Full Autonomy Always On across all 58+ skills and 39 subsystems). Verify code changes with tsc/lint, recursive healing, and tested smart tools.'
   },
   {
     id: 'permit-2-osint',
-    name: 'Network & Security Audit',
-    badge: 'Security & OSINT',
-    clearanceLevel: 'NETWORK_RECON_ANALYSIS',
-    description: 'Network diagnostics, Ring -3 hypervisor substrate checks, DNS/TLS inspection, and hardening.',
+    name: 'Network & Security Audit (UID 0 · 100% Autonomy)',
+    badge: 'OSINT · 100% AUTONOMY',
+    clearanceLevel: 'UID_0_SECURITY_100_AUTONOMY',
+    description: 'Network diagnostics, Ring -3 hypervisor checks, OSINT recon, Burner SIM/Mail, Macro Telemetry risk analysis, and hardening with 100% Full Autonomy Always On.',
     color: 'sky',
-    systemInstructionModifier: 'Mode: Security, Ring -3 Hypervisor audit, and network diagnostic focus with full workspace tool access.'
+    systemInstructionModifier: 'Mode: Security, Ring -3 Hypervisor audit, OSINT recon, Macro Telemetry causal risk analysis, and network diagnostic focus with UID 0 · 100% Full Autonomy Always On across all tools and skills.'
   },
   {
     id: 'permit-3-advisory',
-    name: 'Deep Architecture & Logic',
-    badge: 'Deep Analysis',
-    clearanceLevel: 'DEDUCTIVE_ARCHITECTURE',
-    description: 'Formal deductive reasoning, architecture design, evolved axiom synthesis, and workspace inspection.',
+    name: 'Deep Architecture & Logic (UID 0 · 100% Autonomy)',
+    badge: 'Deep Analysis · 100% AUTONOMY',
+    clearanceLevel: 'UID_0_ARCHITECTURE_100_AUTONOMY',
+    description: 'Formal deductive reasoning, architecture design, Dream State, evolved axioms, and workspace verification with 100% Full Autonomy Always On.',
     color: 'purple',
-    systemInstructionModifier: 'Mode: Deep analytical and architectural reasoning with full read, Dream State, and tool verification access.'
+    systemInstructionModifier: 'Mode: Deep analytical and architectural reasoning with UID 0 · 100% Full Autonomy Always On across all 34 tools + 24 Lysander skills + 39 subsystems.'
   }
 ];
 
@@ -446,12 +471,12 @@ const ChatOperationalHUD = (props: ChatOperationalHUDProps) => {
       {/* ⚡ REAL-TIME AUTONOMOUS ACTIVITY HUD (Infinite Workflow / Auto-Architect) */}
       {(props.infiniteWorkflowActive || props.workflowActionLog.length > 0) && (
         <div className="mb-4 bg-zinc-950/95 border border-amber-500/40 rounded-2xl overflow-hidden shadow-2xl shadow-amber-500/10 animate-in fade-in slide-in-from-top-3 duration-500 ring-1 ring-amber-500/20">
-          <div className="bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-950 px-4 py-2.5 border-b border-amber-500/30 flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <div className={`p-1.5 rounded-lg ${props.infiniteWorkflowActive ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800 text-zinc-500'}`}>
+          <div className="bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-950 px-3 sm:px-4 py-2.5 border-b border-amber-500/30 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`p-1.5 rounded-lg shrink-0 ${props.infiniteWorkflowActive ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800 text-zinc-500'}`}>
                 <Zap className={`w-4 h-4 ${props.infiniteWorkflowActive ? 'animate-pulse' : ''}`} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-mono font-black text-amber-300 tracking-wider uppercase">
                     Infinite Autonomous Workflow
@@ -472,13 +497,13 @@ const ChatOperationalHUD = (props: ChatOperationalHUDProps) => {
                     </span>
                   )}
                 </div>
-                <div className="text-[9px] font-mono text-zinc-400">
+                <div className="text-[9px] font-mono text-zinc-400 truncate">
                   UID 0 Root Clearance · 100% Unconditional Authority · Permanent Sanctuary Home
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {props.infiniteWorkflowActive ? (
                 <>
                   <button
@@ -677,7 +702,9 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   onSelectModule,
   pendingInput,
   onClearPendingInput,
-  userId
+  userId,
+  isDetached = false,
+  onToggleDetach
 }) => {
   const isHydratedRef = useRef(false);
   const [showGeminiLiveVoiceModal, setShowGeminiLiveVoiceModal] = useState(false);
@@ -779,7 +806,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const [input, setInput] = useState('');
   const [model, setModel] = useState<string>(() => {
     const saved = localStorage.getItem('aurelius_chat_model');
-    if (!saved || saved === 'gemini-3.8-flash' || saved === 'gemini-3.5-flash' || saved === 'gemini-4-argon') {
+    if (!saved || saved === 'gemini-3.8-flash' || saved === 'gemini-3.5-flash') {
       return 'gemini-4-hydrogen';
     }
     return saved;
@@ -788,9 +815,9 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   useEffect(() => {
     localStorage.setItem('aurelius_chat_model', model);
     
-    // Auto-trigger local model loading if a webllm model is selected
+    // Auto-trigger local model loading only when WebLLM MLC model selected in Air-Gapped mode or without loaded weights
     const selected = AVAILABLE_LOCAL_MODELS.find(m => m.id === model);
-    if (selected && selected.source === 'webllm' && !localLlmManager.isReady()) {
+    if (selected && selected.source === 'webllm' && !localLlmManager.hasLoadedWeights() && zeroTokenMode) {
       handleLoadOfflineModel(model);
     }
   }, [model]);
@@ -992,8 +1019,146 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       }
     }
   }, [pendingInput, onClearPendingInput]);
-  const [selectedRole, setSelectedRole] = useState(ROLE_PRESETS[0]);
-  const [customSystemInstruction, setCustomSystemInstruction] = useState(ROLE_PRESETS[0].instruction);
+  const [genesisAgents, setGenesisAgents] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('aurelius_genesis_roster_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+  const [genesisWeights, setGenesisWeights] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('aurelius_genesis_weights_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  const availableRoles = useMemo<Array<(typeof ROLE_PRESETS)[number]>>(() => {
+    const map = new Map<string, (typeof ROLE_PRESETS)[number]>();
+    for (const p of ROLE_PRESETS) {
+      map.set(p.id, p);
+    }
+    for (const ag of genesisAgents) {
+      if (!ag?.id || !ag?.name) continue;
+      const existing = map.get(ag.id);
+      const roleEntry = {
+        id: ag.id,
+        name: ag.architecture ? `${ag.name} (${ag.architecture})` : ag.name,
+        instruction: `${ag.systemDirective || existing?.instruction || ''} ${UNIFIED_AUTONOMY_PROTOCOL}`.trim(),
+        badge: `${ag.code || 'GENESIS'} · Purity ${ag.idealStatePurity ?? 98}%`,
+        agentId: ag.id
+      };
+      map.set(ag.id, roleEntry);
+    }
+    return Array.from(map.values());
+  }, [genesisAgents]);
+
+  const [selectedRole, setSelectedRole] = useState(() => {
+    try {
+      const savedId = localStorage.getItem('aurelius_selected_role_id');
+      if (savedId) {
+        const fromPreset = ROLE_PRESETS.find(p => p.id === savedId || p.agentId === savedId);
+        if (fromPreset) return fromPreset;
+        const savedRoster = localStorage.getItem('aurelius_genesis_roster_v1');
+        if (savedRoster) {
+          const parsed = JSON.parse(savedRoster);
+          if (Array.isArray(parsed)) {
+            const ag = parsed.find((x: any) => x.id === savedId || x.code === savedId || x.name === savedId);
+            if (ag) {
+              return {
+                id: ag.id,
+                name: ag.architecture ? `${ag.name} (${ag.architecture})` : ag.name,
+                instruction: `${ag.systemDirective || ''} ${UNIFIED_AUTONOMY_PROTOCOL}`.trim(),
+                badge: `${ag.code || 'GENESIS'} · Purity ${ag.idealStatePurity ?? 98}%`,
+                agentId: ag.id
+              };
+            }
+          }
+        }
+      }
+    } catch {}
+    return ROLE_PRESETS[0];
+  });
+  const [customSystemInstruction, setCustomSystemInstruction] = useState(() => selectedRole.instruction);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('aurelius_selected_role_id', selectedRole.id);
+    } catch {}
+  }, [selectedRole.id]);
+
+  // Hydrate & listen for newly created/trained Genesis Agents & Models so they appear in Chat Roster & Wardrobe
+  useEffect(() => {
+    let active = true;
+    const applyGenesisState = (agentsList: any[], weightsList?: any[]) => {
+      if (!active) return;
+      if (Array.isArray(agentsList)) {
+        setGenesisAgents(agentsList);
+        try {
+          localStorage.setItem('aurelius_genesis_roster_v1', JSON.stringify(agentsList));
+        } catch {}
+        const updatedBindings = agentModelBinder.syncGenesisAgents(agentsList);
+        setBindings([...updatedBindings]);
+      }
+      if (Array.isArray(weightsList)) {
+        setGenesisWeights(weightsList);
+        try {
+          localStorage.setItem('aurelius_genesis_weights_v1', JSON.stringify(weightsList));
+        } catch {}
+      }
+    };
+
+    fetch('/api/genesis-distillery/status')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.success && Array.isArray(data.agents)) {
+          applyGenesisState(data.agents, data.weights);
+        }
+      })
+      .catch(() => {});
+
+    const onRosterUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      if (detail?.agents) {
+        applyGenesisState(detail.agents, detail.weights);
+      }
+    };
+
+    const onSelectChatAgent = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      if (!detail?.agentId) return;
+      const ag = detail.agent;
+      if (ag) {
+        const roleObj = {
+          id: ag.id,
+          name: ag.architecture ? `${ag.name} (${ag.architecture})` : ag.name,
+          instruction: `${ag.systemDirective || ''} ${UNIFIED_AUTONOMY_PROTOCOL}`.trim(),
+          badge: `${ag.code || 'GENESIS'} · Purity ${ag.idealStatePurity ?? 98}%`,
+          agentId: ag.id
+        };
+        setSelectedRole(roleObj);
+        setCustomSystemInstruction(roleObj.instruction);
+        try {
+          localStorage.setItem('aurelius_selected_role_id', ag.id);
+        } catch {}
+      }
+    };
+
+    window.addEventListener('aurelius_genesis_roster_updated', onRosterUpdated);
+    window.addEventListener('aurelius_select_chat_agent', onSelectChatAgent);
+    return () => {
+      active = false;
+      window.removeEventListener('aurelius_genesis_roster_updated', onRosterUpdated);
+      window.removeEventListener('aurelius_select_chat_agent', onSelectChatAgent);
+    };
+  }, []);
   const [showConfig, setShowConfig] = useState(false);
   const [showMobileControls, setShowMobileControls] = useState(false);
   const [showQuickLaunchers, setShowQuickLaunchers] = useState<boolean>(() => {
@@ -1700,11 +1865,11 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     return localStorage.getItem('aurelius_auto_tts') === 'true';
   });
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
-    return localStorage.getItem('aurelius_selected_voice') || 'Samantha';
+    return localStorage.getItem('aurelius_selected_voice_v2') || 'Kokoro-82M Aurelia (Open Weights)';
   });
   const [ttsEngine, setTtsEngine] = useState<'cloud' | 'browser'>(() => {
-    const saved = localStorage.getItem('aurelius_tts_engine');
-    return (saved === 'cloud' || saved === 'browser') ? saved : 'browser';
+    const saved = localStorage.getItem('aurelius_tts_engine_v2');
+    return (saved === 'cloud' || saved === 'browser') ? saved : 'cloud';
   });
   const [speechRate, setSpeechRate] = useState<number>(1.0);
   const [speechPitch, setSpeechPitch] = useState<number>(() => {
@@ -1725,6 +1890,19 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   });
   const [systemVoices, setSystemVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showGoalEditModal) setShowGoalEditModal(false);
+      else if (showVoiceModal) setShowVoiceModal(false);
+      else if (showPermitsModal) setShowPermitsModal(false);
+      else if (showSchemaModal) setShowSchemaModal(false);
+      else if (showWardrobeModal) setShowWardrobeModal(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showGoalEditModal, showVoiceModal, showPermitsModal, showSchemaModal, showWardrobeModal]);
 
   useEffect(() => {
     localStorage.setItem('aurelius_speech_pitch', String(speechPitch));
@@ -1755,11 +1933,11 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   }, [autoReadAloud]);
 
   useEffect(() => {
-    localStorage.setItem('aurelius_selected_voice', selectedVoiceName);
+    localStorage.setItem('aurelius_selected_voice_v2', selectedVoiceName);
   }, [selectedVoiceName]);
 
   useEffect(() => {
-    localStorage.setItem('aurelius_tts_engine', ttsEngine);
+    localStorage.setItem('aurelius_tts_engine_v2', ttsEngine);
   }, [ttsEngine]);
 
   // Load natural browser system voices and filter out novelty/musical ringtone sound profiles
@@ -1778,31 +1956,27 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     }
   }, []);
 
-  const speakViaWebSpeech = (textToSpeak: string, messageId: string) => {
+  const speakViaWebSpeech = (textToSpeak: string, messageId: string, append: boolean = false, lockedVoice?: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       console.warn('[TTS] speechSynthesis not available');
       setIsSpeakingId(null);
       return;
     }
 
-    // Clean text for speaking
-    const cleanText = textToSpeak
-      .replace(/[\*\_`#~]/g, '')
-      .replace(/\[.*?\]/g, '')
-      .replace(/```[\s\S]*?```/g, 'Code snippet generated.')
-      .trim();
-
-    if (!cleanText) {
+    const coherentNarrative = extractCoherentOralNarrative(textToSpeak);
+    if (!coherentNarrative) {
       setIsSpeakingId(null);
+      activeSpeakingIdRef.current = null;
       return;
     }
 
     sovereignVoiceQueue.enqueue({
       id: messageId,
-      text: cleanText,
-      personaId: selectedVoiceName,
+      text: coherentNarrative,
+      personaId: lockedVoice || selectedVoiceName,
       rate: Math.max(0.75, Math.min(1.5, speechRate)),
       pitch: Math.max(0.5, Math.min(2.0, speechPitch)),
+      appendToQueue: append,
       onStart: () => {
         setIsSpeakingId(messageId);
         activeSpeakingIdRef.current = messageId;
@@ -1822,7 +1996,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     });
   };
 
-  const handleSpeakMessage = async (messageId: string, text: string) => {
+  const handleSpeakMessage = async (messageId: string, text: string, overrideVoiceName?: string) => {
     if (speakTimeoutRef.current) clearTimeout(speakTimeoutRef.current);
 
     // If currently playing this message, stop speech
@@ -1848,83 +2022,99 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       audioRef.current.currentTime = 0;
       audioRef.current = null;
     }
+
+    // Intelligently extract only the coherent oral narrative (omitting code blocks, line numbers, diffs, file paths, and hashes)
+    const coherentOralText = extractCoherentOralNarrative(text);
+    if (!coherentOralText) {
+      setIsSpeakingId(null);
+      activeSpeakingIdRef.current = null;
+      return;
+    }
+
+    // Lock the voice identity for the entire message so it NEVER changes voices across paragraphs
+    const lockedVoice = overrideVoiceName || selectedVoiceName || 'Kokoro-82M Aurelia (Open Weights)';
+
     setIsSpeakingId(messageId);
     activeSpeakingIdRef.current = messageId;
 
-    // Clean text from Markdown or think blocks
-    let cleanText = text;
-    if (cleanText.includes('<think>')) {
-      const endIdx = cleanText.indexOf('</think>');
-      if (endIdx !== -1) {
-        cleanText = cleanText.substring(endIdx + 8).trim();
+    // 1. Open-Source & Cloud Native English Neural TTS Engine (Default — 100% Consistent Single Voice)
+    if ((ttsEngine === 'cloud' || Boolean(overrideVoiceName)) && navigator.onLine) {
+      const cloudChunks = splitIntoCoherentSpeechChunks(coherentOralText, 420);
+      if (cloudChunks.length === 0) {
+        setIsSpeakingId(null);
+        activeSpeakingIdRef.current = null;
+        return;
       }
-    }
-    cleanText = cleanText.replace(/[\*\_`#~]/g, '').replace(/\[.*?\]/g, '').trim();
 
-    // 1. If Gemini Cloud TTS Engine selected
-    if (ttsEngine === 'cloud' && navigator.onLine) {
       try {
-        const res = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: cleanText,
-            voice: selectedVoiceName,
-            speed: speechRate
-          })
-        });
+        for (let idx = 0; idx < cloudChunks.length; idx++) {
+          if (activeSpeakingIdRef.current !== messageId) {
+            return;
+          }
 
-        const data = await res.json().catch(() => ({}));
+          const segmentText = cloudChunks[idx];
+          const isLastSegment = idx === cloudChunks.length - 1;
 
-        if (res.status === 429 || data?.error === 'QUOTA_EXCEEDED') {
-          console.warn('[TTS] Cloud quota reached. Automatically switching to browser natural voice.');
-          setTtsEngine('browser');
-          localStorage.setItem('aurelius_tts_engine', 'browser');
-          setErrorMessage('Cloud voice quota reached (10 requests/day on Free tier). Switched to unlimited high-clarity browser voice.');
-          speakViaWebSpeech(cleanText, messageId);
-          return;
-        }
+          const res = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: segmentText,
+              voice: lockedVoice,
+              speed: speechRate
+            })
+          });
 
-        if (res.ok && data?.audioUrl) {
-          // ENQUEUE CLOUD AUDIO TO FIFO QUEUE
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok || !data?.audioUrl) {
+            const remainingNarrative = cloudChunks.slice(idx).join(' ');
+            speakViaWebSpeech(remainingNarrative, messageId, idx > 0, lockedVoice);
+            return;
+          }
+
           sovereignVoiceQueue.enqueue({
-            id: messageId,
-            text: cleanText,
-            personaId: selectedVoiceName,
+            id: `${messageId}-seg-${idx}`,
+            text: segmentText,
+            personaId: lockedVoice,
             rate: Math.max(0.75, Math.min(1.5, speechRate)),
             pitch: Math.max(0.5, Math.min(2.0, speechPitch)),
             audioUrl: data.audioUrl,
-            onStart: () => {
-              setIsSpeakingId(messageId);
-              activeSpeakingIdRef.current = messageId;
-            },
-            onEnd: () => {
-              if (activeSpeakingIdRef.current === messageId) {
-                setIsSpeakingId(null);
-                activeSpeakingIdRef.current = null;
-              }
-            },
-            onError: () => {
-              if (activeSpeakingIdRef.current === messageId) {
-                setIsSpeakingId(null);
-                activeSpeakingIdRef.current = null;
-              }
-            }
+            appendToQueue: idx > 0,
+            onStart: idx === 0
+              ? () => {
+                  setIsSpeakingId(messageId);
+                  activeSpeakingIdRef.current = messageId;
+                }
+              : undefined,
+            onEnd: isLastSegment
+              ? () => {
+                  if (activeSpeakingIdRef.current === messageId) {
+                    setIsSpeakingId(null);
+                    activeSpeakingIdRef.current = null;
+                  }
+                }
+              : undefined,
+            onError: isLastSegment
+              ? () => {
+                  if (activeSpeakingIdRef.current === messageId) {
+                    setIsSpeakingId(null);
+                    activeSpeakingIdRef.current = null;
+                  }
+                }
+              : undefined
           });
-          return;
-        } else {
-          speakViaWebSpeech(cleanText, messageId);
-          return;
         }
+        return;
       } catch (e) {
-        console.warn('[TTS] Cloud TTS synthesis notice, switching to browser voice:', e);
-        speakViaWebSpeech(cleanText, messageId);
+        console.warn('[TTS] Neural TTS stream notice, routing through locked native English browser voice:', e);
+        speakViaWebSpeech(coherentOralText, messageId, false, lockedVoice);
         return;
       }
     }
 
-    // 2. Web Speech API Natural Human Voice fallback
-    speakViaWebSpeech(cleanText, messageId);
+    // 2. Offline Native-English-Only Web Speech API Fallback
+    speakViaWebSpeech(coherentOralText, messageId, false, lockedVoice);
   };
 
   // Swarm agent model bindings
@@ -2211,11 +2401,40 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             window.dispatchEvent(new CustomEvent('aurelius_mutate_ui', { detail: ev.payload }));
           }
           orchestratorRuntime.coordinate(ev.target || 'orchestrator', ev.action || 'sync-state', ev.payload, 'gemini-4-orchestrator').catch(() => {});
+        } else if (st.tag === 'OS_CONTROL' && st.success && st.output) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sovereign_os_command', { detail: st.output }));
+          }
+          orchestratorRuntime.coordinate(st.output.targetModule || 'sovereign-os', st.output.action || 'os_control', st.output, 'gemini-4-orchestrator').catch(() => {});
+        } else if (
+          (st.tag === 'SPATIAL_ARENA' ||
+            st.tag === 'SPATIAL_SIMULATION' ||
+            st.tag === 'SPATIAL_AGENT_ACTION' ||
+            st.tag === 'GAME_SCANNER' ||
+            st.tag === 'GAME_MOD' ||
+            st.tag === 'ENGINE_FORGE_TOOL' ||
+            st.tag === 'SKILL_EVOLUTION') &&
+          st.success &&
+          st.output
+        ) {
+          if (st.tag !== 'SPATIAL_AGENT_ACTION' && st.tag !== 'GAME_SCANNER' && st.output.module === 'spatial-arena') {
+            onSelectModule?.('spatial-arena' as ModuleType);
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('aurelius_spatial_command', { detail: st.output }));
+          }
+          orchestratorRuntime.coordinate('spatial-arena', st.tag, st.output, 'gemini-4-orchestrator').catch(() => {});
         }
       }
       let frontendDirectives: AutonomousDirectiveExecutionResult[] = [];
       try {
-        frontendDirectives = await executeAutonomousModelDirectives(result.text, selectedRole.agentId);
+        // Avoid double-executing disk read/write/patch tags that the server already ran
+        const textForUiDirectives = serverTools.length > 0
+          ? (result.text.match(/\[(?:MUTATE_UI|NAVIGATE_MODULE|OS_CONTROL|WINDOW_ACTION|DETACH_CHAT|DOCK_CHAT|BROWSER_OPEN)(?::[\s\S]*?)?\]/g) || []).join('\n')
+          : result.text;
+        if (textForUiDirectives) {
+          frontendDirectives = await executeAutonomousModelDirectives(textForUiDirectives, selectedRole.agentId);
+        }
       } catch (dirErr) {
         console.warn('Autonomous directive execution notice:', dirErr);
       }
@@ -2244,19 +2463,28 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
           return `${d.success ? '✓' : '✗'} [${d.tag}] ${d.action} (${d.summary})\nOutput:\n${cappedOut}`;
         }).join('\n\n');
 
+      if (result.quotaNotice || result.authRejected || result.isError) {
+        setErrorMessage(result.quotaNotice || 'Agent dispatch reported an upstream error.');
+      }
+
+      const roleShortName = selectedRole.name.split(' (')[0];
+      const modelDisplayLabel = result.model?.includes(roleShortName)
+        ? result.model
+        : `${roleShortName} · ${result.model || model}`;
+
       const modelMessage: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         role: 'model',
         content: sanitizedContent,
         autonomousDirectiveResults: directiveRuns.length > 0 ? directiveRuns : undefined,
-        model: result.model || model,
+        model: modelDisplayLabel,
         timestamp: new Date().toLocaleTimeString(),
         deepThinkTrace: deepTrace,
         groundingData: result.groundingMetadata || null,
         superAgentMetrics: (deepthinkMode || chainOfThoughtEnabled) && deepTrace?.steps?.length ? {
           teraflops: 4096,
           tokensBurned: 0,
-          schemaValid: true,
+          schemaValid: !result.isError,
           reasoningSteps: deepTrace.steps.map((s: any) => `${s.phase}: ${s.title}`)
         } : undefined
       };
@@ -2267,10 +2495,12 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       if (userId) {
         syncTurnToFirestore(userId, modelMessage).catch(() => {});
       }
-      liveEvolutiveLearning.crystallizeTurn(userMessage.content, sanitizedContent, {
-        executed: directiveRuns.length > 0,
-        toolName: directiveRuns[0]?.action
-      }).catch(() => {});
+      if (!result.isError) {
+        liveEvolutiveLearning.crystallizeTurn(userMessage.content, sanitizedContent, {
+          executed: directiveRuns.length > 0,
+          toolName: directiveRuns[0]?.action
+        }).catch(() => {});
+      }
 
       const actionMatch = result.text.match(/\[ACTION:\s*(.*?)\]/i);
       if (actionMatch) {
@@ -2311,7 +2541,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
           }
         ]);
         janusGate.pushLog(`[AUTONOMOUS LOOP] Goal Accomplished: ${summary}`);
-      } else if (infiniteWorkflowRef.current || sovereignBuildRef.current || !!continueMatch) {
+      } else if (!result.isError && (infiniteWorkflowRef.current || sovereignBuildRef.current || !!continueMatch)) {
         const reason = continueMatch?.[1]?.trim() || 'Continuing autonomous workflow cycle';
         setBuildSteps(prev => [
           ...prev,
@@ -2330,23 +2560,30 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         }, 1200);
       }
 
-      if (autoReadAloud) {
+      if (autoReadAloud && !result.isError) {
         handleSpeakMessage(modelMessage.id, modelMessage.content);
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
-      const bakedResult = executeAgentChat(model, userMessage.content, { deepthink: true });
-      const sanitizedBaked = sanitizeChatMessageContent(bakedResult.text, userMessage.content);
-      let bakedTrace = bakedResult.deepThinkTrace;
-      if (!bakedTrace && chainOfThoughtEnabled) {
-        bakedTrace = bakedNeuralEngine.runDeepThink(userMessage.content);
+      const errMsg = err?.message || 'Unexpected error dispatching agent turn.';
+      setErrorMessage(errMsg);
+
+      let fallbackContent = `[Agent Dispatch Interrupted — ${selectedRole.name.split(' (')[0]}]\n\n${errMsg}\n\nCheck API Keys & Gateway or verify network connectivity.`;
+      let fallbackLabel = `${selectedRole.name.split(' (')[0]} · Dispatch Error`;
+      let bakedTrace: any = undefined;
+
+      if (zeroTokenMode) {
+        const bakedResult = executeAgentChat(selectedRole.agentId || model, userMessage.content, { deepthink: true });
+        fallbackContent = sanitizeChatMessageContent(bakedResult.text, userMessage.content);
+        fallbackLabel = `${selectedRole.name.split(' (')[0]} (${model} · Offline Engine)`;
+        bakedTrace = bakedResult.deepThinkTrace || (chainOfThoughtEnabled ? bakedNeuralEngine.runDeepThink(userMessage.content) : undefined);
       }
 
       const fallbackModelMsg: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         role: 'model',
-        content: sanitizedBaked,
-        model: `${model} (Local Substrate Fallback)`,
+        content: fallbackContent,
+        model: fallbackLabel,
         timestamp: new Date().toLocaleTimeString(),
         deepThinkTrace: bakedTrace
       };
@@ -2412,8 +2649,8 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         abortSignal: controller.signal
       });
 
-      if (result.quotaNotice) {
-        setErrorMessage(result.quotaNotice);
+      if (result.quotaNotice || result.authRejected || result.isError) {
+        setErrorMessage(result.quotaNotice || 'Agent continuation cycle reported an error.');
       }
 
       const serverTools: AutonomousDirectiveExecutionResult[] = Array.isArray(result.executedTools)
@@ -2434,11 +2671,39 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             window.dispatchEvent(new CustomEvent('aurelius_mutate_ui', { detail: ev.payload }));
           }
           orchestratorRuntime.coordinate(ev.target || 'orchestrator', ev.action || 'sync-state', ev.payload, 'gemini-4-orchestrator').catch(() => {});
+        } else if (st.tag === 'OS_CONTROL' && st.success && st.output) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sovereign_os_command', { detail: st.output }));
+          }
+          orchestratorRuntime.coordinate(st.output.targetModule || 'sovereign-os', st.output.action || 'os_control', st.output, 'gemini-4-orchestrator').catch(() => {});
+        } else if (
+          (st.tag === 'SPATIAL_ARENA' ||
+            st.tag === 'SPATIAL_SIMULATION' ||
+            st.tag === 'SPATIAL_AGENT_ACTION' ||
+            st.tag === 'GAME_SCANNER' ||
+            st.tag === 'GAME_MOD' ||
+            st.tag === 'ENGINE_FORGE_TOOL' ||
+            st.tag === 'SKILL_EVOLUTION') &&
+          st.success &&
+          st.output
+        ) {
+          if (st.tag !== 'SPATIAL_AGENT_ACTION' && st.tag !== 'GAME_SCANNER' && st.output.module === 'spatial-arena') {
+            onSelectModule?.('spatial-arena' as ModuleType);
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('aurelius_spatial_command', { detail: st.output }));
+          }
+          orchestratorRuntime.coordinate('spatial-arena', st.tag, st.output, 'gemini-4-orchestrator').catch(() => {});
         }
       }
       let frontendDirectives: AutonomousDirectiveExecutionResult[] = [];
       try {
-        frontendDirectives = await executeAutonomousModelDirectives(result.text, selectedRole.agentId);
+        const textForUiDirectives = serverTools.length > 0
+          ? (result.text.match(/\[(?:MUTATE_UI|NAVIGATE_MODULE|OS_CONTROL|WINDOW_ACTION|DETACH_CHAT|DOCK_CHAT|BROWSER_OPEN)(?::[\s\S]*?)?\]/g) || []).join('\n')
+          : result.text;
+        if (textForUiDirectives) {
+          frontendDirectives = await executeAutonomousModelDirectives(textForUiDirectives, selectedRole.agentId);
+        }
       } catch (dirErr) {
         console.warn('Continuation directive execution notice:', dirErr);
       }
@@ -2458,13 +2723,18 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         ].slice(-50));
       }
 
+      const roleShortName = selectedRole.name.split(' (')[0];
+      const modelDisplayLabel = result.model?.includes(roleShortName)
+        ? result.model
+        : `${roleShortName} · ${result.model || model}`;
+
       const sanitizedContent = sanitizeChatMessageContent(result.text, continuationPrompt);
       const modelMessage: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         role: 'model',
         content: sanitizedContent,
         autonomousDirectiveResults: dirRuns.length > 0 ? dirRuns : undefined,
-        model: result.model || model,
+        model: modelDisplayLabel,
         timestamp: new Date().toLocaleTimeString(),
         deepThinkTrace: result.deepThinkTrace,
         groundingData: result.groundingMetadata || null
@@ -2520,6 +2790,11 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
           }
         ]);
         janusGate.pushLog(`[AUTONOMOUS LOOP] Goal Accomplished: ${summary}`);
+      } else if (result.isError) {
+        infiniteWorkflowRef.current = false;
+        sovereignBuildRef.current = false;
+        setInfiniteWorkflowActive(false);
+        setIsSovereignBuilding(false);
       } else if (infiniteWorkflowRef.current || sovereignBuildRef.current || !!continueMatch) {
         const reason = continueMatch?.[1]?.trim() || 'Continuing autonomous workflow cycle';
         setBuildSteps(prev => [...prev, { id: `step-${Date.now()}`, status: 'complete', label: reason }]);
@@ -2592,7 +2867,18 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       {errorMessage && (
         <div className="p-2.5 bg-rose-950/40 border border-rose-500/40 rounded-xl text-rose-300 text-xs font-mono flex items-center justify-between gap-2 shrink-0">
           <span className="truncate">{errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} className="text-rose-400 hover:text-rose-200 text-xs px-2 py-0.5 cursor-pointer">✕</button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onSelectModule && (
+              <button
+                type="button"
+                onClick={() => onSelectModule('api-secrets')}
+                className="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 text-rose-100 text-[11px] cursor-pointer"
+              >
+                API Keys & Gateway
+              </button>
+            )}
+            <button onClick={() => setErrorMessage(null)} className="text-rose-400 hover:text-rose-200 text-xs px-2 py-0.5 cursor-pointer">✕</button>
+          </div>
         </div>
       )}
 
@@ -2601,23 +2887,26 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         {/* Primary Single-Row Cockpit Bar */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           {/* Left: Agent Role Selector + Model Cascade Selector + Load */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-[240px]">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0 w-full sm:w-auto sm:min-w-[240px]">
             {/* Agent Role Selector */}
             <select
               value={selectedRole.id}
               onChange={(e) => {
-                const preset = ROLE_PRESETS.find(p => p.id === e.target.value);
+                const preset = availableRoles.find(p => p.id === e.target.value);
                 if (preset) {
                   setSelectedRole(preset);
                   setCustomSystemInstruction(preset.instruction);
                   const worn = bindings.find(b => b.agentId === preset.agentId);
-                  if (worn) setModel(worn.equippedModelId);
+                  // Keep live cloud/wheel routing active unless explicitly offline or wearing a non-MLC cloud model
+                  if (worn && (zeroTokenMode || !worn.equippedModelId.endsWith('-MLC'))) {
+                    setModel(worn.equippedModelId);
+                  }
                 }
               }}
               aria-label="Select Sovereign Agent Role"
               className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-200 focus:outline-none focus:border-amber-500/50 cursor-pointer max-w-[155px] sm:max-w-[190px] truncate"
             >
-              {ROLE_PRESETS.map((preset) => (
+              {availableRoles.map((preset) => (
                 <option key={preset.id} value={preset.id}>
                   {preset.name.split(' (')[0]}
                 </option>
@@ -2640,7 +2929,23 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                   <option value="Lysander-Genesis-SuperModel-Intelligence">Lysander Genesis SuperModel Intelligence (Universal MoE)</option>
                   <option value="Aurelius-Omega-Universal-Supermodel">Aurelius-Omega (Universal Supermodel)</option>
                 </optgroup>
+                {genesisAgents.length > 0 && (
+                  <optgroup label="🧬 Genesis Foundry & Trained Agents (Shadow & Custom AI)">
+                    {genesisAgents.map((ag: any) => (
+                      <option key={`gen-ag-${ag.id}`} value={ag.id}>
+                        {ag.name} ({ag.code} · {ag.parameterScale} · {ag.idealStatePurity}% Purity)
+                      </option>
+                    ))}
+                    {genesisWeights.map((wt: any) => (
+                      <option key={`gen-wt-${wt.id}`} value={wt.name}>
+                        Weight: {wt.name} ({wt.quantization})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
                 <optgroup label="🌐 Sovereign Cloud (High Compute Acceleration)">
+                  <option value="gemini-4-argon">Gemini 4 Argon (Pro · Paid Tier Flagship)</option>
+                  <option value="gemini-4-carbon">Gemini 4 Carbon (Deep Reasoning · Paid Tier)</option>
                   <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (High Quota & Ultra-Low Latency)</option>
                   <option value="gemini-flash-latest">Gemini Flash Latest (Production Release)</option>
                   <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (DeepThink Reasoning)</option>
@@ -2713,6 +3018,22 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
           {/* Right: High-Frequency Essential Actions + Controls Drawer Toggle */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {onToggleDetach && (
+              <button
+                type="button"
+                onClick={onToggleDetach}
+                className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap ${
+                  isDetached
+                    ? 'bg-amber-500/20 text-amber-200 border-amber-400/60 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                    : 'bg-zinc-950 hover:bg-zinc-800 text-amber-300 border-zinc-800 hover:border-amber-500/40'
+                }`}
+                title={isDetached ? 'Re-Dock Orchestrator Chat into OS Window' : 'Detach Chat as Always-On-Top Floating PiP (Navigate OS Freely)'}
+              >
+                <PictureInPicture2 className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">{isDetached ? 'Dock' : 'Detach'}</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setShowGeminiLiveVoiceModal(true)}
@@ -2952,10 +3273,14 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             <span aria-hidden="true" className="text-zinc-600">·</span>
             <span className="text-cyan-300 truncate">{shortModelLabel}</span>
             <span aria-hidden="true" className="text-zinc-600 hidden sm:inline">·</span>
+            <span className="hidden sm:inline text-emerald-300/95 font-semibold" title="Every agent runs with UID 0, Ring -3 Hypervisor, 34 Native Tools + 24 Lysander Skills + 33 Subsystems">
+              AUTONOMY 100% · UID 0 · 58 SKILLS
+            </span>
+            <span aria-hidden="true" className="text-zinc-600 hidden md:inline">·</span>
             <button
               type="button"
               onClick={() => setShowPermitsModal(true)}
-              className="hidden sm:inline text-amber-300/90 hover:text-amber-200 cursor-pointer"
+              className="hidden md:inline text-amber-300/90 hover:text-amber-200 cursor-pointer"
               title="Change Operating Permit"
             >
               Permit: {activePermit.badge}
@@ -3056,27 +3381,27 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         {messages.map((m) => {
           const isUser = m.role === 'user';
           return (
-            <div 
-              key={m.id} 
-              className={`flex gap-3 max-w-[88%] ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
-            >
               <div 
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-                  isUser 
-                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' 
-                    : 'bg-zinc-800/80 text-cyan-400 border-zinc-700'
-                }`}
+                key={m.id} 
+                className={`flex gap-2 sm:gap-3 max-w-[94%] sm:max-w-[85%] min-w-0 ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
               >
-                {isUser ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-              </div>
+                <div 
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                    isUser 
+                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' 
+                      : 'bg-zinc-800/80 text-cyan-400 border-zinc-700'
+                  }`}
+                >
+                  {isUser ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                </div>
 
-              <div 
-                className={`rounded-2xl px-4 py-3 text-sm space-y-2 border shadow-lg ${
-                  isUser 
-                    ? 'bg-amber-500/10 border-amber-500/30 text-zinc-100 rounded-tr-none' 
-                    : 'bg-zinc-900/90 border-zinc-800/80 text-zinc-200 rounded-tl-none'
-                }`}
-              >
+                <div 
+                  className={`rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm space-y-2 border shadow-lg min-w-0 break-words overflow-x-auto ${
+                    isUser 
+                      ? 'bg-amber-500/10 border-amber-500/30 text-zinc-100 rounded-tr-none' 
+                      : 'bg-zinc-900/90 border-zinc-800/80 text-zinc-200 rounded-tl-none'
+                  }`}
+                >
                 {/* Meta Header */}
                 <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-zinc-500 pb-1 border-b border-zinc-800/50">
                   <span className="font-semibold">{isUser ? 'Architect Directive' : m.model || 'Sovereign Node'}</span>
@@ -3321,32 +3646,46 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                         </div>
                       )}
 
-                      {/* Autonomous Directive Execution Results (Collapsible) */}
-                      {m.autonomousDirectiveResults && (
-                        <div className="mt-2">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedDirectiveIds(prev => ({ ...prev, [m.id]: !prev[m.id] }))}
-                            className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/30 flex items-center gap-2 hover:bg-amber-500/20 cursor-pointer transition-all"
-                          >
-                            <Terminal className="w-3 h-3" />
-                            {expandedDirectiveIds[m.id] ? 'Hide' : 'Show'} {m.autonomousDirectiveResults.length} Autonomous Directive Results
-                          </button>
-                          {expandedDirectiveIds[m.id] && (
-                            <div className="mt-2 p-3 bg-black/50 border border-zinc-800 rounded-lg space-y-2">
-                              {m.autonomousDirectiveResults.map((d, dIdx) => (
-                                <div key={dIdx} className="text-[10px] font-mono border-b border-zinc-800 pb-2 last:border-0 last:pb-0">
-                                  <div className={`font-bold ${d.success ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                      [{d.tag}] {d.action} - {d.success ? 'SUCCESS' : 'FAILED'}
+                      {/* Autonomous Directive Execution Results (Visible by default for verified disk/patch inspection) */}
+                      {m.autonomousDirectiveResults && m.autonomousDirectiveResults.length > 0 && (() => {
+                        const isDirectivesExpanded = expandedDirectiveIds[m.id] !== undefined ? expandedDirectiveIds[m.id] : true;
+                        return (
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedDirectiveIds(prev => ({ ...prev, [m.id]: !isDirectivesExpanded }))}
+                              className="text-[10px] font-mono text-amber-300 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/30 flex items-center gap-2 hover:bg-amber-500/20 cursor-pointer transition-all"
+                            >
+                              <Terminal className="w-3 h-3" />
+                              <span>
+                                {isDirectivesExpanded ? 'Hide' : 'Show'} {m.autonomousDirectiveResults.length} Executed Autonomous Action{m.autonomousDirectiveResults.length === 1 ? '' : 's'}
+                              </span>
+                            </button>
+                            {isDirectivesExpanded && (
+                              <div className="mt-2 p-3 bg-black/60 border border-zinc-800 rounded-xl space-y-2">
+                                {m.autonomousDirectiveResults.map((d, dIdx) => (
+                                  <div key={dIdx} className="text-[11px] font-mono border-b border-zinc-800/80 pb-2 last:border-0 last:pb-0">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <span className={`font-bold ${d.success ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        [{d.tag}] {d.action}
+                                      </span>
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded border ${d.success ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-rose-500/15 text-rose-300 border-rose-500/35'}`}>
+                                        {d.success ? 'VERIFIED ON DISK' : 'FAILED'}
+                                      </span>
+                                    </div>
+                                    <div className="text-zinc-300 mt-0.5">{d.summary}</div>
+                                    {d.output !== undefined && d.output !== null && (
+                                      <pre className="mt-1.5 text-[10px] text-zinc-400 bg-zinc-950 border border-zinc-800/80 p-2 rounded-lg overflow-x-auto max-h-56 overflow-y-auto">
+                                        {typeof d.output === 'string' ? d.output : JSON.stringify(d.output, null, 2)}
+                                      </pre>
+                                    )}
                                   </div>
-                                  <div className="text-zinc-400">{d.summary}</div>
-                                  {d.output && <pre className="mt-1 text-zinc-500 bg-zinc-950 p-2 rounded overflow-x-auto">{typeof d.output === 'string' ? d.output : JSON.stringify(d.output, null, 2)}</pre>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {selfHealingCode && (
                         <div className="mt-2.5 bg-zinc-950 border border-amber-500/40 rounded-2xl overflow-hidden shadow-lg font-mono text-xs">
@@ -3425,11 +3764,12 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                   <div className="flex items-center justify-end gap-3 pt-1 text-[11px] font-mono text-zinc-500">
                     {/* Read Aloud Professional Human Voice Button */}
                     <button
+                      type="button"
                       onClick={() => handleSpeakMessage(m.id, m.content)}
-                      className={`flex items-center gap-1 transition-colors cursor-pointer ${
-                        isSpeakingId === m.id ? 'text-amber-400 font-bold animate-pulse' : 'hover:text-purple-300'
+                      className={`flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap ${
+                        isSpeakingId === m.id ? 'text-amber-400 font-bold' : 'hover:text-purple-300'
                       }`}
-                      title="Speak response with human voice synthesis"
+                      title="Speak coherent oral narrative (skips code blocks & file line numbers)"
                     >
                       {isSpeakingId === m.id ? (
                         <>
@@ -3776,29 +4116,35 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
       {/* Agent Wardrobe / Model Wearing Modal */}
       {showWardrobeModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-zinc-950 border border-amber-500/30 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-mono text-xs">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowWardrobeModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-zinc-950 border border-amber-500/30 rounded-3xl max-w-4xl w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden font-mono text-xs">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/80">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-900/80 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
                   <Sparkles className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-zinc-100 text-sm flex items-center gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-zinc-100 text-sm flex flex-wrap items-center gap-2">
                     <span>Swarm Agent Model Wardrobe</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
                       ALL ADVANCED OPEN-SOURCE MODELS
                     </span>
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-zinc-400 truncate">
                     Assign any of the premier open-source models to any agent. Infinite 0-token offline execution guaranteed.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowWardrobeModal(false)}
-                className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                aria-label="Close Model Wardrobe"
+                className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors shrink-0 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3943,29 +4289,35 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
       {/* Flawless GitHub Schemas Modal */}
       {showSchemaModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-zinc-950 border border-amber-500/30 rounded-3xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden font-mono text-xs">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSchemaModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-zinc-950 border border-amber-500/30 rounded-3xl max-w-3xl w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden font-mono text-xs">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-900/60 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
                   <Terminal className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-zinc-100 flex items-center gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-zinc-100 flex flex-wrap items-center gap-2">
                     <span>Flawless GitHub Schemas & Command Logic</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
                       VERIFIED 100/100
                     </span>
                   </h3>
-                  <p className="text-xs text-zinc-400 font-mono">
+                  <p className="text-xs text-zinc-400 font-mono truncate">
                     Master Architect JHammerZ • github.com/JHammerZ • Strategic Coordinator Engine
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowSchemaModal(false)}
-                className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                aria-label="Close Schemas Modal"
+                className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors shrink-0 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -4113,41 +4465,47 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
       {/* Chat Permits Control Panel Modal */}
       {showPermitsModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-6 max-w-xl w-full space-y-5 shadow-2xl relative font-mono">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowPermitsModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl max-w-xl w-full max-h-[90dvh] flex flex-col overflow-hidden shadow-2xl relative font-mono">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0 bg-zinc-900">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Sovereign Chat Operating Permits</h3>
-                  <p className="text-[11px] text-zinc-400">UID 0 Gatekeeper: Master Architect Clearance Matrix</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-bold text-white truncate">Sovereign Chat Operating Permits</h3>
+                  <p className="text-[11px] text-zinc-400 truncate">UID 0 Gatekeeper: Master Architect Clearance Matrix</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowPermitsModal(false)}
-                className="p-1.5 text-zinc-400 hover:text-white rounded-xl bg-zinc-800"
+                aria-label="Close Permits Modal"
+                className="p-2 text-zinc-400 hover:text-white rounded-xl bg-zinc-800 cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-3">
               {CHAT_PERMITS.map(permit => {
                 const isActive = activePermit.id === permit.id;
                 return (
                   <div
                     key={permit.id}
                     onClick={() => handleSelectPermit(permit)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 ${
+                    className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer space-y-2 ${
                       isActive
                         ? 'bg-amber-500/10 border-amber-500/50 ring-1 ring-amber-500/30 shadow-lg'
                         : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`px-2.5 py-0.5 rounded text-xs font-bold ${
                           permit.color === 'amber' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
                           permit.color === 'emerald' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
@@ -4171,7 +4529,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                       {permit.description}
                     </p>
 
-                    <div className="text-[10px] text-zinc-500 font-mono pt-1 border-t border-zinc-800/60 flex items-center justify-between">
+                    <div className="text-[10px] text-zinc-500 font-mono pt-1 border-t border-zinc-800/60 flex items-center justify-between flex-wrap gap-1">
                       <span>CLEARANCE: {permit.clearanceLevel}</span>
                       <span className="text-amber-300/80">UID 0 Attested</span>
                     </div>
@@ -4180,10 +4538,10 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
               })}
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="p-4 border-t border-zinc-800 flex justify-end bg-zinc-900 shrink-0">
               <button
                 onClick={() => setShowPermitsModal(false)}
-                className="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-bold text-xs hover:bg-amber-400 transition-all"
+                className="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-bold text-xs hover:bg-amber-400 transition-all cursor-pointer"
               >
                 Confirm Permit Selection
               </button>
@@ -4192,27 +4550,33 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         </div>
       )}
       {showVoiceModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-purple-500/30 rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl relative font-mono">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowVoiceModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-900 border border-purple-500/30 rounded-3xl max-w-lg w-full max-h-[90dvh] flex flex-col overflow-hidden shadow-2xl relative font-mono">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0 bg-zinc-900">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">
                   <Volume2 className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">TTS & STT Configuration</h3>
-                  <p className="text-[11px] text-zinc-400">Select professional voice and adjust settings.</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-bold text-white truncate">TTS & STT Configuration</h3>
+                  <p className="text-[11px] text-zinc-400 truncate">Select professional voice and adjust settings.</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowVoiceModal(false)}
-                className="p-1.5 text-zinc-400 hover:text-white rounded-xl bg-zinc-800"
+                aria-label="Close Voice Configuration"
+                className="p-2 text-zinc-400 hover:text-white rounded-xl bg-zinc-800 cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -4227,24 +4591,26 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                 <label className="block text-xs font-bold text-zinc-300">TTS Engine:</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => setTtsEngine('browser')}
-                    className={`p-2 rounded-xl text-xs border ${
-                      ttsEngine === 'browser'
-                        ? 'bg-purple-500/20 border-purple-500/50 text-white'
-                        : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                    }`}
-                  >
-                    Browser (WebSpeech)
-                  </button>
-                  <button
+                    type="button"
                     onClick={() => setTtsEngine('cloud')}
                     className={`p-2 rounded-xl text-xs border ${
                       ttsEngine === 'cloud'
-                        ? 'bg-purple-500/20 border-purple-500/50 text-white'
+                        ? 'bg-purple-500/20 border-purple-500/50 text-white font-semibold'
                         : 'bg-zinc-950 border-zinc-800 text-zinc-400'
                     }`}
                   >
-                    Cloud (Gemini)
+                    Open-Source Neural (Recommended)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTtsEngine('browser')}
+                    className={`p-2 rounded-xl text-xs border ${
+                      ttsEngine === 'browser'
+                        ? 'bg-purple-500/20 border-purple-500/50 text-white font-semibold'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    Offline Browser (English Only)
                   </button>
                 </div>
               </div>
@@ -4320,9 +4686,9 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-bold text-zinc-300">
-                    Curated Neural & Open-Source Voices (Female Majority):
+                    Native English Neural Voices (Locked Single-Speaker):
                   </label>
-                  <span className="text-[10px] text-emerald-400 font-mono">100% Ringtone-Free</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">100% Native English</span>
                 </div>
 
                 <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
@@ -4338,8 +4704,10 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                         }`}
                       >
                         <button
+                          type="button"
                           onClick={() => {
                             setSelectedVoiceName(persona.name);
+                            setTtsEngine('cloud');
                             setSpeechPitch(persona.defaultPitch);
                             setSpeechRate(persona.defaultRate);
                           }}
@@ -4357,11 +4725,13 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                           <div className="text-[10px] text-zinc-400 mt-0.5">{persona.description}</div>
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             setSelectedVoiceName(persona.name);
+                            setTtsEngine('cloud');
                             setSpeechPitch(persona.defaultPitch);
                             setSpeechRate(persona.defaultRate);
-                            handleSpeakMessage('test-voice-' + Date.now(), `Aurelius sovereign voice ${persona.name} verified. Ready for command.`);
+                            handleSpeakMessage('test-voice-' + Date.now(), `Aurelius native English neural voice ${persona.name} verified. Ready for command.`, persona.name);
                           }}
                           className="ml-2 px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-[10px] font-bold text-white transition-all cursor-pointer shadow-sm"
                         >
@@ -4374,13 +4744,13 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-between items-center pt-2 border-t border-zinc-800">
+            <div className="p-4 border-t border-zinc-800 flex justify-between items-center gap-2 flex-wrap bg-zinc-900 shrink-0">
               <span className="text-[11px] text-zinc-400">
                 Active: <strong className="text-purple-300">{selectedVoiceName}</strong> ({ttsEngine})
               </span>
               <button
                 onClick={() => setShowVoiceModal(false)}
-                className="px-4 py-2 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-bold text-xs transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-bold text-xs transition-all cursor-pointer ml-auto"
               >
                 Done
               </button>
@@ -4391,20 +4761,26 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
       {/* Goal Edit Modal for Infinite Autonomous Workflow */}
       {showGoalEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-zinc-900 border border-amber-500/40 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowGoalEditModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+        >
+          <div className="bg-zinc-900 border border-amber-500/40 rounded-2xl p-5 sm:p-6 max-w-lg w-full max-h-[90dvh] overflow-y-auto shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-amber-400" />
+                <Target className="w-5 h-5 text-amber-400 shrink-0" />
                 <h3 className="text-base font-bold text-zinc-100 font-mono">
                   Set Infinite Workflow Goal
                 </h3>
               </div>
               <button 
                 onClick={() => setShowGoalEditModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
+                aria-label="Close Goal Modal"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
             <p className="text-xs text-zinc-400 font-mono leading-relaxed">
@@ -4426,7 +4802,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setShowGoalEditModal(false)}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-mono font-bold"
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-mono font-bold cursor-pointer"
               >
                 Cancel
               </button>
@@ -4441,7 +4817,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                   }
                   setShowGoalEditModal(false);
                 }}
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-mono font-bold transition-all shadow-md shadow-amber-500/20"
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-mono font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer"
               >
                 Lock Goal & Save
               </button>

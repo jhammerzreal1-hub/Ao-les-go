@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import fs from 'fs';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
@@ -89,15 +100,13 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const WHEEL_CONFIG_PATH = path.join(DATA_DIR, '.proxy_wheel_config.json');
 
 const CAPABLE_GEMINI_BASELINE: Array<{ model: string; tier: WheelTier; supportsTools: boolean; supportsThinking: boolean }> = [
+  { model: 'gemini-4-hydrogen', tier: 'flagship', supportsTools: true, supportsThinking: true },
   { model: 'gemini-3-flash-preview', tier: 'flagship', supportsTools: true, supportsThinking: true },
   { model: 'gemini-3.5-flash-lite', tier: 'flagship', supportsTools: true, supportsThinking: false },
-  { model: 'gemini-2.5-flash', tier: 'flagship', supportsTools: true, supportsThinking: true },
   { model: 'gemini-flash-latest', tier: 'flagship', supportsTools: true, supportsThinking: false },
   { model: 'gemini-flash-lite-latest', tier: 'capable', supportsTools: true, supportsThinking: false },
   { model: 'gemini-3.1-flash-lite-preview', tier: 'capable', supportsTools: true, supportsThinking: true },
-  { model: 'gemini-2.5-flash-lite', tier: 'capable', supportsTools: true, supportsThinking: false },
   { model: 'gemini-3.5-flash', tier: 'capable', supportsTools: true, supportsThinking: true },
-  { model: 'gemini-4-hydrogen', tier: 'capable', supportsTools: true, supportsThinking: true },
   { model: 'gemma-4-31b-it', tier: 'fast', supportsTools: false, supportsThinking: false },
   { model: 'gemma-4-26b-a4b-it', tier: 'fast', supportsTools: false, supportsThinking: false }
 ];
@@ -312,16 +321,11 @@ class ProxyLoopWheelManager {
       lower.includes('nano-banana') ||
       lower.includes('decision') ||
       lower.includes('translate') ||
-      lower.includes('argon') ||
-      lower.includes('carbon') ||
       lower.includes('3.6') ||
       lower.includes('3.7') ||
       lower.includes('3.8') ||
       lower.includes('gemini-1.') ||
       lower.includes('gemini-2.0') ||
-      lower.includes('2.5-pro') ||
-      lower.includes('pro-latest') ||
-      lower.includes('3.1-pro') ||
       lower === 'gemini-pro'
     ) {
       return false;
@@ -850,10 +854,23 @@ class ProxyLoopWheelManager {
 
     const pref = (opts?.preferredModel || '').trim().toLowerCase();
     const prefMatches = (s: WheelSpokePublic): boolean => {
-      if (!pref || pref === 'auto' || pref === 'default' || pref === 'proxy-wheel' || pref === 'lyrailius-omega-ultimate-sovereign-moe') {
+      if (
+        !pref ||
+        pref === 'auto' ||
+        pref === 'default' ||
+        pref === 'proxy-wheel' ||
+        pref === 'lyrailius-omega-ultimate-sovereign-moe' ||
+        pref === 'aurelius-omega-universal-supermodel' ||
+        pref === 'lysander-genesis-supermodel-intelligence'
+      ) {
         return false;
       }
-      return s.model.toLowerCase() === pref || s.model.toLowerCase().includes(pref) || pref.includes(s.model.toLowerCase());
+      const sm = s.model.toLowerCase();
+      if (sm === pref || sm.includes(pref) || pref.includes(sm)) return true;
+      if (pref.includes('deepseek') && sm.includes('deepseek')) return true;
+      if (pref.includes('qwen') && sm.includes('qwen')) return true;
+      if (pref.includes('llama') && sm.includes('llama')) return true;
+      return false;
     };
 
     const rotateArray = <T>(arr: T[], offset: number): T[] => {
@@ -899,16 +916,21 @@ class ProxyLoopWheelManager {
       }
     } else {
       // 'capable-first': prioritize flagship -> capable -> fast -> local; within each tier preserve model ranking,
-      // boost proven healthy spokes first, and rotate across multi-key slots (slot-0, slot-1, ...) via cursor!
+      // boost proven healthy spokes and discovered live Gemini models first, and rotate across multi-key slots via cursor!
+      const discoveredSet = new Set(this.discoveredGeminiModels);
+      const isDiscoveredOrVerified = (s: WheelSpokePublic) =>
+        s.provider !== 'gemini' || discoveredSet.size === 0 || discoveredSet.has(s.model) || s.model === 'gemini-4-hydrogen';
+
       const tiers: WheelTier[] = ['flagship', 'capable', 'fast', 'local'];
       for (const tier of tiers) {
         const tierSpokes = ready.filter((s) => s.tier === tier);
         const proven = tierSpokes
           .filter((s) => s.successes > 0)
           .sort((a, b) => (a.avgMs || 9999) - (b.avgMs || 9999));
-        const unprobed = tierSpokes.filter((s) => s.successes === 0 && s.failures === 0);
+        const unprobedVerified = tierSpokes.filter((s) => s.successes === 0 && s.failures === 0 && isDiscoveredOrVerified(s));
+        const unprobedFallback = tierSpokes.filter((s) => s.successes === 0 && s.failures === 0 && !isDiscoveredOrVerified(s));
         const previouslyFailed = tierSpokes.filter((s) => s.successes === 0 && s.failures > 0);
-        const orderedTier = [...proven, ...unprobed, ...previouslyFailed];
+        const orderedTier = [...proven, ...unprobedVerified, ...unprobedFallback, ...previouslyFailed];
 
         // Rotate across distinct keySlots when multiple keys exist without scrambling model hierarchy
         const distinctSlots = Array.from(new Set(orderedTier.map((s) => s.keySlot)));
@@ -935,7 +957,7 @@ class ProxyLoopWheelManager {
 
     if (opts?.includeCoolingFallback !== false) {
       const cooling = allSpokes
-        .filter((s) => s.status === 'COOLDOWN')
+        .filter((s) => s.status === 'COOLDOWN' && s.cooldownReason !== 'MODEL_NOT_FOUND_404' && s.cooldownReason !== 'auth_rejected')
         .sort((a, b) => a.cooldownUntil - b.cooldownUntil)
         .slice(0, Math.max(2, this.config.maxRotations * 2));
       return [...orderedReady, ...cooling];
@@ -1004,9 +1026,15 @@ class ProxyLoopWheelManager {
     } else if (status === 401 || status === 403 || lower.includes('api key not valid') || lower.includes('invalid api key')) {
       cooldownMs = 300_000;
       reason = 'auth_rejected';
-    } else if (status === 404 || lower.includes('not found') || lower.includes('not supported for generatecontent') || lower.includes('does not exist')) {
-      cooldownMs = 1_800_000;
-      reason = 'unsupported_model';
+    } else if (
+      status === 404 ||
+      lower.includes('not found') ||
+      lower.includes('no longer available') ||
+      lower.includes('not supported for generatecontent') ||
+      lower.includes('does not exist')
+    ) {
+      cooldownMs = 3_600_000;
+      reason = 'MODEL_NOT_FOUND_404';
     } else if (err?.isTimeout || status === 504 || lower.includes('timed out') || lower.includes('timeout')) {
       cooldownMs = 90_000;
       reason = 'timeout';

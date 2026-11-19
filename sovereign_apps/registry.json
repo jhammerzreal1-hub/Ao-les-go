@@ -1,0 +1,290 @@
+[
+  {
+    "id": "dl-7z2408-x64-exe-mwmssqtr",
+    "name": "7z2408-x64.exe",
+    "category": "custom_download",
+    "version": "PE32",
+    "vendor": "www.7-zip.org",
+    "description": "PE32 (32-bit Windows Executable) · i386 (Intel 32-bit x86) · IMAGE_SUBSYSTEM_WINDOWS_GUI (Win32 Graphical Desktop App)",
+    "installMethod": "wine_pe32",
+    "platforms": [
+      "windows",
+      "macos",
+      "linux",
+      "android",
+      "web"
+    ],
+    "installedAt": 1795047271119,
+    "installPath": "/app/applet/downloads",
+    "binaryOrEntryPath": "/app/applet/downloads/7z2408-x64.exe",
+    "sizeBytes": 1624144,
+    "sha256": "67cb9d3452c9dd974b04f4a5fd842dbcba8184f2344ff72e3662d7cdb68b099b",
+    "launchMode": "browser_bridge",
+    "launchTarget": "/api/os/fs/download?path=%2Fapp%2Fapplet%2Fdownloads%2F7z2408-x64.exe",
+    "iconName": "Download",
+    "accentColor": "text-emerald-400",
+    "desktopShortcut": true,
+    "peHeaderInfo": {
+      "validPe": true,
+      "fileName": "7z2408-x64.exe",
+      "filePath": "/app/applet/downloads/7z2408-x64.exe",
+      "fileSizeBytes": 1624144,
+      "sha256": "67cb9d3452c9dd974b04f4a5fd842dbcba8184f2344ff72e3662d7cdb68b099b",
+      "fileFormat": "PE32 (32-bit Windows Executable)",
+      "dosMagicHex": "0x5A4D (MZ)",
+      "peOffsetHex": "0xF8",
+      "machineArchitecture": "i386 (Intel 32-bit x86)",
+      "subsystem": "IMAGE_SUBSYSTEM_WINDOWS_GUI (Win32 Graphical Desktop App)",
+      "entryPointRvaHex": "0x7294",
+      "imageBaseHex": "0x400000",
+      "osVersionRequired": "Windows NT 4.0 (Win10/Win11 Compatible)",
+      "compileTimestampIso": "2024-08-11T13:00:00.000Z",
+      "sections": [
+        {
+          "name": ".text",
+          "virtualSize": 26094,
+          "virtualAddressHex": "0x1000",
+          "rawDataSize": 26112,
+          "characteristicsHex": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtualSize": 4934,
+          "virtualAddressHex": "0x8000",
+          "rawDataSize": 5120,
+          "characteristicsHex": "0x40000040"
+        },
+        {
+          "name": ".data",
+          "virtualSize": 14572,
+          "virtualAddressHex": "0xA000",
+          "rawDataSize": 512,
+          "characteristicsHex": "0xC0000040"
+        },
+        {
+          "name": ".rsrc",
+          "virtualSize": 4072,
+          "virtualAddressHex": "0xE000",
+          "rawDataSize": 4096,
+          "characteristicsHex": "0x40000040"
+        }
+      ],
+      "wineCompatibilityGrade": "PLATINUM_NATIVE_WIN32"
+    },
+    "nativeDownloadUrls": {
+      "windows": "/api/os/fs/download?path=%2Fapp%2Fapplet%2Fdownloads%2F7z2408-x64.exe",
+      "macos": "/api/os/fs/download?path=%2Fapp%2Fapplet%2Fdownloads%2F7z2408-x64.exe",
+      "linux": "/api/os/fs/download?path=%2Fapp%2Fapplet%2Fdownloads%2F7z2408-x64.exe"
+    }
+  },
+  {
+    "id": "dl-steamsetup-exe-mwmssq2b",
+    "name": "Valve Steam Windows Installer (SteamSetup.exe)",
+    "category": "gaming",
+    "version": "PE32",
+    "vendor": "cdn.akamai.steamstatic.com",
+    "description": "PE32 (32-bit Windows Executable) · i386 (Intel 32-bit x86) · IMAGE_SUBSYSTEM_WINDOWS_GUI (Win32 Graphical Desktop App)",
+    "installMethod": "wine_pe32",
+    "platforms": [
+      "windows",
+      "macos",
+      "linux",
+      "android",
+      "web"
+    ],
+    "installedAt": 1795047270131,
+    "installPath": "/app/applet/downloads",
+    "binaryOrEntryPath": "/app/applet/downloads/SteamSetup.exe",
+    "sizeBytes": 2380800,
+    "sha256": "7d3654531c32d941b8cae81c4137fc542172bfa9635f169cb392f245a0a12bcb",
+    "launchMode": "browser_bridge",
+    "launchTarget": "/api/os/fs/download?path=%2Fapp%2Fapplet%2Fdownloads%2FSteamSetup.exe",
+    "iconName": "Download",
+    "accentColor": "text-emerald-400",
+    "desktopShortcut": true,
+    "peHeaderInfo": {
+      "validPe": true,
+      "fileName": "SteamSetup.exe",
+      "filePath": "/app/applet/downloads/SteamSetup.exe",
+      "fileSizeBytes": 2380800,
+      "sha256": "7d3654531c32d941b8cae81c4137fc542172bfa9635f169cb392f245a0a12bcb",
+      "fileFormat": "PE32 (32-bit Windows Executable)",
+      "dosMagicHex": "0x5A4D (MZ)",
+      "peOffsetHex": "0xC8",
+      "machineArchitecture": "i386 (Intel 32-bit x86)",
+      "subsystem": "IMAGE_SUBSYSTEM_WINDOWS_GUI (Win32 Graphical Desktop App)",
+      "entryPointRvaHex": "0x33B6",
+      "imageBaseHex": "0x400000",
+      "osVersionRequired": "Windows NT 4.0 (Win10/Win11 Compatible)",
+      "compileTimestampIso": "2016-07-25T00:55:51.000Z",
+      "sections": [
+        {
+          "name": ".text",
+          "virtualSize": 24925,
+          "virtualAddressHex": "0x1000",
+          "rawDataSize": 25088,
+          "characteristicsHex": "0x60000020"
+        },
+        {
+          "name": ".rdata",
+          "virtualSize": 5028,
+          "virtualAddressHex": "0x8000",
+          "rawDataSize": 5120,
+          "characteristicsHex": "0x40000040"
+        },
+        {
+          "name": ".data",
+          "virtualSize": 131896,
+          "virtualAddressHex": "0xA000",
+          "rawDataSize": 1536,
+          "characteristicsHex": "0xC0000040"
+        },
+        {
+          "name": ".ndata",
+          "virtualSize": 225280,
+          "virtualAddressHex": "0x2B000",
+          "rawDataSize": 0,
+          "characteristicsHex": "0xC0000080"
+        },
+        {
+          "name": ".rsrc",
+          "virtualSize": 77840,
+          "virtualAddressHex": "0x62000",
+          "rawDataSize": 78336,
+          "characteristicsHex": "0x40000040"
+        }
+      ],
+      "wineCompatibilityGrade": "PLATINUM_NATIVE_WIN32"
+    },
+    "nativeDownloadUrls": {
+      "windows": "/api/os/fs/download?path=%2Fapp%2Fapplet%2Fdownloads%2FSteamSetup.exe",
+      "macos": "/api/os/fs/download?path=%2Fapp%2Fapplet%2Fdownloads%2FSteamSetup.exe",
+      "linux": "/api/os/fs/download?path=%2Fapp%2Fapplet%2Fdownloads%2FSteamSetup.exe"
+    }
+  },
+  {
+    "id": "steam",
+    "name": "Steam Client & Game Store",
+    "category": "gaming",
+    "version": "1.0.0.81-Sovereign",
+    "vendor": "Valve Corporation",
+    "description": "Full Steam PC/Mac/Linux Store, Community, Cloud Gaming & Proton/Wine Game Launcher integration.",
+    "installMethod": "sovereign_store",
+    "platforms": [
+      "windows",
+      "macos",
+      "linux",
+      "android",
+      "web"
+    ],
+    "installedAt": 1795046662841,
+    "installPath": "/app/applet/sovereign_apps/steam",
+    "binaryOrEntryPath": "/app/applet/sovereign_apps/steam/index.html",
+    "sizeBytes": 4110,
+    "sha256": "4571acf4e088c4a913f483674e01fba09c3cb32f2ae9b09578047fa478657936",
+    "launchMode": "builtin_app",
+    "launchTarget": "/api/os/apps/serve/steam/index.html",
+    "iconName": "Gamepad2",
+    "accentColor": "text-sky-400",
+    "desktopShortcut": true,
+    "nativeDownloadUrls": {
+      "windows": "https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe",
+      "macos": "https://cdn.akamai.steamstatic.com/client/installer/steam.dmg",
+      "linux": "https://cdn.akamai.steamstatic.com/client/installer/steam.deb",
+      "android": "https://store.steampowered.com/mobile"
+    }
+  },
+  {
+    "id": "discord",
+    "name": "Discord Voice, Video & Chat",
+    "category": "social",
+    "version": "0.0.72-Stable",
+    "vendor": "Discord Inc.",
+    "description": "Low-latency voice channels, screen sharing, servers, direct messaging, and WebRTC comms hub.",
+    "installMethod": "sovereign_store",
+    "platforms": [
+      "windows",
+      "macos",
+      "linux",
+      "android",
+      "web"
+    ],
+    "installedAt": 1795046662841,
+    "installPath": "/app/applet/sovereign_apps/discord",
+    "binaryOrEntryPath": "/app/applet/sovereign_apps/discord/index.html",
+    "sizeBytes": 6087,
+    "sha256": "27a3f77609f88552d8a62ccb061bc9a1f502c0b38c8201a72d61d202945a259c",
+    "launchMode": "builtin_app",
+    "launchTarget": "/api/os/apps/serve/discord/index.html",
+    "iconName": "MessageCircle",
+    "accentColor": "text-indigo-400",
+    "desktopShortcut": true,
+    "nativeDownloadUrls": {
+      "windows": "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64",
+      "macos": "https://discord.com/api/download?platform=osx",
+      "linux": "https://discord.com/api/download?platform=linux&format=deb",
+      "android": "https://discord.com/app"
+    }
+  },
+  {
+    "id": "sovereign-arcade",
+    "name": "Sovereign Cyber Arcade (Playable Games)",
+    "category": "gaming",
+    "version": "2.4.0",
+    "vendor": "Lysander Interactive",
+    "description": "Instant-play 60FPS HTML5/Canvas Cyber Arcade featuring Tactical Space Defender, Cyber Snake & 2048.",
+    "installMethod": "sovereign_store",
+    "platforms": [
+      "windows",
+      "macos",
+      "linux",
+      "android",
+      "web"
+    ],
+    "installedAt": 1795046662841,
+    "installPath": "/app/applet/sovereign_apps/sovereign-arcade",
+    "binaryOrEntryPath": "/app/applet/sovereign_apps/sovereign-arcade/index.html",
+    "sizeBytes": 3486,
+    "sha256": "1bb2fd68f493d40b20dd469baec8b3a7b91c6e467b86e5b342aaa847b30dd383",
+    "launchMode": "builtin_app",
+    "launchTarget": "/api/os/apps/serve/sovereign-arcade/index.html",
+    "iconName": "Trophy",
+    "accentColor": "text-amber-400",
+    "desktopShortcut": true,
+    "nativeDownloadUrls": {
+      "windows": "/api/os/apps/serve/sovereign-arcade/index.html",
+      "macos": "/api/os/apps/serve/sovereign-arcade/index.html",
+      "linux": "/api/os/apps/serve/sovereign-arcade/index.html"
+    }
+  },
+  {
+    "id": "obs-studio",
+    "name": "OBS Studio Screen & Stream Recorder",
+    "category": "media",
+    "version": "30.2.3-WebRTC",
+    "vendor": "OBS Project / Sovereign Media",
+    "description": "Real-time OS Desktop & Window screen capture, microphone muxing, and instant .webm video recording.",
+    "installMethod": "sovereign_store",
+    "platforms": [
+      "windows",
+      "macos",
+      "linux",
+      "web"
+    ],
+    "installedAt": 1795046662841,
+    "installPath": "/app/applet/sovereign_apps/obs-studio",
+    "binaryOrEntryPath": "/app/applet/sovereign_apps/obs-studio/index.html",
+    "sizeBytes": 2719,
+    "sha256": "9a1f221d009e3815587666b26f9c1feab5405028374fb34e3d6c73f2d50790da",
+    "launchMode": "builtin_app",
+    "launchTarget": "/api/os/apps/serve/obs-studio/index.html",
+    "iconName": "Video",
+    "accentColor": "text-rose-400",
+    "desktopShortcut": true,
+    "nativeDownloadUrls": {
+      "windows": "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.3-Windows-Installer.exe",
+      "macos": "https://cdn-fastly.obsproject.com/downloads/obs-studio-30.2.3-macos-arm64.dmg",
+      "linux": "https://obsproject.com/download"
+    }
+  }
+]

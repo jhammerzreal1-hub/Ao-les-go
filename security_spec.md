@@ -1,23 +1,24 @@
-# Security Specification: Aurelius Orchestrator
+# Security Specification: Lysander Genesis Orchestrator
 
 ## 1. Data Invariants
-- A user can only read, create, update, or delete their own profile at `/users/{userId}` when authenticated with a verified email (`request.auth.uid == userId`).
-- All nested user collections (`threads`, `messages`, `agentic_memory`, `artifacts`, `audit_ledger`) enforce strict path-ownership and parent/field identity integrity (`userId == userId == request.auth.uid`), with zero synthetic guest bypasses (`'0'`, `'guest-*'`).
+- A user can only read, create, or update their own profile at `/users/{userId}` when authenticated with a verified email (`request.auth.uid == userId && request.auth.token.email_verified == true`).
+- All nested user collections (`threads`, `messages`, `agentic_memory`, `artifacts`, `audit_ledger`, `game_runs`, `spatial_blueprints`, `detected_games`, `crafted_items`) enforce strict path-ownership and parent/field identity integrity (`userId == userId == request.auth.uid`), with zero synthetic guest bypasses (`'0'`, `'guest-*'`).
 - Document IDs must match `^[a-zA-Z0-9_\-]+$` and length `1..128` on single-document operations (`get`, `create`, `update`, `delete`).
-- Every string field enforces explicit upper bounds (`id <= 128`, `title <= 256`, `prompt <= 4000`, `content <= 50000`, `mediaUrl <= 500000`) and strict enum domains (`UserProfile.role`, `ChatMessage.role`, `AgenticMemory.role`, `Artifact.type`, `AuditLedgerItem.status`).
-- Immutable ownership & creation fields (`uid`, `userId`, `createdAt`, `threadId`) cannot be mutated after document creation.
+- Every string field enforces explicit upper bounds (`id <= 128`, `title <= 256` or `128` for blueprints/games/items, `sourcePath <= 512`, `prompt <= 4000`, `content/blueprintJson/modStateJson/itemSpecJson <= 50000`, `mediaUrl <= 500000`) and finite enum sets (`UserProfile.role`, `ChatMessage.role`, `AgenticMemory.role`, `Artifact.type`, `AuditLedgerItem.status`, `GameRun.mode`, `GameRun.shipFinish`, `GameRun.status`, `SpatialBlueprint.engineKind`, `DetectedGameMod.engine`, `DetectedGameMod.status`, `CraftedItem.category`, `CraftedItem.rarity`).
+- Numerical game telemetry fields (`score` `0..10000000`, `wave` `1..999`, `beaconsCollected` `0..99999`, `durationSec` `0..86400`, `agentsCount` `0..64`, `modCount` `0..10000`, `crafterSkillLevel` `1..999`, `processMetricValue` `-1000000..10000000`) are strictly bounded against negative or overflow injection.
+- Immutable ownership & creation fields (`uid`, `userId`, `createdAt`, `createdByAgent`, `gameKey`, `detectedAt`, `signatureHash`, `threadId`) cannot be mutated after document creation; completed `game_runs` and `crafted_items` are terminal once recorded (admin-only correction).
 - Self-privilege escalation is blocked: standard users cannot create or update their `role` to `'admin'`.
 
-## 2. Attack Vectors & Defensive Gates ("Dirty Dozen" Protections)
-1. **Unauthenticated Read/Write**: Rejected by `isSignedIn()` + catch-all deny `match /{document=**} { allow read, write: if false; }`.
-2. **Email Spoofing (`email_verified == false`)**: `isSignedIn()` and `isAdmin()` explicitly require `request.auth.token.email_verified == true`.
-3. **Synthetic Guest / Path Traversal (`uid == '0'` or `/users/{userIdB}`)**: Rejected because `isOwner(userId)` strictly enforces `request.auth.uid == userId`.
-4. **Shadow Field Injection**: Blocked on create via `keys().hasAll(...) && keys().hasOnly(...)` and on update via `diff(existing()).affectedKeys().hasOnly(...)`.
-5. **Document ID Poisoning**: Guarded on `get`, `create`, `update`, `delete` using `isValidId(id)` (`^[a-zA-Z0-9_\-]+$`, max 128 chars).
-6. **Self-Role Privilege Escalation**: Users cannot write `role: 'admin'` unless verified `isAdmin()`, and cannot alter `role` via update.
-7. **Denial-of-Wallet / Large Buffer DoS**: Strict `.size()` limits enforced on every string field; zero `get()`/`exists()` inside `allow list`.
-8. **Cross-Tenant Query Scraping**: Every `allow list` verifies `resource.data.userId == request.auth.uid` (or `resource.data.uid == request.auth.uid`) directly without client delegation.
-9. **Type & Enum Poisoning**: Strictly validates field types (`is string`) and finite enum sets (`in ['user', 'admin']`, `in ['SUCCESS', 'FAILED', 'HEALED']`, etc.).
-10. **Immutable Field Overwrite (`createdAt`, `userId`, `threadId`)**: Verified unchanged during `update` (`incoming().createdAt == existing().createdAt`).
-11. **Public Read/Write Probe Abuse**: `/test/connection` restricted to authenticated `allow get: if request.auth != null;` with `allow list, write: if false;`.
-12. **Client Security Delegation / Secret Exposure**: Server-side AES-256-GCM vault manages credentials (`data/.secrets.vault.enc`), never stored in Firestore or client state.
+## 2. Attack Vectors & Defensive Gates ("Dirty Dozen" Payloads)
+1. **Unauthenticated Read/Write**: `{}` with `auth = null` -> Rejected by `isSignedIn()` + catch-all `match /{document=**} { allow read, write: if false; }`.
+2. **Email Spoofing (`email_verified == false`)**: `{ uid: "admin1", email: "jhammerzreal1@gmail.com", role: "admin" }` with `email_verified: false` -> Rejected by `isSignedIn()` and `isAdmin()`.
+3. **Synthetic Guest / Cross-Tenant Path Traversal**: Write to `/users/userB/game_runs/run1` as `userA` -> Rejected by `isOwner(userId)`.
+4. **Shadow Field Injection**: `{ userId: "userA", mode: "arcade", shipFinish: "titanium", score: 100, wave: 1, beaconsCollected: 3, durationSec: 25, status: "COMPLETED", createdAt: "...", isVerified: true }` -> Rejected by `keys().hasAll(...) && keys().hasOnly(...)`.
+5. **Document ID Poisoning**: Document path `/users/userA/game_runs/../../admins` or 500-char random ID -> Rejected by `isValidId(runId)`.
+6. **Self-Role Privilege Escalation**: Update `/users/userA` with `{ role: "admin" }` -> Rejected because `incoming().role == existing().role` and `affectedKeys().hasOnly(['email', 'displayName', 'photoURL', 'updatedAt'])`.
+7. **Denial-of-Wallet / Large Buffer DoS**: `Artifact` with `title` > 256 chars or `prompt` > 4000 chars -> Rejected by strict `.size()` limits; zero `get()`/`exists()` inside `allow list`.
+8. **Cross-Tenant Query Scraping**: `collection(db, 'users/userB/game_runs')` queried by `userA` -> Rejected by `allow list: if isSignedIn() && existing().userId == request.auth.uid;`.
+9. **Type & Enum Poisoning**: `GameRun` with `score: "999999"` (string), `score: -500`, `score: 999999999`, or `mode: "godmode"` -> Rejected by `is number`, range bounds, and enum allowlist.
+10. **Immutable Field Overwrite & Terminal State Tampering**: `update` on `game_runs/{runId}` trying to inflate `score` or change `createdAt`/`userId` -> Rejected because `game_runs` updates are terminal-locked (`isAdmin()` only).
+11. **Public Read/Write Probe Abuse**: `list` or `setDoc` against `/test/connection` -> Rejected by `allow get: if request.auth != null; allow list, write: if false;`.
+12. **Orphaned Child Record Creation**: Creating `/users/userA/threads/t1/messages/m1` when parent thread `t1` does not exist -> Rejected by `exists(.../threads/$(threadId))`.

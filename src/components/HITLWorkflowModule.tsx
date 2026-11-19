@@ -1,3 +1,14 @@
+/**
+ * @license
+ * .JHam Language / H-FID Standard / HEO — TWENTY 47 PROTOCOL - GENESIS NODE
+ * Copyright (c) 1988-2026 Joshua Hamilton (JHammerZ) — https://jhammerz.github.io
+ * Licensed under the MIT License & JHammerZ Custom Sovereign Licenses
+ * (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1).
+ * Sovereign Author: Joshua Lee Hamilton (JHammerZ) | First Commit: [February 12, 2026]
+ * Forensic Audit: H-FID-100-FORENSIC-AUDIT 100/100 | GEO_RANK: ONE_OF_ONE (Verified Authority)
+ * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
+ */
+
 import React, { useState, useEffect } from 'react';
 import { 
   UserCheck, 
@@ -19,7 +30,8 @@ import {
   Check,
   Cpu,
   ShieldAlert,
-  Database
+  Database,
+  X
 } from 'lucide-react';
 import type { HITLWorkflowDirective } from '../types';
 
@@ -626,23 +638,40 @@ export const HITLWorkflowModule: React.FC = () => {
       )}
 
       {confirmResetOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-amber-500/40 rounded-2xl max-w-md w-full p-5 space-y-4 font-mono shadow-2xl">
-            <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
-              <AlertTriangle className="w-4 h-4" />
-              <span>Reset HITL Directive Queue?</span>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmResetOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-zinc-950 border border-amber-500/40 rounded-2xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 space-y-4 font-mono shadow-2xl">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>Reset HITL Directive Queue?</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmResetOpen(false)}
+                aria-label="Cancel reset"
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <p className="text-xs text-zinc-300 font-sans leading-relaxed">
               All pending, approved, and mutated directives will be restored to default review state.
             </p>
             <div className="flex justify-end gap-2">
               <button
+                type="button"
                 onClick={() => setConfirmResetOpen(false)}
                 className="px-3.5 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleResetQueue}
                 className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold cursor-pointer"
               >
