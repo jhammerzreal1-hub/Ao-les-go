@@ -9,7 +9,7 @@
  * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { 
   auth, 
   db, 
@@ -29,51 +29,10 @@ import {
 } from './firebase';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
-import { ChatModule } from './components/ChatModule';
-import { GroundingModule } from './components/GroundingModule';
-import { MusicModule } from './components/MusicModule';
-import { ImageModule } from './components/ImageModule';
-import { VideoModule } from './components/VideoModule';
-import { TranscribeModule } from './components/TranscribeModule';
-import { LiveVoiceModule } from './components/LiveVoiceModule';
-import { VaultModule } from './components/VaultModule';
-import { GitHubModule } from './components/GitHubModule';
-import { WarRoomModule } from './components/WarRoomModule';
-import { SovereignBrowser } from './components/SovereignBrowser';
-import { ScratchpadModule } from './components/ScratchpadModule';
-import { HITLWorkflowModule } from './components/HITLWorkflowModule';
-import { TermuxEdgeModule } from './components/TermuxEdgeModule';
-import { OSINTModule } from './components/OSINTModule';
-import { BurnerMailModule } from './components/BurnerMailModule';
-import { InfiniteSimModule } from './components/InfiniteSimModule';
-import { FunctionDeckModule } from './components/FunctionDeckModule';
-import { UnifiedProjectsModule } from './components/UnifiedProjectsModule';
-import { PromptPresetsModule } from './components/PromptPresetsModule';
-import { AuditLedgerModule } from './components/AuditLedgerModule';
-import { SwarmDiagnosticModule } from './components/SwarmDiagnosticModule';
-import { PackagerModule } from './components/PackagerModule';
-import { GoogleDriveModule } from './components/GoogleDriveModule';
-import { GoogleTasksModule } from './components/GoogleTasksModule';
-import { KnowledgeGraphModule } from './components/KnowledgeGraphModule';
-import { ToolShedModule } from './components/ToolShedModule';
-import { AutonomySupervisorModule } from './components/AutonomySupervisorModule';
-import { AgentDevKitModule } from './components/AgentDevKitModule';
-import { AIGenesisDistilleryModule } from './components/AIGenesisDistilleryModule';
-import { WorldLoadStartScreen } from './components/WorldLoadStartScreen';
-import { UniversalEmulatorModderModule } from './components/UniversalEmulatorModderModule';
-import { MacroTelemetryModule, type AutonomousMarketAlert } from './components/MacroTelemetryModule';
-import { SovereignFilesModule } from './components/SovereignFilesModule';
-import { SovereignTerminalModule } from './components/SovereignTerminalModule';
-import { SovereignTaskManagerModule } from './components/SovereignTaskManagerModule';
-import { SovereignOSSettingsModule, type OSShellViewMode } from './components/SovereignOSSettingsModule';
+import type { AutonomousMarketAlert } from './components/MacroTelemetryModule';
+import type { OSShellViewMode } from './components/SovereignOSSettingsModule';
 import { CommandPalette } from './components/CommandPalette';
 import { SystemHealthDashboard } from './components/SystemHealthDashboard';
-import { DownloadModelsModule } from './components/DownloadModelsModule';
-import { UniversalInstallerModule } from './components/UniversalInstallerModule';
-import { SovereignCryptoWalletModule } from './components/SovereignCryptoWalletModule';
-import { ApiSecretsModule } from './components/ApiSecretsModule';
-import { SovereignIntegrationsHub } from './components/SovereignIntegrationsHub';
-import { SpatialArenaModule } from './components/three/SpatialArenaModule';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { SovereignOSBar } from './components/SovereignOSBar';
@@ -89,6 +48,58 @@ import { autonomousSelfImprovement } from './utils/autonomousSelfImprovement';
 import { orchestratorRuntime } from './utils/OrchestratorRuntime';
 import { useOrchestrator } from './hooks/useOrchestrator';
 import type { ModuleType, Artifact, AuditLedgerItem } from './types';
+
+// Lazy-loaded OS Applications (keeps initial boot fast & eliminates 20+ MB including Three.js from startup)
+const ChatModule = lazy(() => import('./components/ChatModule').then(m => ({ default: m.ChatModule })));
+const GroundingModule = lazy(() => import('./components/GroundingModule').then(m => ({ default: m.GroundingModule })));
+const MusicModule = lazy(() => import('./components/MusicModule').then(m => ({ default: m.MusicModule })));
+const ImageModule = lazy(() => import('./components/ImageModule').then(m => ({ default: m.ImageModule })));
+const VideoModule = lazy(() => import('./components/VideoModule').then(m => ({ default: m.VideoModule })));
+const TranscribeModule = lazy(() => import('./components/TranscribeModule').then(m => ({ default: m.TranscribeModule })));
+const LiveVoiceModule = lazy(() => import('./components/LiveVoiceModule').then(m => ({ default: m.LiveVoiceModule })));
+const VaultModule = lazy(() => import('./components/VaultModule').then(m => ({ default: m.VaultModule })));
+const GitHubModule = lazy(() => import('./components/GitHubModule').then(m => ({ default: m.GitHubModule })));
+const WarRoomModule = lazy(() => import('./components/WarRoomModule').then(m => ({ default: m.WarRoomModule })));
+const SovereignBrowser = lazy(() => import('./components/SovereignBrowser').then(m => ({ default: m.SovereignBrowser })));
+const ScratchpadModule = lazy(() => import('./components/ScratchpadModule').then(m => ({ default: m.ScratchpadModule })));
+const HITLWorkflowModule = lazy(() => import('./components/HITLWorkflowModule').then(m => ({ default: m.HITLWorkflowModule })));
+const TermuxEdgeModule = lazy(() => import('./components/TermuxEdgeModule').then(m => ({ default: m.TermuxEdgeModule })));
+const OSINTModule = lazy(() => import('./components/OSINTModule').then(m => ({ default: m.OSINTModule })));
+const BurnerMailModule = lazy(() => import('./components/BurnerMailModule').then(m => ({ default: m.BurnerMailModule })));
+const InfiniteSimModule = lazy(() => import('./components/InfiniteSimModule').then(m => ({ default: m.InfiniteSimModule })));
+const FunctionDeckModule = lazy(() => import('./components/FunctionDeckModule').then(m => ({ default: m.FunctionDeckModule })));
+const UnifiedProjectsModule = lazy(() => import('./components/UnifiedProjectsModule').then(m => ({ default: m.UnifiedProjectsModule })));
+const PromptPresetsModule = lazy(() => import('./components/PromptPresetsModule').then(m => ({ default: m.PromptPresetsModule })));
+const AuditLedgerModule = lazy(() => import('./components/AuditLedgerModule').then(m => ({ default: m.AuditLedgerModule })));
+const SwarmDiagnosticModule = lazy(() => import('./components/SwarmDiagnosticModule').then(m => ({ default: m.SwarmDiagnosticModule })));
+const PackagerModule = lazy(() => import('./components/PackagerModule').then(m => ({ default: m.PackagerModule })));
+const GoogleDriveModule = lazy(() => import('./components/GoogleDriveModule').then(m => ({ default: m.GoogleDriveModule })));
+const GoogleTasksModule = lazy(() => import('./components/GoogleTasksModule').then(m => ({ default: m.GoogleTasksModule })));
+const KnowledgeGraphModule = lazy(() => import('./components/KnowledgeGraphModule').then(m => ({ default: m.KnowledgeGraphModule })));
+const ToolShedModule = lazy(() => import('./components/ToolShedModule').then(m => ({ default: m.ToolShedModule })));
+const AutonomySupervisorModule = lazy(() => import('./components/AutonomySupervisorModule').then(m => ({ default: m.AutonomySupervisorModule })));
+const AgentDevKitModule = lazy(() => import('./components/AgentDevKitModule').then(m => ({ default: m.AgentDevKitModule })));
+const AIGenesisDistilleryModule = lazy(() => import('./components/AIGenesisDistilleryModule').then(m => ({ default: m.AIGenesisDistilleryModule })));
+const WorldLoadStartScreen = lazy(() => import('./components/WorldLoadStartScreen').then(m => ({ default: m.WorldLoadStartScreen })));
+const UniversalEmulatorModderModule = lazy(() => import('./components/UniversalEmulatorModderModule').then(m => ({ default: m.UniversalEmulatorModderModule })));
+const MacroTelemetryModule = lazy(() => import('./components/MacroTelemetryModule').then(m => ({ default: m.MacroTelemetryModule })));
+const SovereignFilesModule = lazy(() => import('./components/SovereignFilesModule').then(m => ({ default: m.SovereignFilesModule })));
+const SovereignTerminalModule = lazy(() => import('./components/SovereignTerminalModule').then(m => ({ default: m.SovereignTerminalModule })));
+const SovereignTaskManagerModule = lazy(() => import('./components/SovereignTaskManagerModule').then(m => ({ default: m.SovereignTaskManagerModule })));
+const SovereignOSSettingsModule = lazy(() => import('./components/SovereignOSSettingsModule').then(m => ({ default: m.SovereignOSSettingsModule })));
+const DownloadModelsModule = lazy(() => import('./components/DownloadModelsModule').then(m => ({ default: m.DownloadModelsModule })));
+const UniversalInstallerModule = lazy(() => import('./components/UniversalInstallerModule').then(m => ({ default: m.UniversalInstallerModule })));
+const SovereignCryptoWalletModule = lazy(() => import('./components/SovereignCryptoWalletModule').then(m => ({ default: m.SovereignCryptoWalletModule })));
+const ApiSecretsModule = lazy(() => import('./components/ApiSecretsModule').then(m => ({ default: m.ApiSecretsModule })));
+const SovereignIntegrationsHub = lazy(() => import('./components/SovereignIntegrationsHub').then(m => ({ default: m.SovereignIntegrationsHub })));
+const SpatialArenaModule = lazy(() => import('./components/three/SpatialArenaModule').then(m => ({ default: m.SpatialArenaModule })));
+
+const ModuleLoadingFallback: React.FC<{ label?: string }> = ({ label = 'Loading module...' }) => (
+  <div className="flex-1 min-h-[220px] flex flex-col items-center justify-center gap-3 p-8 bg-zinc-950/90 text-zinc-400 font-mono text-xs">
+    <div className="w-7 h-7 rounded-lg border-2 border-amber-500/30 border-t-amber-400 animate-spin" />
+    <span>{label}</span>
+  </div>
+);
 
 export default function App() {
   const {
@@ -1547,60 +1558,66 @@ export default function App() {
             />
           )}
 
-          {/* Persistent Sovereign Chat Window (ZERO-Unmount Keep-Alive across Docked, Desktop Floating, and Always-On-Top Resizable PiP) */}
-          <SovereignOSWindowFrame
-            moduleId="chat"
-            mode={isChatDetached ? 'pip' : desktopActive ? 'floating' : 'tiled'}
-            visible={isChatDetached ? true : desktopActive ? openModules.includes('chat') : isChatVisible}
-            tiledClassName={`${getPaneSizingClass(chatRole)} ${
-              chatRole === 'primary' ? 'lg:order-1' : 'lg:order-3'
-            } overflow-y-auto overflow-x-clip`}
-            geometry={getOrCreateWindowGeometry('chat', 0)}
-            isFocused={activeModule === 'chat' || isChatDetached}
-            alwaysOnTop={isChatDetached}
-            isDetached={isChatDetached}
-            pipMinimized={chatPipMinimized}
-            containerSize={desktopSize}
-            onFocus={() => {
-              if (isChatDetached) {
-                setChatPipMinimized(false);
-                handleMoveResizeWindow('chat', { zIndex: ++topZRef.current + 16 });
-              } else {
-                handleSelectOSModule('chat');
-              }
-            }}
-            onMinimize={() => {
-              if (isChatDetached) {
-                setChatPipMinimized(true);
-              } else {
-                handleMinimizeWindow('chat');
-              }
-            }}
-            onToggleMaximize={() => handleToggleMaximizeWindow('chat')}
-            onSnapLeft={() => handleSnapWindow('chat', 'left')}
-            onSnapRight={() => handleSnapWindow('chat', 'right')}
-            onToggleDetach={() => handleToggleDetachChat()}
-            onRestorePip={() => setChatPipMinimized(false)}
-            onClose={() => handleCloseOpenModule('chat')}
-            onMoveResize={(next) => handleMoveResizeWindow('chat', next)}
-          >
-            <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-clip">
-              <ChatModule
-                onSaveToVault={(title, content, model) =>
-                  handleSaveToVault('knowledge', title, content, model)
+          {/* Persistent Sovereign Chat Window (ZERO-Unmount Keep-Alive once opened; avoids eager download while minimized at boot) */}
+          {(isChatDetached || !desktopActive || (openModules.includes('chat') && !windowStates.chat?.minimized)) && (
+            <SovereignOSWindowFrame
+              moduleId="chat"
+              mode={isChatDetached ? 'pip' : desktopActive ? 'floating' : 'tiled'}
+              visible={isChatDetached ? true : desktopActive ? openModules.includes('chat') : isChatVisible}
+              tiledClassName={`${getPaneSizingClass(chatRole)} ${
+                chatRole === 'primary' ? 'lg:order-1' : 'lg:order-3'
+              } overflow-y-auto overflow-x-clip`}
+              geometry={getOrCreateWindowGeometry('chat', 0)}
+              isFocused={activeModule === 'chat' || isChatDetached}
+              alwaysOnTop={isChatDetached}
+              isDetached={isChatDetached}
+              pipMinimized={chatPipMinimized}
+              containerSize={desktopSize}
+              onFocus={() => {
+                if (isChatDetached) {
+                  setChatPipMinimized(false);
+                  handleMoveResizeWindow('chat', { zIndex: ++topZRef.current + 16 });
+                } else {
+                  handleSelectOSModule('chat');
                 }
-                onSelectModule={handleSelectOSModule}
-                pendingInput={pendingChatInput}
-                onClearPendingInput={() => setPendingChatInput(null)}
-                userId={user?.uid}
-                isDetached={isChatDetached}
-                onToggleDetach={() => handleToggleDetachChat()}
-              />
-            </div>
-          </SovereignOSWindowFrame>
+              }}
+              onMinimize={() => {
+                if (isChatDetached) {
+                  setChatPipMinimized(true);
+                } else {
+                  handleMinimizeWindow('chat');
+                }
+              }}
+              onToggleMaximize={() => handleToggleMaximizeWindow('chat')}
+              onSnapLeft={() => handleSnapWindow('chat', 'left')}
+              onSnapRight={() => handleSnapWindow('chat', 'right')}
+              onToggleDetach={() => handleToggleDetachChat()}
+              onRestorePip={() => setChatPipMinimized(false)}
+              onClose={() => handleCloseOpenModule('chat')}
+              onMoveResize={(next) => handleMoveResizeWindow('chat', next)}
+            >
+              <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-clip">
+                <ErrorBoundary key="persistent-chat-eb">
+                  <Suspense fallback={<ModuleLoadingFallback label="Loading Sovereign Chat..." />}>
+                    <ChatModule
+                      onSaveToVault={(title, content, model) =>
+                        handleSaveToVault('knowledge', title, content, model)
+                      }
+                      onSelectModule={handleSelectOSModule}
+                      pendingInput={pendingChatInput}
+                      onClearPendingInput={() => setPendingChatInput(null)}
+                      userId={user?.uid}
+                      isDetached={isChatDetached}
+                      onToggleDetach={() => handleToggleDetachChat()}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            </SovereignOSWindowFrame>
+          )}
 
-          {/* Persistent Sovereign Google Chrome Browser Window (Keep-Alive & Resizable Across Desktop + Detached PiP) */}
-          {isBrowserMounted && (
+          {/* Persistent Sovereign Google Chrome Browser Window (Mounts when un-minimized or workspace active) */}
+          {isBrowserMounted && (isBrowserDetached || !desktopActive || !windowStates.browser?.minimized) && (
             <SovereignOSWindowFrame
               moduleId="browser"
               mode={isBrowserDetached ? 'pip' : desktopActive ? 'floating' : 'tiled'}
@@ -1638,24 +1655,32 @@ export default function App() {
               onMoveResize={(next) => handleMoveResizeWindow('browser', next)}
             >
               <div className="flex-1 min-h-0 flex flex-col p-2 sm:p-3 overflow-hidden">
-                <SovereignBrowser
-                  agentInternetAllowed={agentInternetAllowed}
-                  onToggleAgentInternet={toggleInternet}
-                  userId={user?.uid}
-                  initialUrl={browserTargetUrl}
-                  onInjectToChat={handleInjectIntoChat}
-                  onSelectModule={handleSelectOSModule}
-                  onSaveToVault={(artifact) =>
-                    handleSaveToVault((artifact.type as any) || 'knowledge', artifact.title, artifact.prompt, artifact.model, undefined, artifact.metadataJson)
-                  }
-                />
+                <ErrorBoundary key="persistent-browser-eb">
+                  <Suspense fallback={<ModuleLoadingFallback label="Loading Sovereign Browser..." />}>
+                    <SovereignBrowser
+                      agentInternetAllowed={agentInternetAllowed}
+                      onToggleAgentInternet={toggleInternet}
+                      userId={user?.uid}
+                      initialUrl={browserTargetUrl}
+                      onInjectToChat={handleInjectIntoChat}
+                      onSelectModule={handleSelectOSModule}
+                      onSaveToVault={(artifact) =>
+                        handleSaveToVault((artifact.type as any) || 'knowledge', artifact.title, artifact.prompt, artifact.model, undefined, artifact.metadataJson)
+                      }
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               </div>
             </SovereignOSWindowFrame>
           )}
 
           {/* Multi-Window Floating & Detached Always-On-Top App Windows (100% Resizable Everywhere) */}
           {nonPersistentOpenModules
-            .filter((mod) => desktopActive || detachedExtraModules.includes(mod))
+            .filter((mod) => {
+              const isDetached = detachedExtraModules.includes(mod);
+              if (isDetached) return true;
+              return desktopActive && !windowStates[mod]?.minimized;
+            })
             .map((mod, idx) => {
               const isModDetached = detachedExtraModules.includes(mod);
               return (
@@ -1695,7 +1720,9 @@ export default function App() {
                 >
                   <ErrorBoundary key={`desktop-eb-${mod}`}>
                     <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-clip">
-                      {renderStandardModuleContent(mod)}
+                      <Suspense fallback={<ModuleLoadingFallback label={`Loading ${mod}...`} />}>
+                        {renderStandardModuleContent(mod)}
+                      </Suspense>
                     </div>
                   </ErrorBoundary>
                 </SovereignOSWindowFrame>
@@ -1706,7 +1733,9 @@ export default function App() {
           {!desktopActive && activeModule !== 'chat' && activeModule !== 'browser' && !detachedExtraModules.includes(activeModule) && (
             <div className={`${getPaneSizingClass('primary')} lg:order-1 overflow-y-auto overflow-x-clip`}>
               <ErrorBoundary key={`primary-${activeModule}`}>
-                {renderStandardModuleContent(activeModule)}
+                <Suspense fallback={<ModuleLoadingFallback label={`Loading ${activeModule}...`} />}>
+                  {renderStandardModuleContent(activeModule)}
+                </Suspense>
               </ErrorBoundary>
             </div>
           )}
@@ -1729,7 +1758,9 @@ export default function App() {
           {!desktopActive && isSplitMode && secondaryModule !== 'chat' && secondaryModule !== 'browser' && secondaryModule !== activeModule && !detachedExtraModules.includes(secondaryModule) && (
             <div className={`${getPaneSizingClass('secondary')} lg:order-3 overflow-y-auto overflow-x-clip`}>
               <ErrorBoundary key={`secondary-${secondaryModule}`}>
-                {renderStandardModuleContent(secondaryModule)}
+                <Suspense fallback={<ModuleLoadingFallback label={`Loading ${secondaryModule}...`} />}>
+                  {renderStandardModuleContent(secondaryModule)}
+                </Suspense>
               </ErrorBoundary>
             </div>
           )}

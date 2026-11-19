@@ -46,6 +46,16 @@ export class ErrorBoundary extends Component<Props, State> {
       localStorage.removeItem('aurelius_knowledge_nodes');
       localStorage.removeItem('aurelius_knowledge_edges');
       localStorage.removeItem('aurelius_active_account');
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((r) => r.unregister());
+        }).catch(() => {});
+      }
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((k) => caches.delete(k));
+        }).catch(() => {});
+      }
     } catch (_) {}
     this.setState({ hasError: false, error: null, errorInfo: null });
     window.location.href = '/';

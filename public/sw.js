@@ -4,10 +4,8 @@
  * Production offline cache and Android background sync service worker
  */
 
-const CACHE_NAME = 'lysander-sovereign-os-v6';
+const CACHE_NAME = 'lysander-sovereign-os-v8';
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png'
@@ -40,14 +38,21 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET, API, Vite dev assets, WebSocket requests, and local dev preview
+  // Never intercept non-GET, API, dev preview hosts, HTML, JS/CSS bundles, Vite dev assets, or WebSockets
   if (
     event.request.method !== 'GET' ||
     url.hostname === 'localhost' ||
     url.hostname === '127.0.0.1' ||
+    url.hostname.startsWith('ais-dev-') ||
     url.pathname === '/' ||
     url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.mjs') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.css') ||
     url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/assets/') ||
     url.pathname.startsWith('/@') ||
     url.pathname.startsWith('/src/') ||
     url.pathname.startsWith('/node_modules/') ||
@@ -59,10 +64,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stale-while-revalidate for app assets
+  // Network-first for static icons/manifests so fresh builds always win
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
+    fetch(event.request)
+      .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -70,10 +75,8 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return networkResponse;
-      }).catch(() => cachedResponse);
-
-      return cachedResponse || fetchPromise;
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });
 
@@ -81,8 +84,8 @@ self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : { title: 'Aurelius Swarm', body: 'Node-09 Synchronized' };
   const options = {
     body: data.body,
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     vibrate: [100, 50, 100],
     data: { url: data.url || '/' }
   };

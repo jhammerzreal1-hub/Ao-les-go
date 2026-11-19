@@ -15,6 +15,8 @@ import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
+// Signal to index.html boot watchdog that the JS entry point loaded successfully
+(window as any).__SOVEREIGN_BOOT_MOUNTED__ = true;
 
 // Global Client Exceptional Error Safeguards
 window.addEventListener('unhandledrejection', (event) => {
@@ -44,11 +46,33 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );
 
-// Register Service Worker for Android WebAPK / Cross-Mobile PWA support
+// Manage Service Worker cleanly:
+// On dev/preview hosts (localhost, 127.0.0.1, ais-dev-*), actively unregister stale SWs & caches
+// so Vite module updates never collide with stale caches. Only register SW in production builds.
 if ('serviceWorker' in navigator) {
+  const host = window.location.hostname || '';
+  const isDevPreview =
+    !import.meta.env.PROD ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.startsWith('ais-dev-');
+
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('ServiceWorker registration error:', err);
-    });
+    if (isDevPreview) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => Promise.all(registrations.map((reg) => reg.unregister())))
+        .catch(() => {});
+      if ('caches' in window) {
+        caches
+          .keys()
+          .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+          .catch(() => {});
+      }
+    } else {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('ServiceWorker registration error:', err);
+      });
+    }
   });
 }
