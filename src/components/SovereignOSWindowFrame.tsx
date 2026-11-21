@@ -162,7 +162,7 @@ interface SovereignOSWindowFrameProps {
 
 type DragAction = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
-export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
+const SovereignOSWindowFrameInner: React.FC<SovereignOSWindowFrameProps> = ({
   moduleId,
   mode,
   visible,
@@ -184,6 +184,8 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
   onMoveResize,
   children
 }) => {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const coordsBadgeRef = useRef<HTMLSpanElement | null>(null);
   const dragSessionRef = useRef<{
     type: DragAction;
     startX: number;
@@ -316,25 +318,49 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
       document.body.style.userSelect = 'none';
     }
 
-    let pendingUpdate: Partial<OSWindowGeometry> | null = null;
-    const flushUpdate = () => {
+    let pendingCommit: Partial<OSWindowGeometry> | null = null;
+    let pendingMoveDx = 0;
+    let pendingMoveDy = 0;
+    let pendingBox: { x: number; y: number; w: number; h: number } | null = null;
+
+    const applyLiveFrameToDom = () => {
       rafRef.current = 0;
-      if (pendingUpdate && onMoveResize) {
-        onMoveResize(pendingUpdate);
-        pendingUpdate = null;
+      const el = wrapperRef.current;
+      if (!el) return;
+      const sess = dragSessionRef.current;
+      if (!sess) return;
+
+      if (sess.type === 'move') {
+        if (sess.unmaximized && pendingBox) {
+          el.style.left = `${Math.round(pendingBox.x)}px`;
+          el.style.top = `${Math.round(pendingBox.y)}px`;
+          el.style.width = `${Math.round(pendingBox.w)}px`;
+          el.style.height = `${Math.round(pendingBox.h)}px`;
+        }
+        el.style.transform = `translate3d(${Math.round(pendingMoveDx)}px, ${Math.round(pendingMoveDy)}px, 0)`;
+        if (coordsBadgeRef.current && pendingCommit) {
+          coordsBadgeRef.current.textContent = `X ${Math.round(pendingCommit.x ?? sess.origX)} · Y ${Math.round(pendingCommit.y ?? sess.origY)}`;
+        }
+      } else if (pendingBox) {
+        el.style.left = `${Math.round(pendingBox.x)}px`;
+        el.style.top = `${Math.round(pendingBox.y)}px`;
+        el.style.width = `${Math.round(pendingBox.w)}px`;
+        el.style.height = `${Math.round(pendingBox.h)}px`;
+        if (coordsBadgeRef.current) {
+          coordsBadgeRef.current.textContent = `${Math.round(pendingBox.w)} × ${Math.round(pendingBox.h)}`;
+        }
       }
     };
 
-    const scheduleUpdate = (patch: Partial<OSWindowGeometry>) => {
-      pendingUpdate = patch;
+    const scheduleDomFrame = () => {
       if (!rafRef.current) {
-        rafRef.current = requestAnimationFrame(flushUpdate);
+        rafRef.current = requestAnimationFrame(applyLiveFrameToDom);
       }
     };
 
     const handlePointerMove = (moveEvt: PointerEvent) => {
       const sess = dragSessionRef.current;
-      if (!sess || !onMoveResize) return;
+      if (!sess) return;
       const dx = moveEvt.clientX - sess.startX;
       const dy = moveEvt.clientY - sess.startY;
       const minW = Math.min(280, Math.max(220, containerSize.width - 12));
@@ -342,7 +368,6 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
 
       if (sess.type === 'move') {
         if (sess.startedMaximized && !sess.unmaximized) {
-          // Require slight 6px threshold before tearing off a maximized window
           if (Math.hypot(dx, dy) < 6) return;
           sess.unmaximized = true;
           const localCursorX = moveEvt.clientX - sess.containerLeft;
@@ -363,13 +388,24 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
             containerSize.width,
             containerSize.height
           );
-          scheduleUpdate({
-            x: Math.round(clampedTear.x),
-            y: Math.round(clampedTear.y),
+          sess.origX = Math.round(clampedTear.x);
+          sess.origY = Math.round(clampedTear.y);
+          pendingBox = {
+            x: sess.origX,
+            y: sess.origY,
+            w: Math.round(clampedTear.width),
+            h: Math.round(clampedTear.height)
+          };
+          pendingMoveDx = 0;
+          pendingMoveDy = 0;
+          pendingCommit = {
+            x: sess.origX,
+            y: sess.origY,
             width: Math.round(clampedTear.width),
             height: Math.round(clampedTear.height),
             maximized: false
-          });
+          };
+          scheduleDomFrame();
           return;
         }
 
@@ -385,11 +421,17 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
           containerSize.width,
           containerSize.height
         );
-        scheduleUpdate({
-          x: Math.round(clamped.x),
-          y: Math.round(clamped.y),
+        const finalX = Math.round(clamped.x);
+        const finalY = Math.round(clamped.y);
+        pendingMoveDx = finalX - sess.origX;
+        pendingMoveDy = finalY - sess.origY;
+        pendingCommit = {
+          x: finalX,
+          y: finalY,
+          ...(sess.unmaximized ? { width: Math.round(sess.origW), height: Math.round(sess.origH) } : {}),
           maximized: false
-        });
+        };
+        scheduleDomFrame();
         return;
       }
 
@@ -420,13 +462,20 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
         nextH = sess.origH - clampedDy;
       }
 
-      scheduleUpdate({
+      pendingBox = {
         x: Math.round(nextX),
         y: Math.round(nextY),
-        width: Math.round(nextW),
-        height: Math.round(nextH),
+        w: Math.round(nextW),
+        h: Math.round(nextH)
+      };
+      pendingCommit = {
+        x: pendingBox.x,
+        y: pendingBox.y,
+        width: pendingBox.w,
+        height: pendingBox.h,
         maximized: false
-      });
+      };
+      scheduleDomFrame();
     };
 
     const finishDrag = () => {
@@ -434,9 +483,13 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
         cancelAnimationFrame(rafRef.current);
         rafRef.current = 0;
       }
-      if (pendingUpdate && onMoveResize) {
-        onMoveResize(pendingUpdate);
-        pendingUpdate = null;
+      const el = wrapperRef.current;
+      if (el) {
+        el.style.transform = '';
+      }
+      if (pendingCommit && onMoveResize) {
+        onMoveResize(pendingCommit);
+        pendingCommit = null;
       }
       dragSessionRef.current = null;
       lastInteractionEndRef.current = Date.now();
@@ -460,14 +513,16 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
         left: 4,
         width: 'calc(100% - 8px)',
         height: 'calc(100% - 8px)',
-        zIndex: effectiveZ
+        zIndex: effectiveZ,
+        willChange: isInteracting ? 'transform, left, top, width, height' : undefined
       }
     : {
         top: safeGeom.y,
         left: safeGeom.x,
         width: safeGeom.width,
         height: safeGeom.height,
-        zIndex: effectiveZ
+        zIndex: effectiveZ,
+        willChange: isInteracting ? 'transform, left, top, width, height' : undefined
       };
 
   const activeResizeEdge = activeInteraction && activeInteraction !== 'move' ? activeInteraction : hoveredHandle;
@@ -476,7 +531,10 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
 
   return (
     <div
-      onPointerDownCapture={() => onFocus?.()}
+      ref={wrapperRef}
+      onPointerDownCapture={() => {
+        if (!isFocused) onFocus?.();
+      }}
       style={windowStyle}
       className="sovereign-window-wrapper absolute overflow-visible"
     >
@@ -485,14 +543,14 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
         style={{
           borderRadius: 'var(--sovereign-window-radius, 14px)'
         }}
-        className={`sovereign-window relative w-full h-full flex flex-col overflow-hidden bg-zinc-950/95 backdrop-blur-md transition-shadow ${
+        className={`sovereign-window relative w-full h-full flex flex-col overflow-hidden bg-zinc-950 ${
           isInteracting
-            ? 'border-2 border-sky-400/80 shadow-[0_26px_76px_rgba(0,0,0,0.92)] ring-2 ring-sky-400/25'
+            ? 'border-2 border-sky-400/85 shadow-[0_18px_48px_rgba(0,0,0,0.88)]'
             : isDetached || alwaysOnTop
-            ? 'border border-amber-400/75 shadow-[0_24px_70px_rgba(0,0,0,0.88)] ring-1 ring-amber-400/35'
+            ? 'border border-amber-400/75 shadow-[0_18px_48px_rgba(0,0,0,0.85)] ring-1 ring-amber-400/35'
             : isFocused
-            ? 'border border-amber-500/55 shadow-[0_20px_60px_rgba(0,0,0,0.75)] ring-1 ring-amber-500/20'
-            : 'border border-zinc-800/95 shadow-[0_12px_36px_rgba(0,0,0,0.6)]'
+            ? 'border border-amber-500/55 shadow-[0_16px_42px_rgba(0,0,0,0.75)] ring-1 ring-amber-500/20'
+            : 'border border-zinc-800/95 shadow-[0_10px_28px_rgba(0,0,0,0.55)]'
         }`}
       >
         {/* Subtle Visual Edge Glow When Hovering or Dragging a Resize Handle */}
@@ -535,7 +593,10 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
             <Icon className={`w-4 h-4 shrink-0 ${meta?.accentColor || 'text-amber-400'}`} />
             <span className="text-xs font-semibold truncate">{meta?.label || moduleId}</span>
             {isInteracting ? (
-              <span className="text-[11px] font-mono text-sky-300 tabular-nums whitespace-nowrap">
+              <span
+                ref={coordsBadgeRef}
+                className="text-[11px] font-mono text-sky-300 tabular-nums whitespace-nowrap"
+              >
                 {activeInteraction === 'move'
                   ? `X ${Math.round(safeGeom.x)} · Y ${Math.round(safeGeom.y)}`
                   : `${Math.round(safeGeom.width)} × ${Math.round(safeGeom.height)}`}
@@ -647,18 +708,9 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
           </div>
         </div>
 
-        {/* Window Content Body */}
+        {/* Window Content Body (never intercept 1-tap focus on inputs/textareas/links) */}
         <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden bg-zinc-950">
           {children}
-
-          {/* Focus shield on background unfocused windows */}
-          {!isFocused && !alwaysOnTop && (
-            <div
-              onPointerDown={() => onFocus?.()}
-              className="absolute inset-0 z-10 bg-transparent cursor-pointer"
-              title="Click to focus window"
-            />
-          )}
 
           {/* Drag/Resize pointer shield so embedded iframes/canvases never swallow pointermove */}
           {isInteracting && (
@@ -745,6 +797,8 @@ export const SovereignOSWindowFrame: React.FC<SovereignOSWindowFrameProps> = ({
   );
 };
 
+export const SovereignOSWindowFrame = React.memo(SovereignOSWindowFrameInner);
+
 interface SovereignDesktopCanvasProps {
   openModules: ModuleType[];
   isChatDetached?: boolean;
@@ -796,7 +850,7 @@ interface DesktopInstalledApp {
   desktopShortcut: boolean;
 }
 
-export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
+const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
   openModules,
   isChatDetached = false,
   onOpenModule,
@@ -1533,10 +1587,10 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
             })}
         </div>
 
-        {/* Right-Side Live Desktop Telemetry & Customization HUD Widgets */}
+        {/* Right-Side Live Desktop Telemetry & Customization HUD Widgets (Composited Solid-Alpha for Zero Backdrop-Blur Drag Lag) */}
         <div className="hidden lg:flex flex-col gap-2.5 w-72 shrink-0">
           {customProfile.desktopWidgets.showKernelHud && (
-            <div className="rounded-2xl bg-zinc-950/80 backdrop-blur-xl border border-zinc-800/90 p-3 shadow-xl space-y-2 text-[11px] font-mono">
+            <div className="rounded-2xl bg-zinc-950/92 border border-zinc-800/90 p-3 shadow-lg space-y-2 text-[11px] font-mono">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-amber-300 flex items-center gap-1.5">
                   <Cpu className="w-3.5 h-3.5 text-emerald-400" />
@@ -1579,7 +1633,7 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
           )}
 
           {customProfile.desktopWidgets.showMarketTickerHud && hudMarketQuotes.length > 0 && (
-            <div className="rounded-2xl bg-zinc-950/80 backdrop-blur-xl border border-zinc-800/90 p-3 shadow-xl space-y-1.5 text-[11px] font-mono">
+            <div className="rounded-2xl bg-zinc-950/92 border border-zinc-800/90 p-3 shadow-lg space-y-1.5 text-[11px] font-mono">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-rose-300 flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5 text-rose-400" />
@@ -1615,7 +1669,7 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
           )}
 
           {customProfile.desktopWidgets.showCryptoVaultHud && hudCryptoSummary && (
-            <div className="rounded-2xl bg-zinc-950/80 backdrop-blur-xl border border-zinc-800/90 p-3 shadow-xl space-y-1.5 text-[11px] font-mono">
+            <div className="rounded-2xl bg-zinc-950/92 border border-zinc-800/90 p-3 shadow-lg space-y-1.5 text-[11px] font-mono">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-emerald-300 flex items-center gap-1.5">
                   <Wallet className="w-3.5 h-3.5 text-emerald-400" />
@@ -1654,7 +1708,7 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
           )}
 
           {customProfile.desktopWidgets.showClipboardHud && (
-            <div className="rounded-2xl bg-zinc-950/80 backdrop-blur-xl border border-zinc-800/90 p-3 shadow-xl space-y-1.5 text-[11px] font-mono">
+            <div className="rounded-2xl bg-zinc-950/92 border border-zinc-800/90 p-3 shadow-lg space-y-1.5 text-[11px] font-mono">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-sky-300">OS CLIPBOARD RING</span>
                 <button
@@ -1682,9 +1736,9 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
       </div>
 
       {/* Bottom Orchestrator-Powered OS Command Dock & Live Host Telemetry Strip */}
-      <div className="relative z-0 px-3 pb-3 sm:px-5 sm:pb-4 flex flex-col lg:flex-row lg:items-end justify-between gap-2.5 shrink-0">
+      <div className="keyboard-hide-secondary relative z-0 px-3 pb-3 sm:px-5 sm:pb-4 flex flex-col lg:flex-row lg:items-end justify-between gap-2.5 shrink-0">
         {/* Central / Primary Autonomous Orchestrator Command Dock */}
-        <div className="w-full lg:max-w-2xl rounded-2xl bg-zinc-950/85 backdrop-blur-xl border border-zinc-800/90 shadow-[0_20px_50px_rgba(0,0,0,0.75)] p-2.5 sm:p-3 space-y-2">
+        <div className="w-full lg:max-w-2xl rounded-2xl bg-zinc-950/94 border border-zinc-800/90 shadow-xl p-2.5 sm:p-3 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono">
             <div className="flex items-center gap-1.5 text-zinc-200 font-semibold">
               <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -1782,7 +1836,7 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
         </div>
 
         {/* Desktop Right-Bottom Quick Customization & Window Manager Bar (sm+) */}
-        <div className="hidden sm:flex items-center gap-1.5 bg-zinc-900/85 backdrop-blur-md border border-zinc-800 rounded-xl p-1.5 shadow-xl self-end shrink-0">
+        <div className="hidden sm:flex items-center gap-1.5 bg-zinc-900/94 border border-zinc-800 rounded-xl p-1.5 shadow-lg self-end shrink-0">
           <button
             type="button"
             onClick={() => setDesktopModal({ type: 'new-file', name: 'notes.txt', content: '' })}
@@ -2292,3 +2346,5 @@ export const SovereignDesktopCanvas: React.FC<SovereignDesktopCanvasProps> = ({
     </div>
   );
 };
+
+export const SovereignDesktopCanvas = React.memo(SovereignDesktopCanvasInner);

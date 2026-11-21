@@ -743,13 +743,13 @@ export async function performRealWebSearch(
 
   const tasks: Promise<void>[] = [];
 
-  // 1. Primary Full Open-Internet Web Index: Bing RSS (clean direct URLs across the entire web)
+  // 1. Primary Full Open-Internet Web Index: Bing RSS (clean direct URLs across the entire open web, SafeSearch OFF)
   tasks.push(
     (async () => {
       try {
         enginesQueried.push('Bing-OpenWeb');
         const rssRes = await fetch(
-          `https://www.bing.com/search?q=${encodeURIComponent(effectiveQuery)}&format=rss&count=20&setlang=en-US`,
+          `https://www.bing.com/search?q=${encodeURIComponent(effectiveQuery)}&format=rss&count=20&setlang=en-US&adlt=off`,
           {
             headers: {
               'User-Agent': CHROME_UA,
@@ -794,13 +794,13 @@ export async function performRealWebSearch(
     })()
   );
 
-  // 2. Primary Full Open-Internet Web Index: Bing Live HTML (extra depth & direct URLs)
+  // 2. Primary Full Open-Internet Web Index: Bing Live HTML (extra depth & direct URLs, SafeSearch OFF)
   tasks.push(
     (async () => {
       try {
         enginesQueried.push('Bing-WebHTML');
         const webRes = await fetch(
-          `https://www.bing.com/search?q=${encodeURIComponent(effectiveQuery)}&count=15&setlang=en-US`,
+          `https://www.bing.com/search?q=${encodeURIComponent(effectiveQuery)}&count=15&setlang=en-US&adlt=off`,
           {
             headers: buildRealisticBrowserHeaders('desktop', 'https://www.bing.com/'),
             signal: AbortSignal.timeout(7000)
@@ -877,13 +877,13 @@ export async function performRealWebSearch(
     })()
   );
 
-  // 4. DuckDuckGo HTML fallback (bonus open-web coverage if not challenged)
+  // 4. DuckDuckGo HTML (unfiltered kp=-2 open-web index)
   tasks.push(
     (async () => {
       try {
         enginesQueried.push('DuckDuckGo-Web');
         const ddgRes = await fetch(
-          `https://html.duckduckgo.com/html/?q=${encodeURIComponent(effectiveQuery)}`,
+          `https://html.duckduckgo.com/html/?q=${encodeURIComponent(effectiveQuery)}&kp=-2`,
           {
             headers: {
               'User-Agent': CHROME_UA,
@@ -915,6 +915,50 @@ export async function performRealWebSearch(
             title: decodeHtmlEntities(m[2].replace(/<[^>]+>/g, '')).trim(),
             url: actualUrl,
             snippet: decodeHtmlEntities(m[3].replace(/<[^>]+>/g, '')).trim(),
+            source: domain
+          });
+        }
+      } catch {
+        // non-fatal
+      }
+    })()
+  );
+
+  // 4b. Yahoo Open-Web Search (parallel full-internet redundancy across commerce, gaming, news, forums)
+  tasks.push(
+    (async () => {
+      try {
+        enginesQueried.push('Yahoo-Web');
+        const yRes = await fetch(
+          `https://search.yahoo.com/search?p=${encodeURIComponent(effectiveQuery)}&n=12`,
+          {
+            headers: buildRealisticBrowserHeaders('desktop', 'https://search.yahoo.com/'),
+            signal: AbortSignal.timeout(5500)
+          }
+        );
+        if (!yRes.ok) return;
+        const html = await yRes.text();
+        const yRegex = /<h3[^>]+class="[^"]*title[^"]*"[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = yRegex.exec(html)) !== null && ddgHits.length < 14) {
+          let actualUrl = decodeHtmlEntities(m[1]);
+          const ruMatch = actualUrl.match(/\/RU=([^/]+)\//i);
+          if (ruMatch) {
+            try {
+              actualUrl = decodeURIComponent(ruMatch[1]);
+            } catch {}
+          }
+          if (!/^https?:\/\//i.test(actualUrl) || actualUrl.includes('yahoo.com/r/')) continue;
+          const cleanTitle = decodeHtmlEntities(m[2].replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+          if (!cleanTitle) continue;
+          let domain = 'open-web';
+          try {
+            domain = new URL(actualUrl).hostname.replace(/^www\./, '');
+          } catch {}
+          ddgHits.push({
+            title: cleanTitle,
+            url: actualUrl,
+            snippet: `Live Open-Web Result (${domain})`,
             source: domain
           });
         }
@@ -1356,14 +1400,14 @@ export async function performYouTubeSearch(query: string): Promise<YouTubeVideoI
     const items: YouTubeVideoItem[] = [];
     const seen = new Set<string>();
 
-    // Extract videoRenderer blocks from ytInitialData
-    const regex = /"videoRenderer":\{"videoId":"([\w-]{11})".*?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"\}\]/g;
+    // Extract videoRenderer blocks from ytInitialData (supports both runs and simpleText formats)
+    const regex = /"videoRenderer":\{"videoId":"([\w-]{11})".*?"title":\{(?:"runs":\[\{"text":"((?:[^"\\]|\\.)*)"\}|"simpleText":"((?:[^"\\]|\\.)*)")/g;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(html)) !== null && items.length < 16) {
       const videoId = match[1];
       if (!videoId || seen.has(videoId)) continue;
       seen.add(videoId);
-      let rawTitle = match[2] || 'YouTube Video';
+      let rawTitle = match[2] || match[3] || 'YouTube Video';
       try {
         rawTitle = JSON.parse(`"${rawTitle}"`);
       } catch {

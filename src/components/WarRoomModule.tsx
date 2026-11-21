@@ -168,6 +168,13 @@ export const WarRoomModule: React.FC = () => {
       gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
+      osc.onended = () => {
+        if (audioCtx.state !== 'closed') {
+          try {
+            audioCtx.close().catch(() => {});
+          } catch {}
+        }
+      };
       osc.start();
       osc.stop(audioCtx.currentTime + duration);
     } catch {

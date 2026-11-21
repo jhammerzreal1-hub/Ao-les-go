@@ -149,10 +149,10 @@ export const LiveVoiceModule: React.FC<LiveVoiceModuleProps> = ({
             <p className="text-[11px] font-mono text-zinc-400 truncate">
               {talkState.active
                 ? talkState.speaking
-                  ? `${talkState.voiceName} speaking · barge-in ready · full OS autonomy`
+                  ? `Lyrailius Omega speaking (${talkState.voiceName} voice) · barge-in ready · full OS autonomy`
                   : talkState.connecting
                   ? 'Connecting zero-gate voice channel...'
-                  : `Live hands-free (${talkState.voiceName}) · synced with Chat & Memory Vault`
+                  : `Live hands-free · Lyrailius Omega (${talkState.voiceName} voice) · synced with Chat & Memory Vault`
                 : 'Single hands-free voice session across all OS windows · zero API key blocks'}
             </p>
           </div>
@@ -279,10 +279,10 @@ export const LiveVoiceModule: React.FC<LiveVoiceModuleProps> = ({
                     {entry.role === 'user'
                       ? 'You'
                       : entry.role === 'thought'
-                      ? `${talkState.voiceName} · Chain-of-Thought`
+                      ? 'Lyrailius Omega · Chain-of-Thought'
                       : entry.role === 'tool'
                       ? 'Autonomous Tool'
-                      : talkState.voiceName}
+                      : 'Lyrailius Omega'}
                   </span>
                   <span className="tabular-nums">{entry.timestamp}</span>
                 </div>

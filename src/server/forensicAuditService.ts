@@ -1513,11 +1513,15 @@ export async function executeForensicRepair(actionId: string): Promise<{
   const runAppBundlesRepair = async () => {
     const coreApps = ['steam', 'discord', 'sovereign-arcade', 'obs-studio', 'vlc-media'];
     for (const appId of coreApps) {
-      const res = await installCatalogSoftware(appId);
-      if (res.success && res.app) {
-        stepsExecuted.push(
-          `Verified & rebuilt in-OS bundle for ${res.app.name} [SHA-256: ${res.app.sha256.slice(0, 16)}...]`
-        );
+      try {
+        const res = await installCatalogSoftware(appId);
+        if (res.success && res.app) {
+          stepsExecuted.push(
+            `Verified & rebuilt in-OS bundle for ${res.app.name} [SHA-256: ${res.app.sha256.slice(0, 16)}...]`
+          );
+        }
+      } catch (err: any) {
+        stepsExecuted.push(`Notice verifying bundle '${appId}': ${err?.message || 'skipped'}`);
       }
     }
   };

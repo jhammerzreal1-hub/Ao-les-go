@@ -9,7 +9,7 @@
  * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
  */
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { 
   auth, 
@@ -51,8 +51,18 @@ import { orchestratorRuntime } from './utils/OrchestratorRuntime';
 import { useOrchestrator } from './hooks/useOrchestrator';
 import {
   loadOSCustomizationProfile,
-  saveOSCustomizationProfile
+  saveOSCustomizationProfile,
+  hydrateOSCustomizationFromRemote
 } from './utils/osCustomizationStore';
+import {
+  pushContinuitySettingsPatch,
+  flushContinuityBeacon,
+  updateLocalBeaconSnapshot,
+  fetchServerContinuityState,
+  loadOrchestratorStateFromFirestore,
+  saveOrchestratorStateToFirestore
+} from './utils/continuityClient';
+import { markVoiceUserGesture } from './utils/mediaPermissions';
 import type { ModuleType, Artifact, AuditLedgerItem } from './types';
 
 // Lazy-loaded OS Applications with automatic retry & stale-chunk recovery
@@ -110,6 +120,42 @@ const ModuleLoadingFallback: React.FC<{ label?: string }> = ({ label = 'Loading 
   </div>
 );
 
+interface MemoChatPaneProps {
+  onSaveToVault: (title: string, content: string, model: string) => void;
+  onSelectModule: (mod: ModuleType) => void;
+  pendingInput: { content: string; immediate?: boolean } | null;
+  onClearPendingInput: () => void;
+  userId?: string;
+  isDetached: boolean;
+  onToggleDetach: () => void;
+}
+
+const MemoChatPane: React.FC<MemoChatPaneProps> = React.memo(({
+  onSaveToVault,
+  onSelectModule,
+  pendingInput,
+  onClearPendingInput,
+  userId,
+  isDetached,
+  onToggleDetach
+}) => (
+  <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <ErrorBoundary key="persistent-chat-eb">
+      <Suspense fallback={<ModuleLoadingFallback label="Loading Sovereign Chat..." />}>
+        <ChatModule
+          onSaveToVault={onSaveToVault}
+          onSelectModule={onSelectModule}
+          pendingInput={pendingInput}
+          onClearPendingInput={onClearPendingInput}
+          userId={userId}
+          isDetached={isDetached}
+          onToggleDetach={onToggleDetach}
+        />
+      </Suspense>
+    </ErrorBoundary>
+  </div>
+));
+
 export default function App() {
   const {
     state: orchestratorState,
@@ -124,7 +170,13 @@ export default function App() {
     coordinateSubsystem,
     getResidentState
   } = useOrchestrator({
-    activeModule: 'chat',
+    activeModule: (() => {
+      try {
+        const saved = localStorage.getItem('sovereign_os_active_module_v1') as ModuleType | null;
+        if (saved && saved.trim()) return saved;
+      } catch {}
+      return 'chat';
+    })(),
     pendingChatInput: null,
     agentInternetAllowed: true,
     devMode: (() => {
@@ -132,7 +184,16 @@ export default function App() {
       return saved !== null ? saved === 'true' : true;
     })(),
     activeAccountEmail: localStorage.getItem('aurelius_active_account') || 'joshualhamilton17@gmail.com',
-    uiMutation: { css: '' },
+    uiMutation: (() => {
+      try {
+        const saved = localStorage.getItem('sovereign_ui_mutation_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed.css === 'string') return parsed;
+        }
+      } catch {}
+      return { css: '' };
+    })(),
     lamportClock: 1
   });
 
@@ -146,7 +207,9 @@ export default function App() {
     console.log('%c[KERNEL] ZENODO DOI PROVENANCE: IMMUTABLE', 'color: #8b5cf6;');
     
     // Automatically initialize offline substrate and background autonomous learning daemon
-    localStorage.setItem('aurelius_dev_mode', 'true');
+    if (localStorage.getItem('aurelius_dev_mode') === null) {
+      localStorage.setItem('aurelius_dev_mode', 'true');
+    }
     localLlmManager.autoInitializeOfflineSubstrate().catch(() => {});
     autonomousSelfImprovement.start();
 
@@ -326,6 +389,13 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState<boolean>(false);
   const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(false);
   const [browserTargetUrl, setBrowserTargetUrl] = useState<string | undefined>(undefined);
+  const [browserNavRequest, setBrowserNavRequest] = useState<{
+    seq: number;
+    action: 'navigate' | 'newtab' | 'search';
+    url?: string;
+    query?: string;
+  } | undefined>(undefined);
+  const browserNavSeqRef = useRef<number>(0);
 
   // Sovereign OS Multi-Window Taskbar, Desktop Window Manager & Split-Screen State
   const mainAreaRef = useRef<HTMLDivElement>(null);
@@ -349,7 +419,13 @@ export default function App() {
       return false;
     }
   });
-  const [chatPipMinimized, setChatPipMinimized] = useState<boolean>(false);
+  const [chatPipMinimized, setChatPipMinimized] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sovereign_os_chat_pip_minimized_v1') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [detachedExtraModules, setDetachedExtraModules] = useState<ModuleType[]>(() => {
     try {
       const saved = localStorage.getItem('sovereign_os_detached_extras_v1');
@@ -360,7 +436,16 @@ export default function App() {
     } catch {}
     return [];
   });
-  const [pipMinimizedExtras, setPipMinimizedExtras] = useState<Partial<Record<ModuleType, boolean>>>({});
+  const [pipMinimizedExtras, setPipMinimizedExtras] = useState<Partial<Record<ModuleType, boolean>>>(() => {
+    try {
+      const saved = localStorage.getItem('sovereign_os_pip_minimized_extras_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return {};
+  });
   const [showDesktopSidebar, setShowDesktopSidebar] = useState<boolean>(false);
   const [osActionToast, setOsActionToast] = useState<string | null>(null);
   const [osMarketAlert, setOsMarketAlert] = useState<AutonomousMarketAlert | null>(null);
@@ -374,7 +459,13 @@ export default function App() {
   const [notificationPrefs, setNotificationPrefs] = useState(
     () => loadOSCustomizationProfile().notifications
   );
-  const [persistentTalkActive, setPersistentTalkActive] = useState<boolean>(false);
+  const [persistentTalkActive, setPersistentTalkActive] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sovereign_persistent_talk_active_v1') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [persistentTalkStatus, setPersistentTalkStatus] = useState<{
     connected: boolean;
     connecting: boolean;
@@ -397,6 +488,10 @@ export default function App() {
       }
     };
     const onToggleTalk = (e: Event) => {
+      markVoiceUserGesture();
+      try {
+        localStorage.setItem('sovereign_continuity_local_updated_at_v1', new Date().toISOString());
+      } catch {}
       const detail = (e as CustomEvent)?.detail;
       if (detail && typeof detail.active === 'boolean') {
         setPersistentTalkActive(detail.active);
@@ -607,17 +702,82 @@ export default function App() {
     }
   });
   const [splitRatio, setSplitRatio] = useState<'50-50' | '60-40'>('50-50');
-  const [splitPct, setSplitPct] = useState<number>(50);
+  const [splitPct, setSplitPct] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem('sovereign_os_split_pct_v1'));
+      if (Number.isFinite(saved) && saved >= 20 && saved <= 80) return saved;
+    } catch {}
+    return 50;
+  });
   const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
   const [isOSLauncherOpen, setIsOSLauncherOpen] = useState<boolean>(false);
+
+  const shellHydratedRef = useRef<boolean>(false);
+  const applyingRemoteShellRef = useRef<boolean>(false);
+  const firestoreSyncTimerRef = useRef<number | null>(null);
+  const shellPersistTimerRef = useRef<number | null>(null);
+  const latestRemoteChatRef = useRef<Record<string, any> | undefined>(undefined);
+  const latestRemoteVoiceDockRef = useRef<Record<string, any> | undefined>(undefined);
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
+
+  // Track window.visualViewport so touch keyboards on mobile/iFrame shrink the OS cleanly instead of hiding chat input
+  useEffect(() => {
+    const root = document.documentElement;
+    let rafId = 0;
+    const syncViewportMetrics = () => {
+      rafId = 0;
+      const vv = window.visualViewport;
+      const layoutH = window.innerHeight || root.clientHeight || 720;
+      const visibleH = vv ? vv.height : layoutH;
+      const offsetTop = vv ? vv.offsetTop : 0;
+      root.style.setProperty('--sovereign-app-height', `${Math.max(240, Math.round(visibleH))}px`);
+      const activeTag = document.activeElement?.tagName;
+      const isEditable =
+        activeTag === 'TEXTAREA' ||
+        activeTag === 'INPUT' ||
+        (document.activeElement as HTMLElement | null)?.isContentEditable === true;
+      const kbOpen = layoutH - visibleH > 90 || (isEditable && visibleH < 500 && layoutH > visibleH + 40);
+      if (kbOpen) {
+        root.setAttribute('data-keyboard-open', 'true');
+      } else {
+        root.removeAttribute('data-keyboard-open');
+      }
+      if (offsetTop > 0 && window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    const scheduleSync = () => {
+      if (!rafId) rafId = requestAnimationFrame(syncViewportMetrics);
+    };
+
+    syncViewportMetrics();
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', scheduleSync);
+    vv?.addEventListener('scroll', scheduleSync);
+    window.addEventListener('resize', scheduleSync);
+    document.addEventListener('focusin', scheduleSync, true);
+    document.addEventListener('focusout', scheduleSync, true);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      vv?.removeEventListener('resize', scheduleSync);
+      vv?.removeEventListener('scroll', scheduleSync);
+      window.removeEventListener('resize', scheduleSync);
+      document.removeEventListener('focusin', scheduleSync, true);
+      document.removeEventListener('focusout', scheduleSync, true);
+      root.removeAttribute('data-keyboard-open');
+    };
+  }, []);
 
   useEffect(() => {
     const el = mainAreaRef.current;
     if (!el) return;
     let rafId = 0;
     const applySize = () => {
+      rafId = 0;
       const nextWidth = Math.max(el.clientWidth, 300);
-      const nextHeight = Math.max(el.clientHeight, 240);
+      const nextHeight = Math.max(el.clientHeight, 220);
       setDesktopSize((prev) =>
         prev.width === nextWidth && prev.height === nextHeight
           ? prev
@@ -631,9 +791,11 @@ export default function App() {
     applySize();
     const ro = new ResizeObserver(updateSize);
     ro.observe(el);
+    window.visualViewport?.addEventListener('resize', updateSize);
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
       ro.disconnect();
+      window.visualViewport?.removeEventListener('resize', updateSize);
     };
   }, []);
 
@@ -644,36 +806,273 @@ export default function App() {
     el.style.setProperty('--split-right', `${100 - splitPct}%`);
   }, [splitPct, isSplitMode, desktopActive]);
 
-  useEffect(() => {
+  const buildShellSnapshot = () => ({
+    activeModule,
+    shellViewMode,
+    openModules,
+    pinnedModules,
+    windowStates,
+    isSplitMode,
+    secondaryModule,
+    splitPct,
+    isChatDetached,
+    detachedExtraModules,
+    chatPipMinimized,
+    pipMinimizedExtras,
+    devMode,
+    activeAccountEmail,
+    persistentTalkActive,
+    uiMutation
+  });
+
+  const scheduleFirestoreContinuityWrite = () => {
+    const u = userRef.current;
+    if (!u?.uid || !u.emailVerified) return;
+    if (firestoreSyncTimerRef.current !== null) {
+      window.clearTimeout(firestoreSyncTimerRef.current);
+    }
+    firestoreSyncTimerRef.current = window.setTimeout(() => {
+      firestoreSyncTimerRef.current = null;
+      const activeUser = userRef.current;
+      if (!activeUser?.uid || !activeUser.emailVerified) return;
+      saveOrchestratorStateToFirestore(activeUser.uid, {
+        shell: buildShellSnapshot(),
+        osCustomization: loadOSCustomizationProfile(),
+        ...(latestRemoteChatRef.current ? { chat: latestRemoteChatRef.current } : {}),
+        ...(latestRemoteVoiceDockRef.current ? { voiceDock: latestRemoteVoiceDockRef.current } : {})
+      }).catch(() => {});
+    }, 1800);
+  };
+
+  const flushShellLocalPersistence = useCallback(() => {
     try {
+      localStorage.setItem('sovereign_os_active_module_v1', activeModule);
       localStorage.setItem('sovereign_os_shell_mode_v1', shellViewMode);
-    } catch {}
-  }, [shellViewMode]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem('sovereign_os_window_states_v2', JSON.stringify(windowStates));
-    } catch {}
-  }, [windowStates]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem('sovereign_os_open_modules_v1', JSON.stringify(openModules));
-    } catch {}
-  }, [openModules]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem('sovereign_os_pinned_modules_v1', JSON.stringify(pinnedModules));
-    } catch {}
-  }, [pinnedModules]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem('sovereign_os_split_mode_v1', String(isSplitMode));
       localStorage.setItem('sovereign_os_secondary_module_v1', secondaryModule);
+      localStorage.setItem('sovereign_os_split_pct_v1', String(splitPct));
+      localStorage.setItem('sovereign_os_chat_detached_v1', String(isChatDetached));
+      localStorage.setItem('sovereign_os_detached_extras_v1', JSON.stringify(detachedExtraModules));
+      localStorage.setItem('sovereign_os_chat_pip_minimized_v1', String(chatPipMinimized));
+      localStorage.setItem('sovereign_os_pip_minimized_extras_v1', JSON.stringify(pipMinimizedExtras));
+      localStorage.setItem('aurelius_dev_mode', String(devMode));
+      localStorage.setItem('aurelius_active_account', activeAccountEmail);
+      localStorage.setItem('sovereign_persistent_talk_active_v1', String(persistentTalkActive));
+      localStorage.setItem('sovereign_ui_mutation_v1', JSON.stringify(uiMutation));
     } catch {}
-  }, [isSplitMode, secondaryModule]);
+
+    const shellSnapshot = buildShellSnapshot();
+    updateLocalBeaconSnapshot({
+      settings: {
+        shell: shellSnapshot
+      }
+    });
+
+    if (applyingRemoteShellRef.current || !shellHydratedRef.current) return;
+    try {
+      localStorage.setItem('sovereign_continuity_local_updated_at_v1', new Date().toISOString());
+    } catch {}
+    pushContinuitySettingsPatch({ shell: shellSnapshot });
+    scheduleFirestoreContinuityWrite();
+  }, [
+    activeModule,
+    shellViewMode,
+    openModules,
+    pinnedModules,
+    windowStates,
+    isSplitMode,
+    secondaryModule,
+    splitPct,
+    isChatDetached,
+    detachedExtraModules,
+    chatPipMinimized,
+    pipMinimizedExtras,
+    devMode,
+    activeAccountEmail,
+    persistentTalkActive,
+    uiMutation
+  ]);
+
+  const flushShellLocalPersistenceRef = useRef(flushShellLocalPersistence);
+  flushShellLocalPersistenceRef.current = flushShellLocalPersistence;
+
+  useEffect(() => {
+    if (shellPersistTimerRef.current !== null) {
+      window.clearTimeout(shellPersistTimerRef.current);
+    }
+    shellPersistTimerRef.current = window.setTimeout(() => {
+      shellPersistTimerRef.current = null;
+      flushShellLocalPersistenceRef.current();
+    }, 320);
+
+    return () => {
+      if (shellPersistTimerRef.current !== null) {
+        window.clearTimeout(shellPersistTimerRef.current);
+        shellPersistTimerRef.current = null;
+      }
+    };
+  }, [flushShellLocalPersistence]);
+
+  // Flush unsaved settings, active agent task checkpoint, and voice transcript on tab refresh / close / disconnect
+  useEffect(() => {
+    const onUnloadFlush = () => {
+      if (shellPersistTimerRef.current !== null) {
+        window.clearTimeout(shellPersistTimerRef.current);
+        shellPersistTimerRef.current = null;
+        flushShellLocalPersistenceRef.current();
+      }
+      flushContinuityBeacon();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        onUnloadFlush();
+      }
+    };
+    const onSubSettingsUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      if (detail?.chat && typeof detail.chat === 'object') {
+        latestRemoteChatRef.current = detail.chat;
+      }
+      if (detail?.voiceDock && typeof detail.voiceDock === 'object') {
+        latestRemoteVoiceDockRef.current = detail.voiceDock;
+      }
+      scheduleFirestoreContinuityWrite();
+    };
+    window.addEventListener('pagehide', onUnloadFlush);
+    window.addEventListener('beforeunload', onUnloadFlush);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('sovereign_os_customization_changed', onSubSettingsUpdated);
+    window.addEventListener('sovereign_continuity_subsettings_changed', onSubSettingsUpdated);
+    return () => {
+      window.removeEventListener('pagehide', onUnloadFlush);
+      window.removeEventListener('beforeunload', onUnloadFlush);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('sovereign_os_customization_changed', onSubSettingsUpdated);
+      window.removeEventListener('sovereign_continuity_subsettings_changed', onSubSettingsUpdated);
+      if (firestoreSyncTimerRef.current !== null) {
+        window.clearTimeout(firestoreSyncTimerRef.current);
+        firestoreSyncTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const applyRemoteShellSettings = (shell: Record<string, any> | undefined, hydratedAt?: string) => {
+    if (!shell || typeof shell !== 'object') return;
+    applyingRemoteShellRef.current = true;
+    try {
+      if (hydratedAt) {
+        try {
+          localStorage.setItem('sovereign_continuity_local_updated_at_v1', hydratedAt);
+        } catch {}
+      }
+      if (typeof shell.activeModule === 'string' && shell.activeModule && shell.activeModule !== activeModule) {
+        setActiveModule(shell.activeModule as ModuleType);
+      }
+      if ((shell.shellViewMode === 'desktop' || shell.shellViewMode === 'workspace') && shell.shellViewMode !== shellViewMode) {
+        setShellViewMode(shell.shellViewMode);
+      }
+      if (Array.isArray(shell.openModules) && shell.openModules.length > 0) {
+        setOpenModules((prev) =>
+          prev.length === shell.openModules.length && prev.every((v, i) => v === shell.openModules[i])
+            ? prev
+            : (shell.openModules as ModuleType[])
+        );
+      }
+      if (Array.isArray(shell.pinnedModules)) {
+        setPinnedModules((prev) =>
+          prev.length === shell.pinnedModules.length && prev.every((v, i) => v === shell.pinnedModules[i])
+            ? prev
+            : (shell.pinnedModules as ModuleType[])
+        );
+      }
+      if (shell.windowStates && typeof shell.windowStates === 'object') {
+        setWindowStates(shell.windowStates);
+      }
+      if (typeof shell.isSplitMode === 'boolean' && shell.isSplitMode !== isSplitMode) {
+        setIsSplitMode(shell.isSplitMode);
+      }
+      if (typeof shell.secondaryModule === 'string' && shell.secondaryModule && shell.secondaryModule !== secondaryModule) {
+        setSecondaryModule(shell.secondaryModule as ModuleType);
+      }
+      if (typeof shell.splitPct === 'number' && shell.splitPct >= 20 && shell.splitPct <= 80 && shell.splitPct !== splitPct) {
+        setSplitPct(shell.splitPct);
+      }
+      if (typeof shell.isChatDetached === 'boolean' && shell.isChatDetached !== isChatDetached) {
+        setIsChatDetached(shell.isChatDetached);
+      }
+      if (Array.isArray(shell.detachedExtraModules)) {
+        setDetachedExtraModules((prev) =>
+          prev.length === shell.detachedExtraModules.length && prev.every((v, i) => v === shell.detachedExtraModules[i])
+            ? prev
+            : (shell.detachedExtraModules as ModuleType[])
+        );
+      }
+      if (typeof shell.chatPipMinimized === 'boolean' && shell.chatPipMinimized !== chatPipMinimized) {
+        setChatPipMinimized(shell.chatPipMinimized);
+      }
+      if (shell.pipMinimizedExtras && typeof shell.pipMinimizedExtras === 'object') {
+        setPipMinimizedExtras(shell.pipMinimizedExtras);
+      }
+      if (typeof shell.devMode === 'boolean' && shell.devMode !== devMode) {
+        setDevMode(shell.devMode);
+      }
+      if (typeof shell.activeAccountEmail === 'string' && shell.activeAccountEmail && shell.activeAccountEmail !== activeAccountEmail) {
+        switchAccountEmail(shell.activeAccountEmail);
+      }
+      if (typeof shell.persistentTalkActive === 'boolean' && shell.persistentTalkActive !== persistentTalkActive) {
+        setPersistentTalkActive(shell.persistentTalkActive);
+      }
+      if (shell.uiMutation && typeof shell.uiMutation.css === 'string' && shell.uiMutation.css !== uiMutation.css) {
+        setUiMutation(shell.uiMutation);
+      }
+    } finally {
+      window.setTimeout(() => {
+        applyingRemoteShellRef.current = false;
+      }, 0);
+    }
+  };
+
+  // Initial server continuity hydration on boot (atomic disk + SQLite -> client state & subcomponents)
+  useEffect(() => {
+    let active = true;
+    fetchServerContinuityState()
+      .then((remote) => {
+        if (!active) return;
+        if (remote?.settings) {
+          if (remote.settings.chat) latestRemoteChatRef.current = remote.settings.chat;
+          if (remote.settings.voiceDock) latestRemoteVoiceDockRef.current = remote.settings.voiceDock;
+          let localTs = 0;
+          try {
+            localTs = Date.parse(localStorage.getItem('sovereign_continuity_local_updated_at_v1') || '') || 0;
+          } catch {}
+          const remoteTs = Date.parse(remote.settings.updatedAt || '') || 0;
+          if (!localTs || remoteTs > localTs) {
+            if (remote.settings.shell && Object.keys(remote.settings.shell).length > 0) {
+              applyRemoteShellSettings(remote.settings.shell, remote.settings.updatedAt);
+            }
+            if (remote.settings.osCustomization && Object.keys(remote.settings.osCustomization).length > 0) {
+              hydrateOSCustomizationFromRemote(remote.settings.osCustomization);
+            }
+          } else if (localTs > remoteTs) {
+            pushContinuitySettingsPatch({
+              shell: buildShellSnapshot(),
+              osCustomization: loadOSCustomizationProfile()
+            });
+          }
+          window.dispatchEvent(new CustomEvent('sovereign_continuity_hydrated', { detail: remote }));
+        }
+        shellHydratedRef.current = true;
+      })
+      .catch(() => {
+        shellHydratedRef.current = true;
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const getOrCreateWindowGeometry = (mod: ModuleType, indexHint = 0): OSWindowGeometry => {
     const existing = windowStates[mod];
@@ -689,10 +1088,13 @@ export default function App() {
   };
 
   const focusDesktopWindow = (mod: ModuleType) => {
-    topZRef.current += 1;
-    const nextZ = topZRef.current;
     setWindowStates((prev) => {
       const existing = prev[mod];
+      if (existing && !existing.minimized && existing.zIndex >= topZRef.current) {
+        return prev;
+      }
+      topZRef.current += 1;
+      const nextZ = topZRef.current;
       const base = existing
         ? clampWindowGeometry(existing, desktopSize.width, desktopSize.height)
         : getOrCreateWindowGeometry(mod, Object.keys(prev).length);
@@ -823,16 +1225,18 @@ export default function App() {
   const handleSelectOSModule = (mod: ModuleType) => {
     setOpenModules((prev) => (prev.includes(mod) ? prev : [...prev, mod]));
     if (mod === 'chat' && isChatDetached) {
-      setChatPipMinimized(false);
+      setChatPipMinimized((cur) => (cur ? false : cur));
     } else if (detachedExtraModules.includes(mod)) {
-      setPipMinimizedExtras((p) => ({ ...p, [mod]: false }));
+      setPipMinimizedExtras((p) => (p[mod] ? { ...p, [mod]: false } : p));
     }
     if (!desktopActive && isSplitMode && mod === secondaryModule) {
       setSecondaryModule(activeModule);
     }
     focusDesktopWindow(mod);
     if (!((isChatDetached && !desktopActive && mod === 'chat') || (!desktopActive && detachedExtraModules.includes(mod)))) {
-      setActiveModule(mod);
+      if (activeModule !== mod) {
+        setActiveModule(mod);
+      }
     }
   };
 
@@ -971,7 +1375,11 @@ export default function App() {
   }, [activeModule, secondaryModule, isSplitMode]);
 
   const handleNavigateUrlInBrowser = (url: string) => {
-    setBrowserTargetUrl(url);
+    const clean = String(url || '').trim();
+    if (!clean) return;
+    const seq = ++browserNavSeqRef.current;
+    setBrowserTargetUrl(clean);
+    setBrowserNavRequest({ seq, action: 'navigate', url: clean });
     handleSelectOSModule('browser');
   };
 
@@ -1029,6 +1437,57 @@ export default function App() {
           createdAt: existingData?.createdAt || currentUser.metadata?.creationTime || new Date().toISOString()
         }, { merge: true });
         if (active) setFirebaseOnline(true);
+
+        if (currentUser.emailVerified) {
+          try {
+            const remoteCloud = await loadOrchestratorStateFromFirestore(currentUser.uid);
+            let localTs = 0;
+            try {
+              localTs = Date.parse(localStorage.getItem('sovereign_continuity_local_updated_at_v1') || '') || 0;
+            } catch {}
+            const cloudTs = remoteCloud?.updatedAt ? Date.parse(remoteCloud.updatedAt) || 0 : 0;
+
+            if (remoteCloud?.snapshot && (!localTs || cloudTs > localTs)) {
+              if (remoteCloud.snapshot.shell) {
+                applyRemoteShellSettings(remoteCloud.snapshot.shell, remoteCloud.updatedAt);
+              }
+              if (remoteCloud.snapshot.osCustomization) {
+                hydrateOSCustomizationFromRemote(remoteCloud.snapshot.osCustomization);
+              }
+              pushContinuitySettingsPatch({
+                shell: remoteCloud.snapshot.shell,
+                osCustomization: remoteCloud.snapshot.osCustomization,
+                chat: remoteCloud.snapshot.chat,
+                voiceDock: remoteCloud.snapshot.voiceDock
+              });
+              window.dispatchEvent(
+                new CustomEvent('sovereign_continuity_hydrated', {
+                  detail: {
+                    settings: {
+                      updatedAt: remoteCloud.updatedAt,
+                      shell: remoteCloud.snapshot.shell || {},
+                      osCustomization: remoteCloud.snapshot.osCustomization || {},
+                      chat: remoteCloud.snapshot.chat || {},
+                      voiceDock: remoteCloud.snapshot.voiceDock || {}
+                    }
+                  }
+                })
+              );
+            } else {
+              await saveOrchestratorStateToFirestore(currentUser.uid, {
+                shell: buildShellSnapshot(),
+                osCustomization: loadOSCustomizationProfile(),
+                ...(latestRemoteChatRef.current ? { chat: latestRemoteChatRef.current } : {}),
+                ...(latestRemoteVoiceDockRef.current ? { voiceDock: latestRemoteVoiceDockRef.current } : {})
+              });
+            }
+          } catch (cloudErr) {
+            console.warn(
+              '[Firestore] Orchestrator continuity sync note:',
+              cloudErr instanceof Error ? cloudErr.message : String(cloudErr)
+            );
+          }
+        }
       } catch (err) {
         await verifyFirestoreReachability();
         console.warn('[Firestore] Profile sync deferred:', err instanceof Error ? err.message : String(err));
@@ -1175,8 +1634,38 @@ export default function App() {
   osCommandRef.current = (detail: any) => {
     if (!detail || !detail.action) return;
     const action = String(detail.action).trim();
-    const targetMod = (detail.targetModule || detail.module) as ModuleType | undefined;
-    const secMod = detail.secondaryModule as ModuleType | undefined;
+    const resolveModuleAlias = (raw?: any): ModuleType | undefined => {
+      if (!raw) return undefined;
+      const k = String(raw).trim().toLowerCase().replace(/\s+/g, '-');
+      const map: Record<string, ModuleType> = {
+        chrome: 'browser',
+        'sovereign-browser': 'browser',
+        'sovereign-chrome': 'browser',
+        web: 'browser',
+        internet: 'browser',
+        files: 'file-manager',
+        explorer: 'file-manager',
+        'file-explorer': 'file-manager',
+        file_manager: 'file-manager',
+        shell: 'terminal',
+        cli: 'terminal',
+        console: 'terminal',
+        research: 'search',
+        'web-search': 'search',
+        tools: 'tool-shed',
+        forge: 'tool-shed',
+        telemetry: 'macro-telemetry',
+        wallets: 'crypto-wallet',
+        wallet: 'crypto-wallet',
+        spatial: 'spatial-arena',
+        arena: 'spatial-arena',
+        distillery: 'ai-genesis-distillery',
+        genesis: 'ai-genesis-distillery'
+      };
+      return map[k] || (String(raw).trim() as ModuleType);
+    };
+    const targetMod = resolveModuleAlias(detail.targetModule || detail.module);
+    const secMod = resolveModuleAlias(detail.secondaryModule);
 
     switch (action) {
       case 'open_window':
@@ -1262,12 +1751,35 @@ export default function App() {
         break;
       case 'browser_navigate':
       case 'browser_new_tab':
-      case 'browser_search':
-        if (detail.url) setBrowserTargetUrl(String(detail.url));
+      case 'browser_search': {
+        const navUrl = detail.url ? String(detail.url).trim() : undefined;
+        const navQuery = detail.query
+          ? String(detail.query).trim()
+          : (!navUrl && detail.command ? String(detail.command).trim() : undefined);
+        const navTarget =
+          action === 'browser_search' && navQuery && !/^https?:\/\//i.test(navQuery)
+            ? `https://www.google.com/search?q=${encodeURIComponent(navQuery)}`
+            : navUrl || navQuery;
+        const seq = ++browserNavSeqRef.current;
+        if (navTarget) {
+          setBrowserTargetUrl(navTarget);
+        }
+        setBrowserNavRequest({
+          seq,
+          action:
+            action === 'browser_new_tab'
+              ? 'newtab'
+              : action === 'browser_search'
+              ? 'search'
+              : 'navigate',
+          url: navTarget,
+          query: navQuery
+        });
         handleSelectOSModule('browser');
         if (isChatDetached) setChatPipMinimized(false);
-        showOsToast(`Chrome -> ${detail.url || 'New Tab'}`);
+        showOsToast(`Chrome -> ${navQuery || navTarget || 'New Tab'}`);
         break;
+      }
       case 'files_open_path':
         handleSelectOSModule('file-manager');
         if (isChatDetached) setChatPipMinimized(false);
@@ -1646,6 +2158,26 @@ export default function App() {
 
   const isChatVisible = activeModule === 'chat' || (isSplitMode && secondaryModule === 'chat');
   const chatRole: 'primary' | 'secondary' = activeModule === 'chat' ? 'primary' : 'secondary';
+  const [hasActivatedChat, setHasActivatedChat] = useState<boolean>(() => {
+    try {
+      return (
+        localStorage.getItem('aurelius_infinite_workflow_active') === 'true' ||
+        localStorage.getItem('sovereign_workflow_window_open_v1') === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    if (isChatDetached || !desktopActive || (openModules.includes('chat') && !windowStates.chat?.minimized)) {
+      setHasActivatedChat(true);
+    }
+  }, [isChatDetached, desktopActive, openModules, windowStates.chat?.minimized]);
+  useEffect(() => {
+    const onWorkflowOpen = () => setHasActivatedChat(true);
+    window.addEventListener('sovereign_workflow_open', onWorkflowOpen);
+    return () => window.removeEventListener('sovereign_workflow_open', onWorkflowOpen);
+  }, []);
   const isBrowserDetached = detachedExtraModules.includes('browser');
   const isBrowserMounted = openModules.includes('browser') || activeModule === 'browser' || (isSplitMode && secondaryModule === 'browser') || isBrowserDetached;
   const isBrowserVisible = activeModule === 'browser' || (isSplitMode && secondaryModule === 'browser');
@@ -1691,7 +2223,13 @@ export default function App() {
       onToggleDetachChat={() => handleToggleDetachChat()}
       persistentTalkActive={persistentTalkActive}
       persistentTalkSpeaking={persistentTalkStatus.speaking}
-      onTogglePersistentTalk={() => setPersistentTalkActive((prev) => !prev)}
+      onTogglePersistentTalk={() => {
+        markVoiceUserGesture();
+        try {
+          localStorage.setItem('sovereign_continuity_local_updated_at_v1', new Date().toISOString());
+        } catch {}
+        setPersistentTalkActive((prev) => !prev);
+      }}
       onInjectToChat={handleInjectIntoChat}
       showDesktopSidebar={showDesktopSidebar}
       onToggleDesktopSidebar={() => setShowDesktopSidebar((prev) => !prev)}
@@ -1702,8 +2240,28 @@ export default function App() {
     />
   );
 
+  const stableSaveToVaultRef = useRef(handleSaveToVault);
+  stableSaveToVaultRef.current = handleSaveToVault;
+  const stableSelectOSModuleRef = useRef(handleSelectOSModule);
+  stableSelectOSModuleRef.current = handleSelectOSModule;
+  const stableToggleDetachChatRef = useRef(handleToggleDetachChat);
+  stableToggleDetachChatRef.current = handleToggleDetachChat;
+
+  const stableChatSaveToVault = useCallback((title: string, content: string, model: string) => {
+    stableSaveToVaultRef.current('knowledge', title, content, model);
+  }, []);
+  const stableChatSelectModule = useCallback((mod: ModuleType) => {
+    stableSelectOSModuleRef.current(mod);
+  }, []);
+  const stableClearPendingChatInput = useCallback(() => {
+    setPendingChatInput(null);
+  }, [setPendingChatInput]);
+  const stableToggleDetachChat = useCallback(() => {
+    stableToggleDetachChatRef.current();
+  }, []);
+
   return (
-    <div className="h-[100dvh] w-full overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-200">
+    <div className="h-[var(--sovereign-app-height,100dvh)] w-full overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-200">
       {/* Sovereign UI HTML Mutation Patch Container */}
       {uiMutation.htmlPatch && (
         <div dangerouslySetInnerHTML={{ __html: uiMutation.htmlPatch }} />
@@ -1762,14 +2320,14 @@ export default function App() {
           )}
 
           {/* Persistent Sovereign Chat Window (ZERO-Unmount Keep-Alive once opened; avoids eager download while minimized at boot) */}
-          {(isChatDetached || !desktopActive || (openModules.includes('chat') && !windowStates.chat?.minimized)) && (
+          {(hasActivatedChat || isChatDetached || !desktopActive || (openModules.includes('chat') && !windowStates.chat?.minimized)) && (
             <SovereignOSWindowFrame
               moduleId="chat"
               mode={isChatDetached ? 'pip' : desktopActive ? 'floating' : 'tiled'}
               visible={isChatDetached ? true : desktopActive ? openModules.includes('chat') : isChatVisible}
               tiledClassName={`${getPaneSizingClass(chatRole)} ${
                 chatRole === 'primary' ? 'lg:order-1' : 'lg:order-3'
-              } overflow-y-auto overflow-x-clip`}
+              } overflow-hidden`}
               geometry={getOrCreateWindowGeometry('chat', 0)}
               isFocused={activeModule === 'chat' || isChatDetached}
               alwaysOnTop={isChatDetached}
@@ -1778,8 +2336,11 @@ export default function App() {
               containerSize={desktopSize}
               onFocus={() => {
                 if (isChatDetached) {
-                  setChatPipMinimized(false);
-                  handleMoveResizeWindow('chat', { zIndex: ++topZRef.current + 16 });
+                  if (chatPipMinimized) setChatPipMinimized(false);
+                  const curZ = windowStates.chat?.zIndex || 0;
+                  if (curZ < topZRef.current + 16) {
+                    handleMoveResizeWindow('chat', { zIndex: ++topZRef.current + 16 });
+                  }
                 } else {
                   handleSelectOSModule('chat');
                 }
@@ -1799,23 +2360,15 @@ export default function App() {
               onClose={() => handleCloseOpenModule('chat')}
               onMoveResize={(next) => handleMoveResizeWindow('chat', next)}
             >
-              <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-clip">
-                <ErrorBoundary key="persistent-chat-eb">
-                  <Suspense fallback={<ModuleLoadingFallback label="Loading Sovereign Chat..." />}>
-                    <ChatModule
-                      onSaveToVault={(title, content, model) =>
-                        handleSaveToVault('knowledge', title, content, model)
-                      }
-                      onSelectModule={handleSelectOSModule}
-                      pendingInput={pendingChatInput}
-                      onClearPendingInput={() => setPendingChatInput(null)}
-                      userId={user?.uid}
-                      isDetached={isChatDetached}
-                      onToggleDetach={() => handleToggleDetachChat()}
-                    />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
+              <MemoChatPane
+                onSaveToVault={stableChatSaveToVault}
+                onSelectModule={stableChatSelectModule}
+                pendingInput={pendingChatInput}
+                onClearPendingInput={stableClearPendingChatInput}
+                userId={user?.uid}
+                isDetached={isChatDetached}
+                onToggleDetach={stableToggleDetachChat}
+              />
             </SovereignOSWindowFrame>
           )}
 
@@ -1836,8 +2389,13 @@ export default function App() {
               containerSize={desktopSize}
               onFocus={() => {
                 if (isBrowserDetached) {
-                  setPipMinimizedExtras((p) => ({ ...p, browser: false }));
-                  handleMoveResizeWindow('browser', { zIndex: ++topZRef.current + 16 });
+                  if (pipMinimizedExtras.browser) {
+                    setPipMinimizedExtras((p) => ({ ...p, browser: false }));
+                  }
+                  const curZ = windowStates.browser?.zIndex || 0;
+                  if (curZ < topZRef.current + 16) {
+                    handleMoveResizeWindow('browser', { zIndex: ++topZRef.current + 16 });
+                  }
                 } else {
                   handleSelectOSModule('browser');
                 }
@@ -1865,6 +2423,7 @@ export default function App() {
                       onToggleAgentInternet={toggleInternet}
                       userId={user?.uid}
                       initialUrl={browserTargetUrl}
+                      pendingNavCommand={browserNavRequest}
                       onInjectToChat={handleInjectIntoChat}
                       onSelectModule={handleSelectOSModule}
                       onSaveToVault={(artifact) =>
@@ -1900,8 +2459,13 @@ export default function App() {
                   containerSize={desktopSize}
                   onFocus={() => {
                     if (isModDetached) {
-                      setPipMinimizedExtras((p) => ({ ...p, [mod]: false }));
-                      handleMoveResizeWindow(mod, { zIndex: ++topZRef.current + 16 });
+                      if (pipMinimizedExtras[mod]) {
+                        setPipMinimizedExtras((p) => ({ ...p, [mod]: false }));
+                      }
+                      const curZ = windowStates[mod]?.zIndex || 0;
+                      if (curZ < topZRef.current + 16) {
+                        handleMoveResizeWindow(mod, { zIndex: ++topZRef.current + 16 });
+                      }
                     } else {
                       handleSelectOSModule(mod);
                     }
@@ -1970,7 +2534,7 @@ export default function App() {
 
           {/* Live OS Autonomous Action Toast */}
           {osActionToast && (
-            <div className="pointer-events-none fixed bottom-16 lg:bottom-14 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 rounded-full bg-zinc-900/95 border border-amber-500/50 text-xs font-mono text-amber-200 shadow-2xl backdrop-blur-md">
+            <div className="pointer-events-none fixed bottom-16 lg:bottom-14 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 rounded-full bg-zinc-900/95 border border-amber-500/50 text-xs font-mono text-amber-200 shadow-2xl">
               {osActionToast}
             </div>
           )}
@@ -1978,10 +2542,10 @@ export default function App() {
           {/* Opt-In Sovereign OS 5-Minute Market & Crypto Alert Toast (Off by Default; Positioned Clear of Window Controls) */}
           {osMarketAlert && (notificationPrefs.telemetryPopupAlerts || notificationPrefs.cryptoTradingAlerts) && (
             <div
-              className={`fixed bottom-16 right-4 z-40 w-[340px] max-w-[calc(100vw-2rem)] p-3.5 rounded-xl border shadow-2xl backdrop-blur-md transition-all ${
+              className={`fixed bottom-16 right-4 z-40 w-[340px] max-w-[calc(100vw-2rem)] p-3.5 rounded-xl border shadow-2xl transition-all ${
                 osMarketAlert.actionSignal === 'STRONG_BUY' || osMarketAlert.actionSignal === 'BUY_ACCUMULATE'
-                  ? 'bg-zinc-950/95 border-emerald-500/55 text-zinc-100'
-                  : 'bg-zinc-950/95 border-rose-500/55 text-zinc-100'
+                  ? 'bg-zinc-950/96 border-emerald-500/55 text-zinc-100'
+                  : 'bg-zinc-950/96 border-rose-500/55 text-zinc-100'
               }`}
             >
               <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-800">

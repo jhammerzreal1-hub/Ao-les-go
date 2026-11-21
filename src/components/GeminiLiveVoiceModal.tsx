@@ -14,6 +14,7 @@ import { Mic, MicOff, Volume2, VolumeX, X, Radio, Brain, Sparkles, RefreshCw, Pl
 import { sovereignAi } from '../utils/sovereignAiDispatcher';
 import { CHAT_PERMITS } from './ChatModule';
 import { PRESET_VOICE_PERSONAS, selectBestSystemVoice, isCleanHumanVoice, sovereignVoiceQueue } from '../utils/voiceEngine';
+import { probeMediaPermission, requestMicrophoneStream, markMediaPermissionGranted } from '../utils/mediaPermissions';
 import type { ChatMessage } from '../types';
 
 interface GeminiLiveVoiceModalProps {
@@ -104,7 +105,11 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
     }
 
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+      const probe = await probeMediaPermission('microphone');
+      if (!probe.canAcquireSilently) {
+        const res = await requestMicrophoneStream({ allowPrompt: true });
+        res.stream?.getTracks().forEach((t) => t.stop());
+      }
 
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
@@ -112,6 +117,7 @@ export const GeminiLiveVoiceModal: React.FC<GeminiLiveVoiceModalProps> = ({
       recognition.lang = 'en-US';
 
       recognition.onstart = () => {
+        markMediaPermissionGranted('microphone');
         setLiveState('listening');
         setErrorMessage(null);
       };

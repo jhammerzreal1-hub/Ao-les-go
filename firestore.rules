@@ -194,6 +194,19 @@ service cloud.firestore {
         isValidStr(data.createdAt, 64);
     }
 
+    function isValidOrchestratorState(data, uid, stateId) {
+      return data.keys().hasAll(['userId', 'stateKey', 'continuityJson', 'revision', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'stateKey', 'continuityJson', 'revision', 'createdAt', 'updatedAt']) &&
+        isValidId(data.userId) &&
+        data.userId == uid &&
+        data.stateKey == 'main' &&
+        stateId == 'main' &&
+        isValidStr(data.continuityJson, 200000) &&
+        data.revision is number && data.revision >= 0 && data.revision <= 100000000 &&
+        isValidStr(data.createdAt, 64) &&
+        isValidStr(data.updatedAt, 64);
+    }
+
     // Authenticated connection health probe
     match /test/connection {
       allow get: if request.auth != null;
@@ -388,6 +401,27 @@ service cloud.firestore {
           incoming().createdAt == existing().createdAt &&
           isAdmin();
         allow delete: if isValidId(userId) && isValidId(itemId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /orchestrator_state/{stateId} {
+        allow get: if isValidId(userId) && isValidId(stateId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(stateId) &&
+          isOwner(userId) &&
+          isValidOrchestratorState(incoming(), userId, stateId);
+        allow update: if isValidId(userId) && isValidId(stateId) &&
+          isValidOrchestratorState(incoming(), userId, stateId) &&
+          incoming().userId == existing().userId &&
+          incoming().stateKey == existing().stateKey &&
+          incoming().createdAt == existing().createdAt &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['continuityJson', 'revision', 'updatedAt'])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(stateId) && (isOwner(userId) || isAdmin());
       }
     }
   }

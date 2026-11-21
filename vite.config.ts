@@ -14,8 +14,41 @@ export default defineConfig({
     hmr: false,
     ws: false,
     watch: {
-      ignored: ['**/data/**', '**/*.db', '**/*.db-*', '**/*.tar.gz', '**/node_modules/**']
+      ignored: [
+        '**/data/**',
+        '**/dist/**',
+        '**/*.db',
+        '**/*.db-*',
+        '**/*.tar.gz',
+        '**/node_modules/**',
+        '**/sovereign_apps/**',
+        '**/downloads/**',
+        '**/wineprefix/**',
+        '**/.active_port',
+        '**/*.log',
+        '**/.termux*',
+        '**/FORENSIC_SYSTEMS_MANUAL.md',
+        '**/infinite_sim_store.json',
+        '**/dynamic_tools.json',
+        '**/agents_manifest.json',
+        '**/swarm-agent-models.json',
+        '**/public/sw.js'
+      ]
     }
+  },
+  optimizeDeps: {
+    holdUntilCrawlEnd: true,
+    include: [
+      'react',
+      'react-dom',
+      'lucide-react',
+      '@google/genai',
+      'three',
+      'recharts',
+      'firebase/app',
+      'firebase/auth',
+      'firebase/firestore'
+    ]
   },
   build: {
     outDir: 'dist',

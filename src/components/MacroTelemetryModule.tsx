@@ -377,9 +377,14 @@ function playAlertAudioChime(isBuy: boolean) {
     osc.start(now);
     osc.stop(now + 0.29);
     setTimeout(() => {
-      try {
-        ctx.close();
-      } catch (_) {}
+      if (ctx.state !== 'closed') {
+        try {
+          const res = ctx.close();
+          if (res && typeof res.catch === 'function') {
+            res.catch(() => {});
+          }
+        } catch (_) {}
+      }
     }, 350);
   } catch (_) {}
 }

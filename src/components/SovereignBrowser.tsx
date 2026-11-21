@@ -81,6 +81,12 @@ interface BrowserProps {
   userId?: string;
   onSaveToVault?: (artifact: any) => void;
   initialUrl?: string;
+  pendingNavCommand?: {
+    seq: number;
+    action: 'navigate' | 'newtab' | 'search';
+    url?: string;
+    query?: string;
+  };
   onInjectToChat?: (content: string, immediate?: boolean) => void;
   onSelectModule?: (mod: any) => void;
 }
@@ -151,6 +157,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
   userId = 'anonymous_sovereign',
   onSaveToVault,
   initialUrl,
+  pendingNavCommand,
   onInjectToChat,
   onSelectModule
 }) => {
@@ -460,12 +467,28 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     }
   }, [mediaVolume]);
 
-  // Handle initialUrl prop navigation if provided
+  const lastConsumedNavSeqRef = useRef<number>(0);
+
+  // Handle initialUrl or monotonic pendingNavCommand prop navigation (guarantees lazy-mounted Browser never drops OS commands)
   useEffect(() => {
-    if (initialUrl && initialUrl !== activeTab.url) {
+    if (pendingNavCommand && pendingNavCommand.seq > lastConsumedNavSeqRef.current) {
+      lastConsumedNavSeqRef.current = pendingNavCommand.seq;
+      if (pendingNavCommand.action === 'newtab') {
+        createNewTab(pendingNavCommand.url || 'sovereign://newtab');
+      } else if (pendingNavCommand.action === 'search') {
+        const searchTarget = pendingNavCommand.url || pendingNavCommand.query;
+        if (searchTarget) {
+          navigateTo(searchTarget);
+        }
+      } else if (pendingNavCommand.url) {
+        navigateTo(pendingNavCommand.url);
+      }
+      return;
+    }
+    if (initialUrl && initialUrl !== activeTab.url && !pendingNavCommand) {
       navigateTo(initialUrl);
     }
-  }, [initialUrl]);
+  }, [initialUrl, pendingNavCommand]);
 
   // Initial live proxy telemetry fetch on mount
   useEffect(() => {
@@ -829,12 +852,17 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
     const onOsCommand = (e: Event) => {
       const detail = (e as CustomEvent<any>)?.detail;
       if (!detail || !detail.action) return;
-      if (detail.action === 'browser_navigate' && detail.url) {
-        osHandlersRef.current.navigateTo(String(detail.url));
+      if (detail.action === 'browser_navigate' && (detail.url || detail.query || detail.command)) {
+        osHandlersRef.current.navigateTo(String(detail.url || detail.query || detail.command));
       } else if (detail.action === 'browser_new_tab') {
         osHandlersRef.current.createNewTab(detail.url ? String(detail.url) : 'sovereign://newtab');
-      } else if (detail.action === 'browser_search' && (detail.url || detail.command)) {
-        osHandlersRef.current.handleSearchQuery(String(detail.url || detail.command));
+      } else if (detail.action === 'browser_search' && (detail.url || detail.query || detail.command)) {
+        const rawSearch = String(detail.query || detail.command || detail.url);
+        if (/^https?:\/\//i.test(rawSearch)) {
+          osHandlersRef.current.navigateTo(rawSearch);
+        } else {
+          osHandlersRef.current.handleSearchQuery(rawSearch);
+        }
       }
     };
     window.addEventListener('sovereign_os_command', onOsCommand);
@@ -2096,7 +2124,7 @@ export const SovereignBrowser: React.FC<BrowserProps> = ({
                   </span>
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Deterministic multi-index aggregation (DuckDuckGo, Wikipedia, HackerNews Algolia)
+                  Full open-internet multi-engine aggregation (Bing OpenWeb, Yahoo, Google News, DuckDuckGo, GitHub, HackerNews)
                 </p>
               </div>
             </div>

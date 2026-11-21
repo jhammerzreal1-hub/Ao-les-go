@@ -326,6 +326,13 @@ export const BurnerMailModule: React.FC<BurnerMailModuleProps> = ({
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      osc.onended = () => {
+        if (ctx.state !== 'closed') {
+          try {
+            ctx.close().catch(() => {});
+          } catch {}
+        }
+      };
       osc.start();
       osc.stop(ctx.currentTime + 0.35);
     } catch (_) {}

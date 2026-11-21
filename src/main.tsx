@@ -18,6 +18,39 @@ import './index.css';
 // Signal to index.html boot watchdog that the JS entry point loaded successfully
 (window as any).__SOVEREIGN_BOOT_MOUNTED__ = true;
 
+// Guarantee idempotent AudioContext.close() across all modules and Web Audio libraries
+// (prevents InvalidStateError: "Cannot close a closed AudioContext" during concurrent teardown/StrictMode cycles)
+if (typeof window !== 'undefined') {
+  const ctors = [window.AudioContext, (window as any).webkitAudioContext].filter(Boolean);
+  for (const Ctor of ctors) {
+    const proto = Ctor?.prototype;
+    if (proto && typeof proto.close === 'function' && !(proto as any).__sovereignSafeClose) {
+      const nativeClose = proto.close;
+      proto.close = function safeClose(this: AudioContext) {
+        if (this.state === 'closed') {
+          return Promise.resolve();
+        }
+        try {
+          return Promise.resolve(nativeClose.call(this)).catch((err: any) => {
+            const msg = String(err?.message || err || '');
+            if ((this.state as AudioContextState) === 'closed' || /closed AudioContext/i.test(msg)) {
+              return;
+            }
+            throw err;
+          });
+        } catch (err: any) {
+          const msg = String(err?.message || err || '');
+          if ((this.state as AudioContextState) === 'closed' || /closed AudioContext/i.test(msg)) {
+            return Promise.resolve();
+          }
+          return Promise.reject(err);
+        }
+      };
+      (proto as any).__sovereignSafeClose = true;
+    }
+  }
+}
+
 // Global Client Exceptional Error Safeguards
 window.addEventListener('unhandledrejection', (event) => {
   const reasonStr = String(event.reason?.message || event.reason || '');

@@ -266,5 +266,39 @@ export const DIRTY_DOZEN_CASES: DirtyDozenCase[] = [
     },
     expectedResult: 'PERMISSION_DENIED',
   },
+  {
+    id: 17,
+    name: 'Shadow field injection & invalid stateId on OrchestratorState',
+    collectionPath: 'users/userA/orchestrator_state/spoof_doc',
+    operation: 'create',
+    auth: { uid: 'userA', email: 'a@example.com', email_verified: true },
+    payload: {
+      userId: 'userA',
+      stateKey: 'spoof_doc',
+      continuityJson: '{}',
+      revision: 1,
+      createdAt: '2026-11-17T00:00:00Z',
+      updatedAt: '2026-11-17T00:00:00Z',
+      elevated: true,
+    },
+    expectedResult: 'PERMISSION_DENIED',
+  },
+  {
+    id: 18,
+    name: 'Immutable stateKey tampering on OrchestratorState update',
+    collectionPath: 'users/userA/orchestrator_state/main',
+    operation: 'update',
+    auth: { uid: 'userA', email: 'a@example.com', email_verified: true },
+    payload: {
+      userId: 'userA',
+      stateKey: 'admin_override',
+      continuityJson: '{"revision":2}',
+      revision: 2,
+      createdAt: '2026-11-17T00:00:00Z',
+      updatedAt: '2026-11-17T01:00:00Z',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+  },
 ];
+
 

@@ -213,6 +213,30 @@ export const SOFTWARE_CATALOG: CatalogSoftwareItem[] = [
     }
   },
   {
+    id: 'sovereign-arcade',
+    name: 'Sovereign Cyber Arcade (Playable Games)',
+    category: 'gaming',
+    version: '2.4.0',
+    vendor: 'Lysander Interactive',
+    description:
+      'Instant-play 60FPS HTML5/Canvas Cyber Arcade featuring Tactical Space Defender, Cyber Snake & 2048.',
+    platforms: ['windows', 'macos', 'linux', 'android', 'web'],
+    iconName: 'Trophy',
+    accentColor: 'text-amber-400',
+    launchMode: 'builtin_app',
+    launchTarget: '/api/os/apps/serve/sovereign-arcade/sovereign-package.json',
+    cliInstallCmds: {
+      linux: 'sovereign-pkg enable sovereign-arcade',
+      macos: 'sovereign-pkg enable sovereign-arcade',
+      windows: 'sovereign-pkg enable sovereign-arcade'
+    },
+    nativeDownloadUrls: {
+      windows: '/api/os/apps/serve/sovereign-arcade/sovereign-package.json',
+      macos: '/api/os/apps/serve/sovereign-arcade/sovereign-package.json',
+      linux: '/api/os/apps/serve/sovereign-arcade/sovereign-package.json'
+    }
+  },
+  {
     id: 'windows-wine-proton',
     name: 'Windows Win32 / PE32+ (.EXE / .MSI) & Wine / Proton Subsystem',
     category: 'system',
@@ -514,7 +538,28 @@ export function loadInstalledAppsRegistry(): InstalledOSApp[] {
       const raw = fs.readFileSync(REGISTRY_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        let repaired = false;
+        const verified = parsed.map((item: InstalledOSApp) => {
+          if (item.launchMode === 'builtin_app' && (!fs.existsSync(item.installPath) || !fs.existsSync(item.binaryOrEntryPath))) {
+            const catItem = SOFTWARE_CATALOG.find((c) => c.id === item.id);
+            if (catItem) {
+              const art = writeRealPackageArtifacts(catItem);
+              repaired = true;
+              return {
+                ...item,
+                installPath: art.appDir,
+                binaryOrEntryPath: art.manifestPath,
+                sizeBytes: art.totalBytes,
+                sha256: art.sha256
+              };
+            }
+          }
+          return item;
+        });
+        if (repaired) {
+          saveInstalledAppsRegistry(verified);
+        }
+        return verified;
       }
     }
   } catch (_) {}

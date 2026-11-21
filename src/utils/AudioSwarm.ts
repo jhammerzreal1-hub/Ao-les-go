@@ -120,16 +120,16 @@ export class AudioSwarm {
     this.activeAudioElements = [];
 
     // 3. Close AudioContexts
-    for (const ctx of this.activeAudioContexts) {
+    const contextsToClose = this.activeAudioContexts.splice(0, this.activeAudioContexts.length);
+    for (const ctx of contextsToClose) {
       try {
-        if (ctx.state !== 'closed') {
-          ctx.close().catch(dev_null);
+        if (ctx && ctx.state !== 'closed') {
+          Promise.resolve(ctx.close()).catch(dev_null);
         }
       } catch (e) {
         dev_null('AudioContext close note:', e);
       }
     }
-    this.activeAudioContexts = [];
 
     this.isLocked = false;
   }

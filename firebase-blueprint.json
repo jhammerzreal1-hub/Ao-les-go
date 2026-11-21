@@ -162,6 +162,20 @@
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["userId", "itemId", "name", "category", "rarity", "crafterName", "crafterSkillLevel", "signatureHash", "uniqueMakerTrait", "itemSpecJson", "createdAt"]
+    },
+    "OrchestratorState": {
+      "title": "OrchestratorState",
+      "description": "Synchronized infinite continuity snapshot for orchestrator settings, active agent tasks, and live voice continuity",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "stateKey": { "type": "string", "enum": ["main"], "maxLength": 16 },
+        "continuityJson": { "type": "string", "maxLength": 200000 },
+        "revision": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "stateKey", "continuityJson", "revision", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -213,6 +227,10 @@
     "/users/{userId}/crafted_items/{itemId}": {
       "schema": { "$ref": "#/entities/CraftedItem" },
       "description": "Bespoke player- and AI-crafted items with unique Crafter Signatures"
+    },
+    "/users/{userId}/orchestrator_state/{stateId}": {
+      "schema": { "$ref": "#/entities/OrchestratorState" },
+      "description": "Cross-device & cross-session infinite continuity snapshot for settings, agent task checkpoints, and voice state"
     }
   }
 }

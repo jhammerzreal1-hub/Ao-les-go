@@ -7,6 +7,9 @@
  * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
  */
 
+import type React from 'react';
+import { pushContinuitySettingsPatch } from './continuityClient';
+
 export type SovereignThemeId =
   | 'aurelius-gold'
   | 'hyprland-matrix'
@@ -361,7 +364,8 @@ export function applyOSCustomizationToDOM(profile: SovereignOSCustomizationProfi
 }
 
 export function saveOSCustomizationProfile(
-  next: Partial<SovereignOSCustomizationProfile>
+  next: Partial<SovereignOSCustomizationProfile>,
+  opts: { skipRemoteSync?: boolean } = {}
 ): SovereignOSCustomizationProfile {
   const current = loadOSCustomizationProfile();
   const merged: SovereignOSCustomizationProfile = {
@@ -392,8 +396,20 @@ export function saveOSCustomizationProfile(
     window.dispatchEvent(
       new CustomEvent('sovereign_os_customization_changed', { detail: merged })
     );
+    if (!opts.skipRemoteSync) {
+      pushContinuitySettingsPatch({ osCustomization: merged });
+    }
   }
   return merged;
+}
+
+export function hydrateOSCustomizationFromRemote(
+  remote: Partial<SovereignOSCustomizationProfile> | null | undefined
+): SovereignOSCustomizationProfile {
+  if (!remote || typeof remote !== 'object') {
+    return loadOSCustomizationProfile();
+  }
+  return saveOSCustomizationProfile(remote, { skipRemoteSync: true });
 }
 
 export function hideDesktopIcon(iconId: string): SovereignOSCustomizationProfile {

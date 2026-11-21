@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { safeCopyToClipboard } from '../utils/clipboard.js';
+import { requestCameraStream } from '../utils/mediaPermissions';
 import { 
   Terminal, 
   Smartphone, 
@@ -788,16 +789,22 @@ export const TermuxEdgeModule: React.FC = () => {
     const nextState = !torchActive;
     try {
       // 1. Toggle camera stream torch constraint
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      if (typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function') {
         if (nextState) {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' }
+          const camRes = await requestCameraStream({
+            allowPrompt: true,
+            constraints: { video: { facingMode: 'environment' } }
           });
-          const track = stream.getVideoTracks()[0];
-          const capabilities = (track as any).getCapabilities ? (track as any).getCapabilities() : {};
-          if (capabilities.torch) {
-            await (track as any).applyConstraints({ advanced: [{ torch: true }] });
-            torchStreamRef.current = stream;
+          const stream = camRes.stream;
+          if (stream) {
+            const track = stream.getVideoTracks()[0];
+            const capabilities = track && (track as any).getCapabilities ? (track as any).getCapabilities() : {};
+            if (capabilities.torch) {
+              await (track as any).applyConstraints({ advanced: [{ torch: true }] });
+              torchStreamRef.current = stream;
+            } else {
+              stream.getTracks().forEach((t) => t.stop());
+            }
           }
         } else if (torchStreamRef.current) {
           torchStreamRef.current.getTracks().forEach(t => t.stop());

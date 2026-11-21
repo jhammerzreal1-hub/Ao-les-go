@@ -18,6 +18,16 @@
   button, a, select, summary, [role="button"] {
     touch-action: manipulation;
   }
+
+  input, textarea, [contenteditable="true"] {
+    touch-action: manipulation;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  .sovereign-window-wrapper {
+    contain: layout style;
+  }
   
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', monospace;
@@ -53,6 +63,11 @@
   .touch-target {
     min-height: 36px;
   }
+}
+
+/* Keep composer visible and trim secondary vertical padding when mobile touch keyboard is active */
+html[data-keyboard-open="true"] .keyboard-hide-secondary {
+  display: none !important;
 }
 
 /* Glassmorphism & Surface Depth */

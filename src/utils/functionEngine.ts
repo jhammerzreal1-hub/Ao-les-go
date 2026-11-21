@@ -1939,7 +1939,22 @@ export async function executeAutonomousModelDirectives(
           });
         }
       } else if (tag === 'NAVIGATE_MODULE') {
-        const targetMod = payload.replace(/['"{}]/g, '').trim();
+        const rawMod = payload.replace(/['"{}]/g, '').trim();
+        const modKey = rawMod.toLowerCase().replace(/\s+/g, '-');
+        const modAlias: Record<string, string> = {
+          chrome: 'browser',
+          'sovereign-browser': 'browser',
+          web: 'browser',
+          files: 'file-manager',
+          explorer: 'file-manager',
+          shell: 'terminal',
+          console: 'terminal',
+          research: 'search',
+          tools: 'tool-shed',
+          telemetry: 'macro-telemetry',
+          wallets: 'crypto-wallet'
+        };
+        const targetMod = modAlias[modKey] || rawMod;
         if (targetMod) {
           const coordRes = await orchestratorRuntime.coordinate(targetMod, 'navigate', { module: targetMod }, agentId);
           results.push({
@@ -2128,7 +2143,13 @@ export async function executeAutonomousModelDirectives(
         results.push({ tag: 'OS_CONTROL', action: 'Dock Chat', success: true, summary: 'Re-docked Orchestrator Chat', output: detail });
       } else if (tag === 'BROWSER_OPEN') {
         const data = payload && payload.startsWith('{') ? JSON.parse(payload) : { url: payload };
-        const detail = { action: 'browser_navigate', targetModule: 'browser', url: data.url || payload, source: agentId };
+        const rawTarget = String(data.url || data.query || payload || '').trim();
+        const resolvedUrl = /^https?:\/\//i.test(rawTarget)
+          ? rawTarget
+          : /^[a-z0-9.-]+\.[a-z]{2,}(\/.*)?$/i.test(rawTarget) && !rawTarget.includes(' ')
+            ? `https://${rawTarget}`
+            : `https://www.google.com/search?q=${encodeURIComponent(rawTarget)}`;
+        const detail = { action: 'browser_navigate', targetModule: 'browser', url: resolvedUrl, source: agentId };
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('sovereign_os_command', { detail }));
         }

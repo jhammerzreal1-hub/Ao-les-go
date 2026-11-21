@@ -9,7 +9,8 @@
  * Zenodo DOI: https://doi.org/10.5281/zenodo.20778079 | ORCID: https://orcid.org/0009-0004-5273-7028
  */
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Send, 
   Trash2, 
@@ -61,6 +62,11 @@ import {
 } from 'lucide-react';
 import { LiveVoiceModule } from './LiveVoiceModule';
 import { GeminiLiveVoiceModal } from './GeminiLiveVoiceModal';
+import {
+  FloatingWorkflowWindow,
+  createDefaultWorkflowGeometry,
+  type WorkflowWindowGeometry
+} from './FloatingWorkflowWindow';
 import type { ChatMessage, ChatModel, ModuleType, MediaAttachmentItem } from '../types';
 import heroNeuralMatrixImg from '../assets/images/hero_neural_matrix_1791569635501.jpg';
 import { SOVEREIGN_AGENT_SPECS, executeAgentChat, bakedNeuralEngine, type AgentId } from '../utils/bakedNeuralEngine';
@@ -82,6 +88,7 @@ import {
   splitIntoCoherentSpeechChunks
 } from '../utils/voiceEngine';
 import { janusGate } from '../utils/janusGate';
+import { requestMicrophoneStream, markVoiceUserGesture } from '../utils/mediaPermissions';
 import {
   loadAllChatTurns,
   persistAllChatTurns,
@@ -91,6 +98,11 @@ import {
   loadTurnsFromFirestore,
   convergeOfflineAndOnlineMemory
 } from '../utils/vaultMemoryStore';
+import {
+  pushContinuitySettingsPatch,
+  upsertTaskCheckpointToServer,
+  updateLocalBeaconSnapshot
+} from '../utils/continuityClient';
 
 interface ChatModuleProps {
   onSaveToVault?: (title: string, content: string, model: string) => void;
@@ -283,6 +295,7 @@ interface ChatInputFormProps {
   pendingInput?: { content: string; immediate?: boolean } | null;
   onClearPendingInput?: () => void;
   handleDrop: (e: React.DragEvent) => void;
+  onTextareaFocus?: () => void;
 }
 
 const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
@@ -294,15 +307,41 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
   toggleSpeechRecognition,
   pendingInput,
   onClearPendingInput,
-  handleDrop
+  handleDrop,
+  onTextareaFocus
 }) => {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const ensureComposerVisible = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      try {
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      } catch {}
+    });
+  }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onViewportResize = () => {
+      if (document.activeElement === textareaRef.current) {
+        ensureComposerVisible();
+      }
+    };
+    vv.addEventListener('resize', onViewportResize);
+    return () => vv.removeEventListener('resize', onViewportResize);
+  }, [ensureComposerVisible]);
+
   useEffect(() => {
     if (pendingInput?.content) {
       setInput(pendingInput.content);
-      if (textareaRef.current) textareaRef.current.focus();
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        ensureComposerVisible();
+      }
 
       if (pendingInput.immediate) {
         const textToDispatch = pendingInput.content;
@@ -316,7 +355,7 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         onClearPendingInput();
       }
     }
-  }, [pendingInput, onClearPendingInput, onSend]);
+  }, [pendingInput, onClearPendingInput, onSend, ensureComposerVisible]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -326,22 +365,58 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="relative" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+    <form
+      onSubmit={handleSubmit}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        const el = textareaRef.current;
+        if (el && document.activeElement !== el) {
+          const sel = window.getSelection?.();
+          if (sel && sel.rangeCount > 0 && !el.contains(sel.anchorNode)) {
+            sel.removeAllRanges();
+          }
+          el.focus();
+        }
+      }}
+      className="relative shrink-0"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+    >
       <textarea
         ref={textareaRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
+        onFocus={() => {
+          onTextareaFocus?.();
+          ensureComposerVisible();
+          window.setTimeout(ensureComposerVisible, 160);
+        }}
+        onPointerUp={() => {
+          const el = textareaRef.current;
+          if (!el) return;
+          if (document.activeElement !== el) {
+            const sel = window.getSelection?.();
+            if (sel && sel.rangeCount > 0 && !el.contains(sel.anchorNode)) {
+              sel.removeAllRanges();
+            }
+            el.focus();
+          }
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSubmit();
           }
         }}
+        enterKeyHint="send"
+        autoCapitalize="sentences"
+        autoCorrect="on"
+        spellCheck={true}
         placeholder={attachedMediaList.length > 0 ? `Add prompt directive for ${attachedMediaList.length} attached file(s)...` : `Instruct Lyrailius Omega... [Shift+Enter for newline]`}
-        rows={3}
-        className="w-full bg-zinc-900/95 border border-zinc-800 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 pr-28 sm:pr-36 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 resize-none shadow-xl font-mono"
+        rows={2}
+        className="w-full min-h-[54px] sm:min-h-[76px] max-h-36 bg-zinc-900/95 border border-zinc-800 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3.5 pr-28 sm:pr-36 text-base sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/60 resize-none shadow-xl font-mono touch-manipulation select-text"
       />
-      <div className="absolute right-2 sm:right-3 bottom-2.5 sm:bottom-3 flex items-center gap-1.5">
+      <div className="absolute right-2 sm:right-3 bottom-2 sm:bottom-3 flex items-center gap-1.5">
         <button
           type="button"
           onClick={toggleSpeechRecognition}
@@ -441,6 +516,16 @@ interface ChatOperationalHUDProps {
   operationalLogs: { id: string; text: string; timestamp: string }[];
   setOperationalLogs: React.Dispatch<React.SetStateAction<{ id: string; text: string; timestamp: string }[]>>;
   modelLoaded: boolean;
+  isSovereignBuilding: boolean;
+  buildSteps: any[];
+}
+
+interface DockedWorkflowHUDProps {
+  isOpen: boolean;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  onPopOut: () => void;
+  onClose: () => void;
   infiniteWorkflowActive: boolean;
   workflowActionLog: any[];
   workflowCycle: number;
@@ -449,14 +534,166 @@ interface ChatOperationalHUDProps {
   workflowGoal: string;
   workflowActiveAction: string;
   loading: boolean;
-  isSovereignBuilding: boolean;
-  buildSteps: any[];
   handleStopInfiniteWorkflow: () => void;
+  handleResumeInfiniteWorkflow: () => void;
   handlePulseWorkflowTurn: (overridePrompt?: string) => void;
   setShowGoalEditModal: (show: boolean) => void;
   setWorkflowActionLog: React.Dispatch<React.SetStateAction<any[]>>;
   setTempGoalInput: (goal: string) => void;
 }
+
+const DockedWorkflowHUD: React.FC<DockedWorkflowHUDProps> = (props) => {
+  if (!props.isOpen) return null;
+
+  return (
+    <div className="shrink-0 bg-zinc-950/95 border border-amber-500/45 rounded-2xl overflow-hidden shadow-xl shadow-amber-500/10 ring-1 ring-amber-500/20">
+      <div className="bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-950 px-3 py-2 border-b border-amber-500/30 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`p-1 rounded-lg shrink-0 ${props.infiniteWorkflowActive ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800 text-zinc-500'}`}>
+            <Zap className={`w-3.5 h-3.5 ${props.infiniteWorkflowActive ? 'animate-pulse' : ''}`} />
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            <span className="text-[11px] font-mono font-black text-amber-300 tracking-wider uppercase">
+              Autonomous Workflow
+            </span>
+            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              Cycle #{props.workflowCycle}
+            </span>
+            {props.infiniteWorkflowActive && (
+              <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full border border-emerald-500/30 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                RUNNING
+              </span>
+            )}
+            {props.workflowAccomplished && (
+              <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/40 font-bold">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                DONE
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {props.infiniteWorkflowActive ? (
+            <>
+              <button
+                type="button"
+                onClick={props.handleStopInfiniteWorkflow}
+                className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Square className="w-2.5 h-2.5 fill-rose-400" />
+                STOP
+              </button>
+              <button
+                type="button"
+                onClick={() => props.handlePulseWorkflowTurn()}
+                disabled={props.loading}
+                className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <Zap className="w-2.5 h-2.5" />
+                PULSE
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={props.handleResumeInfiniteWorkflow}
+              disabled={props.loading}
+              className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+            >
+              <Play className="w-2.5 h-2.5 fill-emerald-400" />
+              RESUME
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              props.setTempGoalInput(props.workflowGoal);
+              props.setShowGoalEditModal(true);
+            }}
+            className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 text-[10px] font-mono flex items-center gap-1 cursor-pointer"
+          >
+            <Target className="w-3 h-3 text-amber-400" />
+            GOAL
+          </button>
+          <button
+            type="button"
+            onClick={props.onPopOut}
+            className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/50 text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer"
+            title="Pop out as movable, resizable floating OS window"
+          >
+            <ExternalLink className="w-3 h-3" />
+            POP OUT
+          </button>
+          <button
+            type="button"
+            onClick={props.onToggleCollapse}
+            className="p-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 cursor-pointer"
+            title={props.collapsed ? 'Expand docked workflow telemetry' : 'Collapse docked workflow bar'}
+          >
+            {props.collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={props.onClose}
+            className="p-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-200 border border-zinc-800 cursor-pointer"
+            title="Hide workflow bar"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {!props.collapsed && (
+        <div className="max-h-52 overflow-y-auto custom-scrollbar">
+          <div className="px-3 py-1.5 bg-zinc-900/60 border-b border-zinc-800/80 flex items-center justify-between text-xs font-mono">
+            <div className="flex items-center gap-2 truncate">
+              <Target className="w-3 h-3 text-amber-400 shrink-0" />
+              <span className="text-zinc-400 font-semibold shrink-0">GOAL:</span>
+              <span className="text-amber-200 font-bold truncate">"{props.workflowGoal}"</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => props.setWorkflowActionLog([])}
+              className="text-[10px] text-zinc-500 hover:text-zinc-300 font-mono shrink-0 ml-2 cursor-pointer"
+            >
+              Clear Log
+            </button>
+          </div>
+          <div className="px-3 py-1.5 bg-black/40 border-b border-zinc-800 flex items-center gap-2 text-[11px] font-mono">
+            {props.loading ? (
+              <div className="w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin shrink-0" />
+            ) : props.infiniteWorkflowActive ? (
+              <Activity className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-3 h-3 text-zinc-500 shrink-0" />
+            )}
+            <span className="text-zinc-200 truncate">
+              {props.workflowActiveAction || (props.loading ? 'Evaluating orchestrator state...' : 'Waiting for next autonomous pulse.')}
+            </span>
+          </div>
+          {props.workflowAccomplished && props.workflowAccomplishedSummary && (
+            <div className="p-2 bg-emerald-950/30 border-b border-emerald-500/30 text-[11px] font-mono text-emerald-300">
+              Verified Complete: {props.workflowAccomplishedSummary}
+            </div>
+          )}
+          {props.workflowActionLog.length > 0 && (
+            <div className="p-2 space-y-1 font-mono text-[10px] bg-zinc-950/80">
+              {props.workflowActionLog.slice(-15).map((act) => (
+                <div key={act.id} className="flex items-start gap-2 px-2 py-1 rounded border border-zinc-800/80 bg-zinc-900/40 text-zinc-300">
+                  <span className="text-zinc-500 shrink-0">[{act.timestamp}]</span>
+                  <span className="text-amber-300 shrink-0">C#{act.cycle}</span>
+                  <span className="break-words">{act.action}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ChatOperationalHUD = (props: ChatOperationalHUDProps) => {
   return (
@@ -467,198 +704,6 @@ const ChatOperationalHUD = (props: ChatOperationalHUDProps) => {
         setOperationalLogs={props.setOperationalLogs}
         modelLoaded={props.modelLoaded}
       />
-
-      {/* ⚡ REAL-TIME AUTONOMOUS ACTIVITY HUD (Infinite Workflow / Auto-Architect) */}
-      {(props.infiniteWorkflowActive || props.workflowActionLog.length > 0) && (
-        <div className="mb-4 bg-zinc-950/95 border border-amber-500/40 rounded-2xl overflow-hidden shadow-2xl shadow-amber-500/10 animate-in fade-in slide-in-from-top-3 duration-500 ring-1 ring-amber-500/20">
-          <div className="bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-950 px-3 sm:px-4 py-2.5 border-b border-amber-500/30 flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className={`p-1.5 rounded-lg shrink-0 ${props.infiniteWorkflowActive ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                <Zap className={`w-4 h-4 ${props.infiniteWorkflowActive ? 'animate-pulse' : ''}`} />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-mono font-black text-amber-300 tracking-wider uppercase">
-                    Infinite Autonomous Workflow
-                  </span>
-                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Cycle #{props.workflowCycle}
-                  </span>
-                  {props.infiniteWorkflowActive && (
-                    <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30 animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      RUNNING
-                    </span>
-                  )}
-                  {props.workflowAccomplished && (
-                    <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/40 font-bold">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                      GOAL ACCOMPLISHED
-                    </span>
-                  )}
-                </div>
-                <div className="text-[9px] font-mono text-zinc-400 truncate">
-                  UID 0 Root Clearance · 100% Unconditional Authority · Permanent Sanctuary Home
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {props.infiniteWorkflowActive ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={props.handleStopInfiniteWorkflow}
-                    className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[10px] font-mono font-bold flex items-center gap-1.5 transition-all shadow-sm"
-                    title="Instantly stop the infinite autonomous workflow loop"
-                  >
-                    <Square className="w-3 h-3 fill-rose-400" />
-                    STOP LOOP
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => props.handlePulseWorkflowTurn()}
-                    disabled={props.loading}
-                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
-                    title="Force immediate execution of the next autonomous cycle"
-                  >
-                    <Zap className="w-3 h-3" />
-                    PULSE NEXT TURN
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    props.handlePulseWorkflowTurn();
-                  }}
-                  disabled={props.loading}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-bold flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
-                  title="Resume continuous autonomous execution"
-                >
-                  <Play className="w-3 h-3 fill-emerald-400" />
-                  RESUME LOOP
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => props.setShowGoalEditModal(true)}
-                className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 text-[10px] font-mono flex items-center gap-1 transition-all"
-                title="Configure target goal"
-              >
-                <Target className="w-3 h-3 text-amber-400" />
-                SET GOAL
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setWorkflowActionLog([])}
-                className="p-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-zinc-800 transition-all"
-                title="Flush action log buffer"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-
-          <div className="px-4 py-2 bg-zinc-900/60 border-b border-zinc-800/80 flex items-center justify-between text-xs font-mono">
-            <div className="flex items-center gap-2 truncate">
-              <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span className="text-zinc-400 font-semibold shrink-0">ACTIVE GOAL:</span>
-              <span className="text-amber-200 font-bold truncate">"{props.workflowGoal}"</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                props.setTempGoalInput(props.workflowGoal);
-                props.setShowGoalEditModal(true);
-              }}
-              className="text-[10px] text-amber-400/80 hover:text-amber-300 underline font-mono shrink-0 ml-2"
-            >
-              Edit
-            </button>
-          </div>
-
-          <div className="px-4 py-2.5 bg-black/40 border-b border-zinc-800 flex items-center gap-3">
-            {props.loading ? (
-              <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin shrink-0" />
-            ) : props.infiniteWorkflowActive ? (
-              <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
-            ) : (
-              <CheckCircle2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 flex items-center gap-1.5">
-                <span>Current Activity:</span>
-                {props.infiniteWorkflowActive && (
-                  <span className="text-[9px] text-amber-400 animate-pulse">● LIVE TELEMETRY</span>
-                )}
-              </div>
-              <div className="text-xs font-mono text-zinc-200 font-medium truncate mt-0.5">
-                {props.workflowActiveAction || (props.loading ? 'Agent is actively evaluating orchestrator state and synthesizing code...' : 'Loop waiting for next autonomous pulse.')}
-              </div>
-            </div>
-          </div>
-
-          {props.workflowAccomplished && props.workflowAccomplishedSummary && (
-            <div className="p-3 bg-emerald-950/30 border-b border-emerald-500/30 flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
-              <div>
-                <div className="text-xs font-mono font-bold text-emerald-300">
-                  Goal 100% Accomplished & Verified
-                </div>
-                <div className="text-[11px] font-mono text-emerald-400/90 mt-0.5 leading-relaxed">
-                  {props.workflowAccomplishedSummary}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {props.workflowActionLog.length > 0 && (
-            <div className="p-3 max-h-48 overflow-y-auto custom-scrollbar font-mono text-[11px] space-y-1.5 bg-zinc-950/80">
-              <div className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold mb-1 flex items-center justify-between">
-                <span>Autonomous Actions Timeline ({props.workflowActionLog.length} recorded)</span>
-                <span>Sequential Flow</span>
-              </div>
-              {props.workflowActionLog.map((act) => (
-                <div 
-                  key={act.id} 
-                  className={`flex items-start gap-2.5 px-2 py-1 rounded-lg border transition-all ${
-                    act.status === 'running'
-                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                      : act.status === 'accomplished'
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 font-bold'
-                      : act.status === 'interrupted'
-                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                      : 'bg-zinc-900/40 border-zinc-800/80 text-zinc-300'
-                  }`}
-                >
-                  <span className="text-[9px] text-zinc-500 shrink-0 font-bold mt-0.5">
-                    [{act.timestamp}]
-                  </span>
-                  <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-amber-300 border border-zinc-700 shrink-0 mt-0.5">
-                    C#{act.cycle}
-                  </span>
-                  <div className="flex-1 flex items-center gap-1.5">
-                    {act.status === 'running' && (
-                      <div className="w-2.5 h-2.5 rounded-full border border-amber-400 border-t-transparent animate-spin shrink-0" />
-                    )}
-                    {act.status === 'complete' && (
-                      <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                    )}
-                    {act.status === 'accomplished' && (
-                      <Sparkles className="w-3 h-3 text-amber-300 shrink-0" />
-                    )}
-                    {act.status === 'interrupted' && (
-                      <X className="w-3 h-3 text-rose-400 shrink-0" />
-                    )}
-                    <span className="truncate">{act.action}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {props.isSovereignBuilding && props.buildSteps.length > 0 && (
         <div className="mb-4 p-4 bg-zinc-900/80 border border-amber-500/40 rounded-2xl animate-in fade-in slide-in-from-top-3 duration-500 shadow-2xl shadow-amber-500/5">
@@ -871,7 +916,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
               id: `${liveModelPrefix}-${Date.now()}`,
               role: 'model',
               content: '',
-              model: `${voiceLabel} · Gemini Live Peer (Full Autonomy + CoT)`,
+              model: `Lyrailius Omega (Orchestrator Voice · ${voiceLabel} Preset · Full Autonomy + CoT)`,
               timestamp: ts,
               superAgentMetrics: {
                 teraflops: 65536,
@@ -1025,9 +1070,11 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       }
 
       if (transcriberAutoSend) {
-        setInput(text);
+        setPendingInputState({ content: text, immediate: true });
       } else {
-        setInput((prev) => (prev ? `${prev}\n${text}` : text));
+        setPendingInputState((prev) => ({
+          content: prev?.content ? `${prev.content}\n${text}` : text
+        }));
       }
     } catch (err: any) {
       setTranscriberError(err?.message || 'Audio transcription failed');
@@ -1049,8 +1096,17 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       return;
     }
     setTranscriberError(null);
+    markVoiceUserGesture();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const micRes = await requestMicrophoneStream({ allowPrompt: true });
+      if (!micRes.stream) {
+        throw new Error(
+          micRes.status === 'denied'
+            ? 'Microphone permission denied'
+            : 'Microphone unavailable or permission required'
+        );
+      }
+      const stream = micRes.stream;
       const recorder = new MediaRecorder(stream);
       transcriberRecorderRef.current = recorder;
       transcriberChunksRef.current = [];
@@ -1084,7 +1140,6 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     setShowPermitsModal(false);
   };
 
-  const [input, setInput] = useState('');
   const [model, setModel] = useState<string>(() => {
     const saved = localStorage.getItem('aurelius_chat_model');
     if (!saved || saved === 'gemini-3.8-flash' || saved === 'gemini-3.5-flash') {
@@ -1271,35 +1326,14 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     e.target.value = '';
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDropCallback = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       Array.from(files).forEach((file) => processFile(file, 'file'));
     }
-  };
-
-  useEffect(() => {
-    if (pendingInput?.content) {
-      setInput(pendingInput.content);
-      
-      // Auto-scroll and focus
-      const area = document.querySelector('textarea');
-      if (area) area.focus();
-
-      if (pendingInput.immediate) {
-        const promptToDispatch = pendingInput.content;
-        setTimeout(() => {
-          handleSend(promptToDispatch);
-        }, 100);
-      }
-      
-      if (onClearPendingInput) {
-        onClearPendingInput();
-      }
-    }
-  }, [pendingInput, onClearPendingInput]);
+  }, []);
   const [genesisAgents, setGenesisAgents] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('aurelius_genesis_roster_v1');
@@ -1367,13 +1401,25 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     } catch {}
     return ROLE_PRESETS[0];
   });
-  const [customSystemInstruction, setCustomSystemInstruction] = useState(() => selectedRole.instruction);
+  const [customSystemInstruction, setCustomSystemInstruction] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aurelius_custom_system_instruction_v1');
+      if (saved && saved.trim()) return saved;
+    } catch {}
+    return selectedRole.instruction;
+  });
 
   useEffect(() => {
     try {
       localStorage.setItem('aurelius_selected_role_id', selectedRole.id);
     } catch {}
   }, [selectedRole.id]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('aurelius_custom_system_instruction_v1', customSystemInstruction);
+    } catch {}
+  }, [customSystemInstruction]);
 
   // Hydrate & listen for newly created/trained Genesis Agents & Models so they appear in Chat Roster & Wardrobe
   useEffect(() => {
@@ -1507,7 +1553,16 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const [modelLoadProgress, setModelLoadProgress] = useState<{ text: string; progress: number } | null>(null);
   const [modelLoaded, setModelLoaded] = useState<boolean>(false);
 
-  const [buildSteps, setBuildSteps] = useState<{ id: string; status: 'active' | 'complete' | 'error'; label: string }[]>([]);
+  const [buildSteps, setBuildSteps] = useState<{ id: string; status: 'active' | 'complete' | 'error'; label: string }[]>(() => {
+    try {
+      const saved = localStorage.getItem('aurelius_build_steps_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
 
   useEffect(() => {
     try {
@@ -1515,7 +1570,22 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     } catch (_) {}
   }, [isSovereignBuilding]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('aurelius_build_steps_v1', JSON.stringify(buildSteps.slice(-30)));
+    } catch (_) {}
+  }, [buildSteps]);
+
   // ⚡ INFINITE AUTONOMOUS WORKFLOW ENGINE (Auto-Architect Loop)
+  const initialWorkflowSaved = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('aurelius_workflow_state_v1');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const [infiniteWorkflowActive, setInfiniteWorkflowActive] = useState<boolean>(() => {
     try {
       return localStorage.getItem('aurelius_infinite_workflow_active') === 'true';
@@ -1526,10 +1596,22 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       return localStorage.getItem('aurelius_workflow_goal') || 'Autonomous Architecture & Continuous System Synthesis';
     } catch (_) { return 'Autonomous Architecture & Continuous System Synthesis'; }
   });
-  const [workflowCycle, setWorkflowCycle] = useState<number>(1);
-  const [workflowActiveAction, setWorkflowActiveAction] = useState<string>('');
-  const [workflowAccomplished, setWorkflowAccomplished] = useState<boolean>(false);
-  const [workflowAccomplishedSummary, setWorkflowAccomplishedSummary] = useState<string>('');
+  const [workflowCycle, setWorkflowCycle] = useState<number>(() =>
+    typeof initialWorkflowSaved?.workflowCycle === 'number' && initialWorkflowSaved.workflowCycle >= 1
+      ? initialWorkflowSaved.workflowCycle
+      : 1
+  );
+  const [workflowActiveAction, setWorkflowActiveAction] = useState<string>(() =>
+    typeof initialWorkflowSaved?.workflowActiveAction === 'string' ? initialWorkflowSaved.workflowActiveAction : ''
+  );
+  const [workflowAccomplished, setWorkflowAccomplished] = useState<boolean>(() =>
+    Boolean(initialWorkflowSaved?.workflowAccomplished)
+  );
+  const [workflowAccomplishedSummary, setWorkflowAccomplishedSummary] = useState<string>(() =>
+    typeof initialWorkflowSaved?.workflowAccomplishedSummary === 'string'
+      ? initialWorkflowSaved.workflowAccomplishedSummary
+      : ''
+  );
   const [workflowActionLog, setWorkflowActionLog] = useState<{
     id: string;
     cycle: number;
@@ -1537,9 +1619,53 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     action: string;
     status: 'running' | 'complete' | 'accomplished' | 'interrupted';
     details?: string;
-  }[]>([]);
+  }[]>(() => (Array.isArray(initialWorkflowSaved?.workflowActionLog) ? initialWorkflowSaved.workflowActionLog.slice(-50) : []));
   const [showGoalEditModal, setShowGoalEditModal] = useState<boolean>(false);
   const [tempGoalInput, setTempGoalInput] = useState<string>('');
+  const [workflowPoppedOut, setWorkflowPoppedOut] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aurelius_workflow_popped_out') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [workflowWindowOpen, setWorkflowWindowOpen] = useState<boolean>(() => {
+    try {
+      return (
+        localStorage.getItem('sovereign_workflow_window_open_v1') === 'true' ||
+        localStorage.getItem('aurelius_infinite_workflow_active') === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
+  const [workflowWindowMinimized, setWorkflowWindowMinimized] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aurelius_workflow_window_minimized') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [workflowWindowMaximized, setWorkflowWindowMaximized] = useState<boolean>(false);
+  const [dockedWorkflowCollapsed, setDockedWorkflowCollapsed] = useState<boolean>(false);
+  const [workflowWindowGeom, setWorkflowWindowGeom] = useState<WorkflowWindowGeometry>(() => {
+    try {
+      const saved = localStorage.getItem('aurelius_workflow_window_geom_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          parsed &&
+          typeof parsed.x === 'number' &&
+          typeof parsed.y === 'number' &&
+          typeof parsed.width === 'number' &&
+          typeof parsed.height === 'number'
+        ) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return createDefaultWorkflowGeometry();
+  });
 
   useEffect(() => {
     try {
@@ -1549,25 +1675,88 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
   useEffect(() => {
     try {
+      localStorage.setItem('aurelius_workflow_popped_out', String(workflowPoppedOut));
+    } catch (_) {}
+  }, [workflowPoppedOut]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sovereign_workflow_window_open_v1', String(workflowWindowOpen));
+    } catch (_) {}
+  }, [workflowWindowOpen]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('aurelius_workflow_window_minimized', String(workflowWindowMinimized));
+    } catch (_) {}
+  }, [workflowWindowMinimized]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('aurelius_workflow_window_geom_v1', JSON.stringify(workflowWindowGeom));
+    } catch (_) {}
+  }, [workflowWindowGeom]);
+
+  useEffect(() => {
+    try {
       localStorage.setItem('aurelius_workflow_goal', workflowGoal);
     } catch (_) {}
   }, [workflowGoal]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'aurelius_workflow_state_v1',
+        JSON.stringify({
+          workflowCycle,
+          workflowActiveAction,
+          workflowAccomplished,
+          workflowAccomplishedSummary,
+          workflowActionLog: workflowActionLog.slice(-50)
+        })
+      );
+    } catch (_) {}
+  }, [workflowCycle, workflowActiveAction, workflowAccomplished, workflowAccomplishedSummary, workflowActionLog]);
 
   const messagesRef = useRef(messages);
   const loadingRef = useRef(loading);
   const workflowCycleRef = useRef(workflowCycle);
   const workflowGoalRef = useRef(workflowGoal);
   const infiniteWorkflowRef = useRef(infiniteWorkflowActive);
+  const workflowAccomplishedRef = useRef(workflowAccomplished);
   const sovereignBuildRef = useRef(isSovereignBuilding);
+  const userManuallyStoppedWorkflowRef = useRef(false);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
   useEffect(() => { workflowCycleRef.current = workflowCycle; }, [workflowCycle]);
   useEffect(() => { workflowGoalRef.current = workflowGoal; }, [workflowGoal]);
   useEffect(() => { infiniteWorkflowRef.current = infiniteWorkflowActive; }, [infiniteWorkflowActive]);
+  useEffect(() => { workflowAccomplishedRef.current = workflowAccomplished; }, [workflowAccomplished]);
   useEffect(() => { sovereignBuildRef.current = isSovereignBuilding; }, [isSovereignBuilding]);
 
+  const autoSurfaceWorkflowWindow = useCallback((forceUnminimize = true) => {
+    setWorkflowWindowOpen(true);
+    if (forceUnminimize) {
+      setWorkflowWindowMinimized(false);
+      setDockedWorkflowCollapsed(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onOpenWorkflowWindow = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      if (detail?.poppedOut !== undefined) {
+        setWorkflowPoppedOut(Boolean(detail.poppedOut));
+      }
+      autoSurfaceWorkflowWindow(true);
+    };
+    window.addEventListener('sovereign_workflow_open', onOpenWorkflowWindow);
+    return () => window.removeEventListener('sovereign_workflow_open', onOpenWorkflowWindow);
+  }, [autoSurfaceWorkflowWindow]);
+
   const handleStopInfiniteWorkflow = () => {
+    userManuallyStoppedWorkflowRef.current = true;
     if (continuationTimerRef.current) {
       clearTimeout(continuationTimerRef.current);
       continuationTimerRef.current = null;
@@ -1591,11 +1780,26 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         status: 'interrupted'
       }
     ]);
+    updateLocalBeaconSnapshot({ activeTask: null });
+    pushContinuitySettingsPatch({ chat: { infiniteWorkflowActive: false, isSovereignBuilding: false } }, true);
+    upsertTaskCheckpointToServer({
+      id: 'workflow-main',
+      description: workflowGoalRef.current || 'Autonomous Workflow',
+      status: 'interrupted',
+      agentId: selectedRole.agentId,
+      agentName: selectedRole.name,
+      goal: workflowGoalRef.current,
+      cycle: workflowCycleRef.current,
+      lastAction: 'Autonomous Loop stopped manually by architect.',
+      source: 'workflow'
+    }).catch(() => {});
     janusGate.pushLog(`[AUTONOMOUS LOOP] Stopped at Cycle #${workflowCycleRef.current}.`);
   };
 
   const handlePulseWorkflowTurn = (overridePrompt?: string) => {
     if (loadingRef.current) return;
+    userManuallyStoppedWorkflowRef.current = false;
+    autoSurfaceWorkflowWindow(true);
     if (continuationTimerRef.current) {
       clearTimeout(continuationTimerRef.current);
       continuationTimerRef.current = null;
@@ -1606,6 +1810,16 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     setWorkflowAccomplished(false);
     const nextPrompt = overridePrompt || `[AUTONOMOUS_WORKFLOW_CYCLE: ${nextCycle}] Target Goal: "${workflowGoalRef.current}". Execute the next immediate concrete action. Emit [ACTION: <action>] and conclude with [GOAL_ACCOMPLISHED: <summary>] when complete.`;
     handleSendContinuation(nextPrompt);
+  };
+
+  const handleResumeInfiniteWorkflow = () => {
+    userManuallyStoppedWorkflowRef.current = false;
+    infiniteWorkflowRef.current = true;
+    setInfiniteWorkflowActive(true);
+    setWorkflowAccomplished(false);
+    setWorkflowAccomplishedSummary('');
+    autoSurfaceWorkflowWindow(true);
+    handlePulseWorkflowTurn();
   };
 
   const [liveElapsedMs, setLiveElapsedMs] = useState<number>(0);
@@ -2182,6 +2396,107 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     localStorage.setItem('aurelius_tts_engine_v2', ttsEngine);
   }, [ttsEngine]);
 
+  const chatSettingsHydratedRef = useRef<boolean>(false);
+  const applyingRemoteChatRef = useRef<boolean>(false);
+  const autoResumeScheduledRef = useRef<boolean>(false);
+
+  const buildChatContinuitySnapshot = () => ({
+    model,
+    selectedRoleId: selectedRole.id,
+    customSystemInstruction,
+    activePermitId: activePermit.id,
+    zeroTokenMode,
+    chainOfThoughtEnabled,
+    deepthinkMode,
+    liveSearchEnabled,
+    showOperationalConsole,
+    showQuickLaunchers,
+    isSovereignBuilding,
+    autoReadAloud,
+    selectedVoiceName,
+    ttsEngine,
+    speechRate,
+    speechPitch,
+    speechWarmth,
+    speechResonance,
+    speechFormant,
+    workflowGoal,
+    infiniteWorkflowActive,
+    workflowCycle,
+    workflowActiveAction,
+    workflowAccomplished,
+    workflowAccomplishedSummary,
+    workflowActionLog: workflowActionLog.slice(-50),
+    buildSteps: buildSteps.slice(-30),
+    workflowPoppedOut,
+    workflowWindowOpen,
+    workflowWindowMinimized,
+    workflowWindowGeom
+  });
+
+  useEffect(() => {
+    const chatSnapshot = buildChatContinuitySnapshot();
+    updateLocalBeaconSnapshot({
+      settings: { chat: chatSnapshot },
+      activeTask:
+        infiniteWorkflowActive && !workflowAccomplished
+          ? {
+              id: 'workflow-main',
+              description: workflowGoal || 'Autonomous Infinite Workflow',
+              status: 'active',
+              agentId: selectedRole.agentId,
+              agentName: selectedRole.name,
+              goal: workflowGoal,
+              cycle: workflowCycle,
+              lastAction: workflowActiveAction || `Cycle #${workflowCycle}`,
+              source: 'workflow',
+              actionLog: workflowActionLog.slice(-20)
+            }
+          : null
+    });
+
+    if (applyingRemoteChatRef.current || !chatSettingsHydratedRef.current) return;
+    try {
+      localStorage.setItem('sovereign_continuity_local_updated_at_v1', new Date().toISOString());
+    } catch {}
+    pushContinuitySettingsPatch({ chat: chatSnapshot });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sovereign_continuity_subsettings_changed', { detail: { chat: chatSnapshot } }));
+    }
+  }, [
+    model,
+    selectedRole.id,
+    customSystemInstruction,
+    activePermit.id,
+    zeroTokenMode,
+    chainOfThoughtEnabled,
+    deepthinkMode,
+    liveSearchEnabled,
+    showOperationalConsole,
+    showQuickLaunchers,
+    isSovereignBuilding,
+    autoReadAloud,
+    selectedVoiceName,
+    ttsEngine,
+    speechRate,
+    speechPitch,
+    speechWarmth,
+    speechResonance,
+    speechFormant,
+    workflowGoal,
+    infiniteWorkflowActive,
+    workflowCycle,
+    workflowActiveAction,
+    workflowAccomplished,
+    workflowAccomplishedSummary,
+    workflowActionLog,
+    buildSteps,
+    workflowPoppedOut,
+    workflowWindowOpen,
+    workflowWindowMinimized,
+    workflowWindowGeom
+  ]);
+
   // Load natural browser system voices and filter out novelty/musical ringtone sound profiles
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -2285,10 +2600,26 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const [selectedAgentForWear, setSelectedAgentForWear] = useState<string>('aurelius-teraflop-omega');
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesViewportRef = useRef<HTMLDivElement>(null);
+
+  const scrollMessagesToBottom = useCallback((smooth = false) => {
+    const vp = messagesViewportRef.current;
+    if (!vp) return;
+    if (smooth) {
+      vp.scrollTo({ top: vp.scrollHeight, behavior: 'smooth' });
+    } else {
+      vp.scrollTop = vp.scrollHeight;
+    }
+  }, []);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+    const vp = messagesViewportRef.current;
+    if (!vp) return;
+    const distFromBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight;
+    if (distFromBottom < 220 || loading) {
+      scrollMessagesToBottom(false);
+    }
+  }, [messages, loading, scrollMessagesToBottom]);
 
   const handleWearModel = async (agentId: string, modelId: string) => {
     const updated = agentModelBinder.wearModel(agentId, modelId);
@@ -2371,6 +2702,21 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     }
     setPendingInputState({ content: promptText });
   };
+
+  const handleSendRef = useRef<(overrideInputText?: string) => Promise<void>>(async () => {});
+  const clearPendingInputStable = useCallback(() => {
+    setPendingInputState(null);
+  }, []);
+  const handleSendStable = useCallback((text: string) => {
+    handleSendRef.current(text);
+  }, []);
+  const toggleSpeechRecognitionRef = useRef<() => void>(() => {});
+  const toggleSpeechRecognitionStable = useCallback(() => {
+    toggleSpeechRecognitionRef.current();
+  }, []);
+  const handleTextareaFocus = useCallback(() => {
+    window.setTimeout(() => scrollMessagesToBottom(false), 180);
+  }, [scrollMessagesToBottom]);
 
   const handleSend = async (overrideInputText?: string) => {
     const textToSend = (overrideInputText !== undefined ? overrideInputText : '').trim();
@@ -2503,10 +2849,23 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     // 2. Dispatch via Sovereign AI Dispatcher (Cloud with Automatic Open-Source Local Fallback)
     try {
       if (infiniteWorkflowActive && textToSend.trim()) {
+        userManuallyStoppedWorkflowRef.current = false;
         setWorkflowGoal(textToSend.trim());
         setWorkflowAccomplished(false);
         setWorkflowAccomplishedSummary('');
         setWorkflowCycle(1);
+        autoSurfaceWorkflowWindow(true);
+        upsertTaskCheckpointToServer({
+          id: 'workflow-main',
+          description: textToSend.trim(),
+          status: 'active',
+          agentId: selectedRole.agentId,
+          agentName: selectedRole.name,
+          goal: textToSend.trim(),
+          cycle: 1,
+          lastAction: 'Started autonomous workflow directive',
+          source: 'workflow'
+        }).catch(() => {});
       }
 
       const evolvedContext = liveEvolutiveLearning.getEvolutiveContext(10);
@@ -2687,6 +3046,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       if (actionMatch) {
         const actionDesc = actionMatch[1].trim();
         setWorkflowActiveAction(actionDesc);
+        autoSurfaceWorkflowWindow(true);
         setWorkflowActionLog(prev => [
           ...prev.map(a => a.status === 'running' ? { ...a, status: 'complete' as const } : a),
           {
@@ -2711,6 +3071,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         setWorkflowAccomplishedSummary(summary);
         setInfiniteWorkflowActive(false);
         setIsSovereignBuilding(false);
+        autoSurfaceWorkflowWindow(false);
         setWorkflowActionLog(prev => [
           ...prev.map(a => a.status === 'running' ? { ...a, status: 'complete' as const } : a),
           {
@@ -2721,9 +3082,26 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             status: 'accomplished' as const
           }
         ]);
+        upsertTaskCheckpointToServer({
+          id: 'workflow-main',
+          description: workflowGoalRef.current || currentGoal,
+          status: 'completed',
+          agentId: selectedRole.agentId,
+          agentName: selectedRole.name,
+          goal: workflowGoalRef.current || currentGoal,
+          cycle: currentCycle,
+          lastAction: summary,
+          progressNotes: summary,
+          source: 'workflow'
+        }).catch(() => {});
         janusGate.pushLog(`[AUTONOMOUS LOOP] Goal Accomplished: ${summary}`);
       } else if (!result.isError && (infiniteWorkflowRef.current || sovereignBuildRef.current || !!continueMatch)) {
         const reason = continueMatch?.[1]?.trim() || 'Continuing autonomous workflow cycle';
+        if (!infiniteWorkflowRef.current && !userManuallyStoppedWorkflowRef.current) {
+          infiniteWorkflowRef.current = true;
+          setInfiniteWorkflowActive(true);
+        }
+        autoSurfaceWorkflowWindow(true);
         setBuildSteps(prev => [
           ...prev,
           { id: `step-${Date.now()}`, status: 'complete', label: reason }
@@ -2732,6 +3110,17 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         const nextCycle = currentCycle + 1;
         workflowCycleRef.current = nextCycle;
         setWorkflowCycle(nextCycle);
+        upsertTaskCheckpointToServer({
+          id: 'workflow-main',
+          description: workflowGoalRef.current || currentGoal,
+          status: 'active',
+          agentId: selectedRole.agentId,
+          agentName: selectedRole.name,
+          goal: workflowGoalRef.current || currentGoal,
+          cycle: nextCycle,
+          lastAction: reason,
+          source: 'workflow'
+        }).catch(() => {});
 
         const feedbackBlock = directiveRuns.length > 0 ? `\n[TOOL_AND_DIRECTIVE_RESULTS]:\n${formatDirectiveFeedback(directiveRuns)}` : '';
         continuationTimerRef.current = setTimeout(() => {
@@ -2936,6 +3325,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       if (actionMatch) {
         const actionDesc = actionMatch[1].trim();
         setWorkflowActiveAction(actionDesc);
+        autoSurfaceWorkflowWindow(false);
         setWorkflowActionLog(prev => [
           ...prev.map(a => a.status === 'running' ? { ...a, status: 'complete' as const } : a),
           {
@@ -2970,19 +3360,58 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             status: 'accomplished' as const
           }
         ]);
+        upsertTaskCheckpointToServer({
+          id: 'workflow-main',
+          description: workflowGoalRef.current || currentGoal,
+          status: 'completed',
+          agentId: selectedRole.agentId,
+          agentName: selectedRole.name,
+          goal: workflowGoalRef.current || currentGoal,
+          cycle: currentCycle,
+          lastAction: summary,
+          progressNotes: summary,
+          source: 'workflow'
+        }).catch(() => {});
         janusGate.pushLog(`[AUTONOMOUS LOOP] Goal Accomplished: ${summary}`);
       } else if (result.isError) {
         infiniteWorkflowRef.current = false;
         sovereignBuildRef.current = false;
         setInfiniteWorkflowActive(false);
         setIsSovereignBuilding(false);
+        upsertTaskCheckpointToServer({
+          id: 'workflow-main',
+          description: workflowGoalRef.current || currentGoal,
+          status: 'interrupted',
+          agentId: selectedRole.agentId,
+          agentName: selectedRole.name,
+          goal: workflowGoalRef.current || currentGoal,
+          cycle: currentCycle,
+          lastAction: result.quotaNotice || 'Cycle paused due to dispatch notice.',
+          source: 'workflow'
+        }).catch(() => {});
       } else if (infiniteWorkflowRef.current || sovereignBuildRef.current || !!continueMatch) {
         const reason = continueMatch?.[1]?.trim() || 'Continuing autonomous workflow cycle';
+        if (!infiniteWorkflowRef.current && !userManuallyStoppedWorkflowRef.current) {
+          infiniteWorkflowRef.current = true;
+          setInfiniteWorkflowActive(true);
+        }
+        autoSurfaceWorkflowWindow(false);
         setBuildSteps(prev => [...prev, { id: `step-${Date.now()}`, status: 'complete', label: reason }]);
 
         const nextCycle = currentCycle + 1;
         workflowCycleRef.current = nextCycle;
         setWorkflowCycle(nextCycle);
+        upsertTaskCheckpointToServer({
+          id: 'workflow-main',
+          description: workflowGoalRef.current || currentGoal,
+          status: 'active',
+          agentId: selectedRole.agentId,
+          agentName: selectedRole.name,
+          goal: workflowGoalRef.current || currentGoal,
+          cycle: nextCycle,
+          lastAction: reason,
+          source: 'workflow'
+        }).catch(() => {});
 
         const feedbackBlock = dirRuns.length > 0
           ? `\n[TOOL_AND_DIRECTIVE_RESULTS]:\n${dirRuns.map(d => {
@@ -3008,6 +3437,165 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       setLoading(false);
     }
   };
+
+  const scheduleInterruptedWorkflowResume = (goalText: string, cycleNum: number, resumeNote?: string) => {
+    if (autoResumeScheduledRef.current || loadingRef.current) return;
+    autoResumeScheduledRef.current = true;
+    autoSurfaceWorkflowWindow(true);
+    const cleanGoal = (goalText || workflowGoalRef.current || 'Autonomous Architecture & Continuous System Synthesis').trim();
+    const nextCycle = Math.max(1, cycleNum || workflowCycleRef.current || 1);
+    workflowCycleRef.current = nextCycle;
+    setWorkflowCycle(nextCycle);
+    setWorkflowActionLog(prev => [
+      ...prev.filter(a => a.action !== 'Resuming interrupted autonomous workflow across session...'),
+      {
+        id: `resume-${Date.now()}`,
+        cycle: nextCycle,
+        timestamp: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        action: 'Resuming interrupted autonomous workflow across session...',
+        status: 'running' as const,
+        details: resumeNote
+      }
+    ].slice(-50));
+    janusGate.pushLog(`[INFINITE CONTINUITY] Auto-resuming interrupted workflow "${cleanGoal.slice(0, 60)}" at Cycle #${nextCycle}`);
+    continuationTimerRef.current = setTimeout(() => {
+      continuationTimerRef.current = null;
+      if (!infiniteWorkflowRef.current || loadingRef.current) return;
+      handleSendContinuation(
+        `[AUTONOMOUS_WORKFLOW_RESUME · CYCLE: ${nextCycle}] Your previous session refreshed or reconnected mid-task. Goal: "${cleanGoal}". ${resumeNote ? `Last recorded step: "${resumeNote}". ` : ''}Seamlessly continue executing from the last checkpoint without restarting from scratch, or emit [GOAL_ACCOMPLISHED: <summary>] if already verified complete.`
+      );
+    }, 2400);
+  };
+
+  // Hydrate Chat settings & resume interrupted autonomous workflows across refreshes/disconnects/devices
+  useEffect(() => {
+    const onContinuityHydrated = (ev: Event) => {
+      const remote = (ev as CustomEvent)?.detail;
+      if (!remote) return;
+      const chatSettings = remote.settings?.chat;
+      let localTs = 0;
+      try {
+        localTs = Date.parse(localStorage.getItem('sovereign_continuity_local_updated_at_v1') || '') || 0;
+      } catch {}
+      const remoteTs = Date.parse(remote.settings?.updatedAt || '') || 0;
+
+      if (chatSettings && typeof chatSettings === 'object' && (!localTs || remoteTs > localTs)) {
+        applyingRemoteChatRef.current = true;
+        try {
+          if (typeof chatSettings.model === 'string' && chatSettings.model) setModel(chatSettings.model);
+          if (typeof chatSettings.selectedRoleId === 'string') {
+            const foundRole = availableRoles.find((r) => r.id === chatSettings.selectedRoleId || r.agentId === chatSettings.selectedRoleId);
+            if (foundRole) setSelectedRole(foundRole);
+          }
+          if (typeof chatSettings.customSystemInstruction === 'string' && chatSettings.customSystemInstruction) {
+            setCustomSystemInstruction(chatSettings.customSystemInstruction);
+          }
+          if (typeof chatSettings.activePermitId === 'string') {
+            const foundPermit = CHAT_PERMITS.find((p) => p.id === chatSettings.activePermitId);
+            if (foundPermit) setActivePermit(foundPermit);
+          }
+          if (typeof chatSettings.zeroTokenMode === 'boolean') setZeroTokenMode(chatSettings.zeroTokenMode);
+          if (typeof chatSettings.chainOfThoughtEnabled === 'boolean') setChainOfThoughtEnabled(chatSettings.chainOfThoughtEnabled);
+          if (typeof chatSettings.deepthinkMode === 'boolean') setDeepthinkMode(chatSettings.deepthinkMode);
+          if (typeof chatSettings.liveSearchEnabled === 'boolean') setLiveSearchEnabled(chatSettings.liveSearchEnabled);
+          if (typeof chatSettings.showOperationalConsole === 'boolean') setShowOperationalConsole(chatSettings.showOperationalConsole);
+          if (typeof chatSettings.showQuickLaunchers === 'boolean') setShowQuickLaunchers(chatSettings.showQuickLaunchers);
+          if (typeof chatSettings.isSovereignBuilding === 'boolean') setIsSovereignBuilding(chatSettings.isSovereignBuilding);
+          if (typeof chatSettings.autoReadAloud === 'boolean') setAutoReadAloud(chatSettings.autoReadAloud);
+          if (typeof chatSettings.selectedVoiceName === 'string' && chatSettings.selectedVoiceName) {
+            setSelectedVoiceName(chatSettings.selectedVoiceName);
+          }
+          if (chatSettings.ttsEngine === 'cloud' || chatSettings.ttsEngine === 'browser') {
+            setTtsEngine(chatSettings.ttsEngine);
+          }
+          if (typeof chatSettings.speechRate === 'number') setSpeechRate(chatSettings.speechRate);
+          if (typeof chatSettings.speechPitch === 'number') setSpeechPitch(chatSettings.speechPitch);
+          if (typeof chatSettings.speechWarmth === 'number') setSpeechWarmth(chatSettings.speechWarmth);
+          if (typeof chatSettings.speechResonance === 'number') setSpeechResonance(chatSettings.speechResonance);
+          if (typeof chatSettings.speechFormant === 'number') setSpeechFormant(chatSettings.speechFormant);
+          if (typeof chatSettings.workflowGoal === 'string' && chatSettings.workflowGoal) {
+            setWorkflowGoal(chatSettings.workflowGoal);
+            workflowGoalRef.current = chatSettings.workflowGoal;
+          }
+          if (typeof chatSettings.workflowCycle === 'number' && chatSettings.workflowCycle >= 1) {
+            setWorkflowCycle(chatSettings.workflowCycle);
+            workflowCycleRef.current = chatSettings.workflowCycle;
+          }
+          if (typeof chatSettings.workflowActiveAction === 'string') setWorkflowActiveAction(chatSettings.workflowActiveAction);
+          if (typeof chatSettings.workflowAccomplished === 'boolean') {
+            setWorkflowAccomplished(chatSettings.workflowAccomplished);
+            workflowAccomplishedRef.current = chatSettings.workflowAccomplished;
+          }
+          if (typeof chatSettings.workflowAccomplishedSummary === 'string') {
+            setWorkflowAccomplishedSummary(chatSettings.workflowAccomplishedSummary);
+          }
+          if (Array.isArray(chatSettings.workflowActionLog)) {
+            setWorkflowActionLog(chatSettings.workflowActionLog.slice(-50));
+          }
+          if (Array.isArray(chatSettings.buildSteps)) {
+            setBuildSteps(chatSettings.buildSteps.slice(-30));
+          }
+          if (typeof chatSettings.workflowPoppedOut === 'boolean') {
+            setWorkflowPoppedOut(chatSettings.workflowPoppedOut);
+          }
+          if (typeof chatSettings.workflowWindowOpen === 'boolean') {
+            setWorkflowWindowOpen(chatSettings.workflowWindowOpen);
+          }
+          if (typeof chatSettings.workflowWindowMinimized === 'boolean') {
+            setWorkflowWindowMinimized(chatSettings.workflowWindowMinimized);
+          }
+          if (
+            chatSettings.workflowWindowGeom &&
+            typeof chatSettings.workflowWindowGeom.x === 'number' &&
+            typeof chatSettings.workflowWindowGeom.y === 'number' &&
+            typeof chatSettings.workflowWindowGeom.width === 'number' &&
+            typeof chatSettings.workflowWindowGeom.height === 'number'
+          ) {
+            setWorkflowWindowGeom(chatSettings.workflowWindowGeom);
+          }
+          if (typeof chatSettings.infiniteWorkflowActive === 'boolean') {
+            setInfiniteWorkflowActive(chatSettings.infiniteWorkflowActive);
+            infiniteWorkflowRef.current = chatSettings.infiniteWorkflowActive;
+            if (chatSettings.infiniteWorkflowActive) {
+              setWorkflowWindowOpen(true);
+            }
+          }
+        } finally {
+          window.setTimeout(() => {
+            applyingRemoteChatRef.current = false;
+            chatSettingsHydratedRef.current = true;
+          }, 0);
+        }
+      } else {
+        chatSettingsHydratedRef.current = true;
+      }
+
+      const interruptedWorkflowTask = Array.isArray(remote.interruptedTasks)
+        ? remote.interruptedTasks.find((t: any) => t?.id === 'workflow-main' || t?.source === 'workflow')
+        : null;
+
+      if ((infiniteWorkflowRef.current && !workflowAccomplishedRef.current) || (chatSettings?.infiniteWorkflowActive && !chatSettings?.workflowAccomplished)) {
+        scheduleInterruptedWorkflowResume(
+          interruptedWorkflowTask?.goal || chatSettings?.workflowGoal || workflowGoalRef.current,
+          Math.max(workflowCycleRef.current, interruptedWorkflowTask?.cycle || 1),
+          interruptedWorkflowTask?.lastAction || workflowActiveAction
+        );
+      }
+    };
+
+    window.addEventListener('sovereign_continuity_hydrated', onContinuityHydrated);
+    const offlineFallbackTimer = window.setTimeout(() => {
+      chatSettingsHydratedRef.current = true;
+      if (infiniteWorkflowRef.current && !workflowAccomplishedRef.current && !autoResumeScheduledRef.current) {
+        scheduleInterruptedWorkflowResume(workflowGoalRef.current, workflowCycleRef.current, workflowActiveAction);
+      }
+    }, 2200);
+
+    return () => {
+      window.removeEventListener('sovereign_continuity_hydrated', onContinuityHydrated);
+      window.clearTimeout(offlineFallbackTimer);
+    };
+  }, [availableRoles]);
 
   const handleFinalizeBuild = async () => {
     if (loadingRef.current) return;
@@ -3316,10 +3904,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                 if (infiniteWorkflowActive) {
                   handleStopInfiniteWorkflow();
                 } else {
-                  setInfiniteWorkflowActive(true);
-                  setWorkflowAccomplished(false);
-                  setWorkflowAccomplishedSummary('');
-                  handlePulseWorkflowTurn();
+                  handleResumeInfiniteWorkflow();
                 }
               }}
               className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border cursor-pointer whitespace-nowrap ${
@@ -3331,6 +3916,27 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             >
               <Zap className={`w-3.5 h-3.5 ${infiniteWorkflowActive ? 'text-amber-300' : ''}`} />
               <span className="hidden xl:inline">{infiniteWorkflowActive ? 'Stop Auto' : 'Auto Loop'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (workflowWindowOpen && workflowPoppedOut && !workflowWindowMinimized) {
+                  setWorkflowWindowMinimized(true);
+                } else {
+                  setWorkflowPoppedOut(true);
+                  autoSurfaceWorkflowWindow(true);
+                }
+              }}
+              className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border cursor-pointer whitespace-nowrap ${
+                workflowWindowOpen && workflowPoppedOut
+                  ? 'bg-amber-500/15 text-amber-200 border-amber-400/60'
+                  : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-amber-500/40 hover:text-amber-200'
+              }`}
+              title="Pop out / focus resizable Autonomous Workflow window over the OS"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Workflow HUD</span>
             </button>
 
             <button
@@ -3592,7 +4198,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         )}
 
         {/* Quiet Single-Line Workspace Context Strip */}
-        <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 pt-1 border-t border-zinc-800/50 gap-2 flex-wrap">
+        <div className="keyboard-hide-secondary flex items-center justify-between text-[11px] font-mono text-zinc-400 pt-1 border-t border-zinc-800/50 gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0 truncate">
             <span className="text-zinc-200 font-semibold truncate">{selectedRole.name.split(' (')[0]}</span>
             <span aria-hidden="true" className="text-zinc-600">·</span>
@@ -3680,13 +4286,18 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         </div>
       )}
 
-      {/* 2. Chat Conversation Viewport */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin scrollbar-thumb-zinc-800">
-        <ChatOperationalHUD 
-          showOperationalConsole={showOperationalConsole}
-          operationalLogs={operationalLogs}
-          setOperationalLogs={setOperationalLogs}
-          modelLoaded={modelLoaded}
+      {/* Non-Scrolling Sticky Docked Autonomous Workflow Slot (only when explicitly docked inside Chat) */}
+      {!workflowPoppedOut && (
+        <DockedWorkflowHUD
+          isOpen={workflowWindowOpen || infiniteWorkflowActive}
+          collapsed={dockedWorkflowCollapsed}
+          onToggleCollapse={() => setDockedWorkflowCollapsed((prev) => !prev)}
+          onPopOut={() => {
+            setWorkflowPoppedOut(true);
+            setWorkflowWindowOpen(true);
+            setWorkflowWindowMinimized(false);
+          }}
+          onClose={() => setWorkflowWindowOpen(false)}
           infiniteWorkflowActive={infiniteWorkflowActive}
           workflowActionLog={workflowActionLog}
           workflowCycle={workflowCycle}
@@ -3695,19 +4306,34 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
           workflowGoal={workflowGoal}
           workflowActiveAction={workflowActiveAction}
           loading={loading}
-          isSovereignBuilding={isSovereignBuilding}
-          buildSteps={buildSteps}
           handleStopInfiniteWorkflow={handleStopInfiniteWorkflow}
+          handleResumeInfiniteWorkflow={handleResumeInfiniteWorkflow}
           handlePulseWorkflowTurn={handlePulseWorkflowTurn}
           setShowGoalEditModal={setShowGoalEditModal}
           setWorkflowActionLog={setWorkflowActionLog}
           setTempGoalInput={setTempGoalInput}
         />
+      )}
+
+      {/* 2. Chat Conversation Viewport */}
+      <div
+        ref={messagesViewportRef}
+        className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 scrollbar-thin scrollbar-thumb-zinc-800"
+      >
+        <ChatOperationalHUD 
+          showOperationalConsole={showOperationalConsole}
+          operationalLogs={operationalLogs}
+          setOperationalLogs={setOperationalLogs}
+          modelLoaded={modelLoaded}
+          isSovereignBuilding={isSovereignBuilding}
+          buildSteps={buildSteps}
+        />
         {messages.map((m) => {
           const isUser = m.role === 'user';
           return (
               <div 
-                key={m.id} 
+                key={m.id}
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '120px' }}
                 className={`flex gap-2 sm:gap-3 max-w-[94%] sm:max-w-[85%] min-w-0 ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
               >
                 <div 
@@ -4411,16 +5037,19 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       {/* Unified Voice Chat HUD renders globally in PersistentTalkDock */}
 
       {/* 4. Chat Input Form (Isolated State to prevent typing lag) */}
+      {(handleSendRef.current = handleSend) && null}
+      {(toggleSpeechRecognitionRef.current = toggleSpeechRecognition) && null}
       <ChatInputForm
-        onSend={handleSend}
+        onSend={handleSendStable}
         loading={loading}
         attachedMediaList={attachedMediaList}
         setAttachedMediaList={setAttachedMediaList}
         isListening={isListening}
-        toggleSpeechRecognition={toggleSpeechRecognition}
+        toggleSpeechRecognition={toggleSpeechRecognitionStable}
         pendingInput={pendingInputState}
-        onClearPendingInput={() => setPendingInputState(null)}
-        handleDrop={handleDrop}
+        onClearPendingInput={clearPendingInputStable}
+        handleDrop={handleDropCallback}
+        onTextareaFocus={handleTextareaFocus}
       />
 
       {/* Agent Wardrobe / Model Wearing Modal */}
@@ -5068,13 +5697,13 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         </div>
       )}
 
-      {/* Goal Edit Modal for Infinite Autonomous Workflow */}
-      {showGoalEditModal && (
+      {/* Goal Edit Modal for Infinite Autonomous Workflow (Portaled above floating windows) */}
+      {showGoalEditModal && typeof document !== 'undefined' && createPortal(
         <div
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowGoalEditModal(false);
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
         >
           <div className="bg-zinc-900 border border-amber-500/40 rounded-2xl p-5 sm:p-6 max-w-lg w-full max-h-[90dvh] overflow-y-auto shadow-2xl space-y-4">
             <div className="flex items-center justify-between gap-2">
@@ -5123,6 +5752,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                     setWorkflowAccomplished(false);
                     setWorkflowAccomplishedSummary('');
                     setWorkflowCycle(1);
+                    autoSurfaceWorkflowWindow(true);
                   }
                   setShowGoalEditModal(false);
                 }}
@@ -5132,7 +5762,43 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Standalone Pop-Out Resizable Floating OS Window for Autonomous Infinite Workflow */}
+      {workflowPoppedOut && (
+        <FloatingWorkflowWindow
+          isOpen={workflowWindowOpen || infiniteWorkflowActive}
+          workflowActive={infiniteWorkflowActive}
+          loading={loading}
+          workflowCycle={workflowCycle}
+          workflowGoal={workflowGoal}
+          workflowActiveAction={workflowActiveAction}
+          workflowAccomplished={workflowAccomplished}
+          workflowAccomplishedSummary={workflowAccomplishedSummary}
+          workflowActionLog={workflowActionLog}
+          minimized={workflowWindowMinimized}
+          maximized={workflowWindowMaximized}
+          geometry={workflowWindowGeom}
+          onGeometryChange={(next) => setWorkflowWindowGeom((prev) => ({ ...prev, ...next }))}
+          onStopLoop={handleStopInfiniteWorkflow}
+          onResumeLoop={handleResumeInfiniteWorkflow}
+          onPulseNextTurn={() => handlePulseWorkflowTurn()}
+          onOpenGoalModal={() => {
+            setTempGoalInput(workflowGoal);
+            setShowGoalEditModal(true);
+          }}
+          onClearLog={() => setWorkflowActionLog([])}
+          onDockToChat={() => {
+            setWorkflowPoppedOut(false);
+            setWorkflowWindowOpen(true);
+            setDockedWorkflowCollapsed(false);
+          }}
+          onMinimizeToggle={() => setWorkflowWindowMinimized((prev) => !prev)}
+          onMaximizeToggle={() => setWorkflowWindowMaximized((prev) => !prev)}
+          onClose={() => setWorkflowWindowOpen(false)}
+        />
       )}
 
       {/* Gemini Live Continuous Voice Hands-Free Modal Overlay */}

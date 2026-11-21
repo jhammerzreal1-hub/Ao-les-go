@@ -1,8 +1,5 @@
 import React, { lazy } from 'react';
 
-const RELOAD_GUARD_KEY = 'sovereign_os_chunk_reload_ts';
-const RELOAD_COOLDOWN_MS = 15000;
-
 export function isDynamicImportError(error: unknown): boolean {
   const msg = String((error as any)?.message || error || '').toLowerCase();
   return (
@@ -27,10 +24,10 @@ function sleep(ms: number): Promise<void> {
 export function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
   moduleLabel?: string,
-  maxRetries = 3
+  maxRetries = 5
 ): React.LazyExoticComponent<T> {
   return lazy(async () => {
-    const delays = [350, 900, 1800];
+    const delays = [250, 500, 900, 1400, 2200];
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -46,23 +43,6 @@ export function lazyWithRetry<T extends React.ComponentType<any>>(
           `[OS Module Loader] Transient import retry ${attempt + 1}/${maxRetries} for ${moduleLabel || 'module'} in ${waitMs}ms...`
         );
         await sleep(waitMs);
-      }
-    }
-
-    // If all retries failed due to stale dev/chunk URLs after a server restart, do a single safe reload
-    if (typeof window !== 'undefined' && isDynamicImportError(lastError)) {
-      try {
-        const lastReload = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) || '0');
-        const now = Date.now();
-        if (!Number.isFinite(lastReload) || now - lastReload > RELOAD_COOLDOWN_MS) {
-          sessionStorage.setItem(RELOAD_GUARD_KEY, String(now));
-          console.warn(`[OS Module Loader] Refreshing session once to sync updated module graph (${moduleLabel || 'module'}).`);
-          window.location.reload();
-          // Keep Suspense pending while browser reloads so ErrorBoundary never flashes
-          return new Promise<{ default: T }>(() => {});
-        }
-      } catch {
-        // sessionStorage blocked — fall through to ErrorBoundary with Retry button
       }
     }
 

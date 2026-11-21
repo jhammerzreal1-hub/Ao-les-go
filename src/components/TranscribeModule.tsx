@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Download
 } from 'lucide-react';
+import { requestMicrophoneStream } from '../utils/mediaPermissions';
 
 interface TranscribeModuleProps {
   onSaveToVault?: (title: string, prompt: string, model: string, transcript: string) => void;
@@ -121,11 +122,17 @@ export const TranscribeModule: React.FC<TranscribeModuleProps> = ({ onSaveToVaul
   }, [isRecording]);
 
   const stopMeterAudio = () => {
-    try {
-      audioCtxRef.current?.close();
-    } catch {}
+    const ctx = audioCtxRef.current;
     audioCtxRef.current = null;
     analyserRef.current = null;
+    if (ctx && ctx.state !== 'closed') {
+      try {
+        const res = ctx.close();
+        if (res && typeof res.catch === 'function') {
+          res.catch(() => {});
+        }
+      } catch {}
+    }
   };
 
   useEffect(() => {
@@ -169,7 +176,15 @@ export const TranscribeModule: React.FC<TranscribeModuleProps> = ({ onSaveToVaul
     try {
       setErrorMessage(null);
       audioChunksRef.current = [];
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const micRes = await requestMicrophoneStream({ allowPrompt: true });
+      if (!micRes.stream) {
+        throw new Error(
+          micRes.status === 'denied'
+            ? 'Microphone permission blocked in browser settings.'
+            : 'Microphone access requires permission.'
+        );
+      }
+      const stream = micRes.stream;
 
       const actx = new AudioContext();
       const source = actx.createMediaStreamSource(stream);
