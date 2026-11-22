@@ -1,6 +1,6 @@
 {
-  "revision": 65,
-  "updatedAt": "2026-11-20T20:11:11.199Z",
+  "revision": 79,
+  "updatedAt": "2026-11-22T01:42:37.194Z",
   "shell": {
     "activeModule": "chat",
     "shellViewMode": "desktop",
@@ -9,6 +9,7 @@
     ],
     "pinnedModules": [
       "chat",
+      "lora-mesh",
       "browser",
       "macro-telemetry",
       "projects",
@@ -39,8 +40,8 @@
         "maximized": true
       },
       "browser": {
-        "x": 153,
-        "y": 360,
+        "x": 2,
+        "y": 353,
         "width": 420,
         "height": 539,
         "zIndex": 40,
@@ -79,9 +80,9 @@
         "y": 93,
         "width": 376,
         "height": 454,
-        "zIndex": 78,
+        "zIndex": 31,
         "minimized": false,
-        "maximized": true
+        "maximized": false
       },
       "ai-genesis-distillery": {
         "x": 8,
@@ -90,7 +91,7 @@
         "height": 522,
         "zIndex": 32,
         "minimized": false,
-        "maximized": false
+        "maximized": true
       },
       "os-settings": {
         "x": 8,
@@ -106,9 +107,9 @@
         "y": 30,
         "width": 376,
         "height": 560,
-        "zIndex": 50,
+        "zIndex": 32,
         "minimized": false,
-        "maximized": false
+        "maximized": true
       },
       "universal-installer": {
         "x": 0,
@@ -138,11 +139,11 @@
         "maximized": true
       },
       "autonomy-supervisor": {
-        "x": -132,
-        "y": 104,
-        "width": 376,
-        "height": 560,
-        "zIndex": 32,
+        "x": 6,
+        "y": 6,
+        "width": 591,
+        "height": 668,
+        "zIndex": 31,
         "minimized": false,
         "maximized": false
       },
@@ -151,18 +152,18 @@
         "y": 8,
         "width": 376,
         "height": 539,
-        "zIndex": 71,
+        "zIndex": 36,
         "minimized": false,
-        "maximized": false
+        "maximized": true
       },
       "osint": {
         "x": 236,
         "y": 20,
         "width": 544,
         "height": 620,
-        "zIndex": 31,
+        "zIndex": 35,
         "minimized": false,
-        "maximized": false
+        "maximized": true
       },
       "transfer-hub": {
         "x": 47.21368408203125,
@@ -178,9 +179,9 @@
         "y": 76,
         "width": 480,
         "height": 640,
-        "zIndex": 82,
+        "zIndex": 31,
         "minimized": false,
-        "maximized": false
+        "maximized": true
       },
       "contacts": {
         "x": 62,
@@ -244,12 +245,39 @@
         "zIndex": 51,
         "minimized": false,
         "maximized": false
+      },
+      "grant-hunter": {
+        "x": 60,
+        "y": 20,
+        "width": 480,
+        "height": 640,
+        "zIndex": 38,
+        "minimized": false,
+        "maximized": false
+      },
+      "lora-mesh": {
+        "x": 6,
+        "y": 6,
+        "width": 970,
+        "height": 672,
+        "zIndex": 31,
+        "minimized": false,
+        "maximized": true
+      },
+      "admin-command": {
+        "x": 236,
+        "y": 76,
+        "width": 608,
+        "height": 640,
+        "zIndex": 35,
+        "minimized": false,
+        "maximized": true
       }
     },
     "isSplitMode": false,
     "secondaryModule": "browser",
     "splitPct": 50,
-    "isChatDetached": true,
+    "isChatDetached": false,
     "detachedExtraModules": [],
     "chatPipMinimized": false,
     "pipMinimizedExtras": {},
@@ -360,30 +388,21 @@
     "speechResonance": 0.5,
     "speechFormant": 0,
     "workflowGoal": "Autonomous Architecture & Continuous System Synthesis",
-    "infiniteWorkflowActive": true,
+    "infiniteWorkflowActive": false,
     "workflowCycle": 1,
     "workflowActiveAction": "",
     "workflowAccomplished": false,
     "workflowAccomplishedSummary": "",
-    "workflowActionLog": [
-      {
-        "id": "resume-1795205470677",
-        "cycle": 1,
-        "timestamp": "20:11:10",
-        "action": "Resuming interrupted autonomous workflow across session...",
-        "status": "running",
-        "details": ""
-      }
-    ],
+    "workflowActionLog": [],
     "buildSteps": [],
     "workflowPoppedOut": true,
-    "workflowWindowOpen": true,
+    "workflowWindowOpen": false,
     "workflowWindowMinimized": false,
     "workflowWindowGeom": {
-      "x": 12,
+      "x": 784,
       "y": 58,
-      "width": 366,
-      "height": 460
+      "width": 480,
+      "height": 432
     }
   },
   "voiceDock": {

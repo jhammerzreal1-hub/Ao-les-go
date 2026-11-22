@@ -32,12 +32,9 @@ import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
 import type { AutonomousMarketAlert } from './components/MacroTelemetryModule';
 import type { OSShellViewMode } from './components/SovereignOSSettingsModule';
-import { CommandPalette } from './components/CommandPalette';
-import { SystemHealthDashboard } from './components/SystemHealthDashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { SovereignOSBar } from './components/SovereignOSBar';
-import { PersistentTalkDock } from './components/PersistentTalkDock';
 import {
   SovereignOSWindowFrame,
   SovereignDesktopCanvas,
@@ -52,7 +49,8 @@ import { useOrchestrator } from './hooks/useOrchestrator';
 import {
   loadOSCustomizationProfile,
   saveOSCustomizationProfile,
-  hydrateOSCustomizationFromRemote
+  hydrateOSCustomizationFromRemote,
+  setActiveCustomizationUserScope
 } from './utils/osCustomizationStore';
 import {
   pushContinuitySettingsPatch,
@@ -63,6 +61,23 @@ import {
   saveOrchestratorStateToFirestore
 } from './utils/continuityClient';
 import { markVoiceUserGesture } from './utils/mediaPermissions';
+import { AuthGateModal } from './components/AuthGateModal';
+import { PersistentTalkDock } from './components/PersistentTalkDock';
+import {
+  apiFetch,
+  fetchAuthSession,
+  loginWithGoogleToken,
+  logoutSession
+} from './utils/authClient';
+import {
+  COLLABORATOR_PRIVILEGES,
+  canUserAccessModule,
+  isExecutiveArchitectUser,
+  type AuthPolicySettings,
+  type AuthSessionResponse,
+  type AuthUserPublic
+} from './types/auth';
+import { signOut } from './firebase';
 import type { ModuleType, Artifact, AuditLedgerItem } from './types';
 
 // Lazy-loaded OS Applications with automatic retry & stale-chunk recovery
@@ -108,10 +123,16 @@ const UniversalInstallerModule = lazyWithRetry(() => import('./components/Univer
 const SovereignCryptoWalletModule = lazyWithRetry(() => import('./components/SovereignCryptoWalletModule').then(m => ({ default: m.SovereignCryptoWalletModule })), 'SovereignCryptoWalletModule');
 const AutonomousGrantEnginePanel = lazyWithRetry(() => import('./components/AutonomousGrantEnginePanel').then(m => ({ default: m.AutonomousGrantEnginePanel })), 'AutonomousGrantEnginePanel');
 const TransferHubModule = lazyWithRetry(() => import('./components/TransferHubModule').then(m => ({ default: m.TransferHubModule })), 'TransferHubModule');
+const BatchProcessorModule = lazyWithRetry(() => import('./components/BatchProcessorModule').then(m => ({ default: m.BatchProcessorModule })), 'BatchProcessorModule');
 const ApiSecretsModule = lazyWithRetry(() => import('./components/ApiSecretsModule').then(m => ({ default: m.ApiSecretsModule })), 'ApiSecretsModule');
 const SovereignIntegrationsHub = lazyWithRetry(() => import('./components/SovereignIntegrationsHub').then(m => ({ default: m.SovereignIntegrationsHub })), 'SovereignIntegrationsHub');
 const SpatialArenaModule = lazyWithRetry(() => import('./components/three/SpatialArenaModule').then(m => ({ default: m.SpatialArenaModule })), 'SpatialArenaModule');
+const LoRaMeshChatModule = lazyWithRetry(() => import('./components/LoRaMeshChatModule').then(m => ({ default: m.LoRaMeshChatModule })), 'LoRaMeshChatModule');
+const AdminSovereignCommandCenter = lazyWithRetry(() => import('./components/AdminSovereignCommandCenter').then(m => ({ default: m.AdminSovereignCommandCenter })), 'AdminSovereignCommandCenter');
 const FloatingTouchGamepadOverlay = lazyWithRetry(() => import('./components/UniversalControllerDeck').then(m => ({ default: m.FloatingTouchGamepadOverlay })), 'FloatingTouchGamepadOverlay');
+const CommandPalette = lazyWithRetry(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })), 'CommandPalette');
+const SystemHealthDashboard = lazyWithRetry(() => import('./components/SystemHealthDashboard').then(m => ({ default: m.SystemHealthDashboard })), 'SystemHealthDashboard');
+const UserPrivilegesManagerModal = lazyWithRetry(() => import('./components/UserPrivilegesManagerModal').then(m => ({ default: m.UserPrivilegesManagerModal })), 'UserPrivilegesManagerModal');
 
 const ModuleLoadingFallback: React.FC<{ label?: string }> = ({ label = 'Loading module...' }) => (
   <div className="flex-1 min-h-[220px] flex flex-col items-center justify-center gap-3 p-8 bg-zinc-950/90 text-zinc-400 font-mono text-xs">
@@ -126,6 +147,7 @@ interface MemoChatPaneProps {
   pendingInput: { content: string; immediate?: boolean } | null;
   onClearPendingInput: () => void;
   userId?: string;
+  authUser?: AuthUserPublic | null;
   isDetached: boolean;
   onToggleDetach: () => void;
 }
@@ -136,6 +158,7 @@ const MemoChatPane: React.FC<MemoChatPaneProps> = React.memo(({
   pendingInput,
   onClearPendingInput,
   userId,
+  authUser,
   isDetached,
   onToggleDetach
 }) => (
@@ -148,6 +171,7 @@ const MemoChatPane: React.FC<MemoChatPaneProps> = React.memo(({
           pendingInput={pendingInput}
           onClearPendingInput={onClearPendingInput}
           userId={userId}
+          authUser={authUser}
           isDetached={isDetached}
           onToggleDetach={onToggleDetach}
         />
@@ -199,40 +223,113 @@ export default function App() {
 
   const { activeModule, pendingChatInput, agentInternetAllowed, devMode, activeAccountEmail, uiMutation } = orchestratorState;
 
+  const [authLoaded, setAuthLoaded] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUserPublic | null>(null);
+  const [authAdminClaimed, setAuthAdminClaimed] = useState(true);
+  const [authEnvAdminConfigured, setAuthEnvAdminConfigured] = useState(false);
+  const [authPolicy, setAuthPolicy] = useState<AuthPolicySettings>({
+    requireLoginOnBoot: true,
+    allowSelfRegistration: true,
+    newUsersRequireApproval: false,
+    defaultRole: 'collaborator',
+    defaultPrivileges: COLLABORATOR_PRIVILEGES
+  });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showUserPrivilegesModal, setShowUserPrivilegesModal] = useState(false);
+  const authUserRef = useRef<AuthUserPublic | null>(null);
+  authUserRef.current = authUser;
+
+  const applyAuthSessionResponse = useCallback((res: AuthSessionResponse) => {
+    setAuthUser(res.user || null);
+    setAuthAdminClaimed(res.adminClaimed !== false);
+    setAuthEnvAdminConfigured(Boolean(res.envAdminConfigured));
+    if (res.policy) setAuthPolicy(res.policy);
+    setAuthLoaded(true);
+    if (res.user && res.user.status === 'active') {
+      setShowLoginModal(false);
+    }
+  }, []);
+
+  const refreshAuthSession = useCallback(async () => {
+    try {
+      const res = await fetchAuthSession();
+      applyAuthSessionResponse(res);
+    } catch {
+      setAuthLoaded(true);
+    }
+  }, [applyAuthSessionResponse]);
+
+  const handleLogoutAccount = useCallback(async () => {
+    await logoutSession().catch(() => {});
+    await signOut(auth).catch(() => {});
+    setAuthUser(null);
+    setShowUserPrivilegesModal(false);
+    await refreshAuthSession();
+  }, [refreshAuthSession]);
+
   useEffect(() => {
-    console.log('%c🌌 SOVEREIGN ARCHITECT BOOT SEQUENCE INITIATED', 'color: #fbbf24; font-weight: bold; font-size: 14px;');
-    console.log('%c[SYSTEM] RING -3 HYPERVISOR: ACTIVE', 'color: #10b981;');
-    console.log('%c[MEMORY] HFID CONSENSUS: VERIFIED (100/100)', 'color: #10b981;');
-    console.log('%c[NEURAL] JANUS GATE: STANDBY', 'color: #3b82f6;');
-    console.log('%c[KERNEL] ZENODO DOI PROVENANCE: IMMUTABLE', 'color: #8b5cf6;');
-    
-    // Automatically initialize offline substrate and background autonomous learning daemon
+    refreshAuthSession();
+  }, [refreshAuthSession]);
+
+  // Scope desktop customization profile & hydrate per-user SQL continuity whenever logged-in user changes
+  useEffect(() => {
+    const isAdminOrArch = Boolean(
+      authUser && (isExecutiveArchitectUser(authUser) || authUser.role === 'admin')
+    );
+    setActiveCustomizationUserScope(authUser?.id || null, isAdminOrArch);
+    if (!authUser?.id) return;
+    let cancelled = false;
+    fetchServerContinuityState()
+      .then((remote) => {
+        if (cancelled) return;
+        if (remote?.settings?.osCustomization) {
+          hydrateOSCustomizationFromRemote(remote.settings.osCustomization);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id, authUser?.role]);
+
+  // Live-sync preferredName across the entire OS whenever Chat, Voice, Desktop, or SoS Mesh updates it
+  useEffect(() => {
+    const onPreferredNameUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<{ userId?: string; preferredName?: string }>)?.detail;
+      if (!detail?.preferredName) return;
+      setAuthUser((prev) => {
+        if (!prev) return prev;
+        if (detail.userId && detail.userId !== prev.id) return prev;
+        return {
+          ...prev,
+          preferredName: detail.preferredName,
+          preferredNameConfirmed: true
+        };
+      });
+    };
+    window.addEventListener('sovereign_preferred_name_updated', onPreferredNameUpdated);
+    return () => window.removeEventListener('sovereign_preferred_name_updated', onPreferredNameUpdated);
+  }, []);
+
+  useEffect(() => {
+    // Signal to index.html boot watchdog IMMEDIATELY after React mounts App
+    (window as any).__SOVEREIGN_BOOT_MOUNTED__ = true;
     if (localStorage.getItem('aurelius_dev_mode') === null) {
       localStorage.setItem('aurelius_dev_mode', 'true');
     }
-    localLlmManager.autoInitializeOfflineSubstrate().catch(() => {});
-    autonomousSelfImprovement.start();
-
-    // Simulate a cascading boot for UI feel
-    const bootSteps = [
-      'Initializing quantum substrate...',
-      'Mapping neural manifold...',
-      'Synchronizing multi-agent mesh...',
-      'Arming sovereign defenses...',
-      'Aurelius Omega Online.'
-    ];
-    
-    bootSteps.forEach((step, i) => {
-      setTimeout(() => {
-        console.log(`%c[BOOT] ${step}`, 'color: #71717a;');
-        if (i === bootSteps.length - 1) {
-          import('./utils/janusGate').then(({ janusGate }) => {
-            janusGate.pushLog('Sovereign Architect Boot Sequence: 100% Verified');
-          });
-        }
-      }, i * 400);
-    });
   }, []);
+
+  // Defer heavy background offline substrate & autonomous learning until user is authenticated
+  useEffect(() => {
+    const isAuthenticatedActive =
+      !authPolicy.requireLoginOnBoot || Boolean(authUser && authUser.status === 'active');
+    if (!authLoaded || !isAuthenticatedActive) return;
+    const timer = window.setTimeout(() => {
+      localLlmManager.autoInitializeOfflineSubstrate().catch(() => {});
+      autonomousSelfImprovement.start();
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [authLoaded, authPolicy.requireLoginOnBoot, authUser?.id, authUser?.status]);
 
   const showOsToast = (msg: string) => {
     setOsActionToast(msg);
@@ -459,13 +556,8 @@ export default function App() {
   const [notificationPrefs, setNotificationPrefs] = useState(
     () => loadOSCustomizationProfile().notifications
   );
-  const [persistentTalkActive, setPersistentTalkActive] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('sovereign_persistent_talk_active_v1') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // Never auto-start live microphone capture on boot; activate only when user clicks Voice Chat
+  const [persistentTalkActive, setPersistentTalkActive] = useState<boolean>(false);
   const [persistentTalkStatus, setPersistentTalkStatus] = useState<{
     connected: boolean;
     connecting: boolean;
@@ -607,7 +699,7 @@ export default function App() {
     };
     const checkMarketAlerts = async () => {
       try {
-        const res = await fetch('/api/macro/live-telemetry?mode=fast2s');
+        const res = await apiFetch('/api/macro/live-telemetry?mode=fast2s');
         if (!res.ok || !active) return;
         const data = await res.json();
         const alerts: AutonomousMarketAlert[] = data?.multiKernelTelemetry?.autonomousAlerts || [];
@@ -663,11 +755,15 @@ export default function App() {
             localStorage.setItem('sovereign_os_pinned_transfer_v1', '1');
             if (!next.includes('transfer-hub')) next.push('transfer-hub');
           }
+          if (!localStorage.getItem('sovereign_os_pinned_sos_mesh_v1')) {
+            localStorage.setItem('sovereign_os_pinned_sos_mesh_v1', '1');
+            if (!next.includes('lora-mesh')) next.splice(1, 0, 'lora-mesh');
+          }
           return next;
         }
       }
     } catch {}
-    return ['chat', 'browser', 'file-manager', 'transfer-hub', 'terminal', 'crypto-wallet', 'grant-hunter', 'macro-telemetry', 'projects', 'os-settings'];
+    return ['chat', 'lora-mesh', 'browser', 'file-manager', 'transfer-hub', 'terminal', 'crypto-wallet', 'grant-hunter', 'macro-telemetry', 'projects', 'os-settings'];
   });
   const [windowStates, setWindowStates] = useState<Partial<Record<ModuleType, OSWindowGeometry>>>(() => {
     try {
@@ -725,23 +821,32 @@ export default function App() {
   useEffect(() => {
     const root = document.documentElement;
     let rafId = 0;
+    let lastHeightPx = -1;
+    let lastKbOpen: boolean | null = null;
     const syncViewportMetrics = () => {
       rafId = 0;
       const vv = window.visualViewport;
       const layoutH = window.innerHeight || root.clientHeight || 720;
       const visibleH = vv ? vv.height : layoutH;
       const offsetTop = vv ? vv.offsetTop : 0;
-      root.style.setProperty('--sovereign-app-height', `${Math.max(240, Math.round(visibleH))}px`);
+      const nextHeightPx = Math.max(240, Math.round(visibleH));
+      if (nextHeightPx !== lastHeightPx) {
+        lastHeightPx = nextHeightPx;
+        root.style.setProperty('--sovereign-app-height', `${nextHeightPx}px`);
+      }
       const activeTag = document.activeElement?.tagName;
       const isEditable =
         activeTag === 'TEXTAREA' ||
         activeTag === 'INPUT' ||
         (document.activeElement as HTMLElement | null)?.isContentEditable === true;
       const kbOpen = layoutH - visibleH > 90 || (isEditable && visibleH < 500 && layoutH > visibleH + 40);
-      if (kbOpen) {
-        root.setAttribute('data-keyboard-open', 'true');
-      } else {
-        root.removeAttribute('data-keyboard-open');
+      if (kbOpen !== lastKbOpen) {
+        lastKbOpen = kbOpen;
+        if (kbOpen) {
+          root.setAttribute('data-keyboard-open', 'true');
+        } else {
+          root.removeAttribute('data-keyboard-open');
+        }
       }
       if (offsetTop > 0 && window.scrollY !== 0) {
         window.scrollTo(0, 0);
@@ -778,11 +883,23 @@ export default function App() {
       rafId = 0;
       const nextWidth = Math.max(el.clientWidth, 300);
       const nextHeight = Math.max(el.clientHeight, 220);
-      setDesktopSize((prev) =>
-        prev.width === nextWidth && prev.height === nextHeight
+      const activeTag = document.activeElement?.tagName;
+      const isEditableFocused =
+        activeTag === 'TEXTAREA' ||
+        activeTag === 'INPUT' ||
+        (document.activeElement as HTMLElement | null)?.isContentEditable === true;
+      const vv = window.visualViewport;
+      const kbAnimatingOrOpen =
+        document.documentElement.hasAttribute('data-keyboard-open') ||
+        Boolean(isEditableFocused && vv && Math.abs((window.innerHeight || 0) - vv.height) > 8);
+      setDesktopSize((prev) => {
+        if (kbAnimatingOrOpen && prev.width === nextWidth && prev.width > 0) {
+          return prev;
+        }
+        return prev.width === nextWidth && prev.height === nextHeight
           ? prev
-          : { width: nextWidth, height: nextHeight }
-      );
+          : { width: nextWidth, height: nextHeight };
+      });
     };
     const updateSize = () => {
       if (rafId) cancelAnimationFrame(rafId);
@@ -791,11 +908,9 @@ export default function App() {
     applySize();
     const ro = new ResizeObserver(updateSize);
     ro.observe(el);
-    window.visualViewport?.addEventListener('resize', updateSize);
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
       ro.disconnect();
-      window.visualViewport?.removeEventListener('resize', updateSize);
     };
   }, []);
 
@@ -906,7 +1021,7 @@ export default function App() {
     shellPersistTimerRef.current = window.setTimeout(() => {
       shellPersistTimerRef.current = null;
       flushShellLocalPersistenceRef.current();
-    }, 320);
+    }, 900);
 
     return () => {
       if (shellPersistTimerRef.current !== null) {
@@ -1022,9 +1137,7 @@ export default function App() {
       if (typeof shell.activeAccountEmail === 'string' && shell.activeAccountEmail && shell.activeAccountEmail !== activeAccountEmail) {
         switchAccountEmail(shell.activeAccountEmail);
       }
-      if (typeof shell.persistentTalkActive === 'boolean' && shell.persistentTalkActive !== persistentTalkActive) {
-        setPersistentTalkActive(shell.persistentTalkActive);
-      }
+      // Intentionally do not auto-activate persistentTalkActive on boot hydration (zero boot mic popups)
       if (shell.uiMutation && typeof shell.uiMutation.css === 'string' && shell.uiMutation.css !== uiMutation.css) {
         setUiMutation(shell.uiMutation);
       }
@@ -1222,7 +1335,86 @@ export default function App() {
     });
   };
 
+  const [hasActivatedChat, setHasActivatedChat] = useState<boolean>(() => {
+    try {
+      return (
+        localStorage.getItem('aurelius_infinite_workflow_active') === 'true' ||
+        localStorage.getItem('sovereign_workflow_window_open_v1') === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (isChatDetached || !desktopActive || (openModules.includes('chat') && !windowStates.chat?.minimized)) {
+      setHasActivatedChat(true);
+    }
+  }, [isChatDetached, desktopActive, openModules, windowStates.chat?.minimized]);
+
+  useEffect(() => {
+    const onWorkflowOpen = () => setHasActivatedChat(true);
+    window.addEventListener('sovereign_workflow_open', onWorkflowOpen);
+    return () => window.removeEventListener('sovereign_workflow_open', onWorkflowOpen);
+  }, []);
+
+  // Silently pre-warm Sovereign Chat during idle time once past login so the composer DOM is immediately ready on first tap
+  useEffect(() => {
+    if (hasActivatedChat || !authLoaded) return;
+    if (authPolicy.requireLoginOnBoot && (!authUser || authUser.status !== 'active')) return;
+    let cancelled = false;
+    const warm = () => {
+      if (!cancelled) setHasActivatedChat(true);
+    };
+    const w = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof w.requestIdleCallback === 'function') {
+      const idleId = w.requestIdleCallback(warm, { timeout: 700 });
+      return () => {
+        cancelled = true;
+        w.cancelIdleCallback?.(idleId);
+      };
+    }
+    const timer = window.setTimeout(warm, 380);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [hasActivatedChat, authLoaded, authPolicy.requireLoginOnBoot, authUser]);
+
+  const restoreAndFocusChatComposerSync = useCallback((focusInput = true) => {
+    setHasActivatedChat(true);
+    if (typeof document === 'undefined') return;
+    const winEl = document.getElementById('sovereign-window-chat');
+    if (winEl && winEl.classList.contains('hidden')) {
+      winEl.classList.remove('hidden');
+      winEl.removeAttribute('aria-hidden');
+    }
+    if (!focusInput) return;
+    const focusNow = () => {
+      const inputEl = document.getElementById('sovereign-chat-composer-input') as HTMLTextAreaElement | null;
+      if (inputEl && document.activeElement !== inputEl) {
+        try {
+          inputEl.focus({ preventScroll: true });
+        } catch {
+          inputEl.focus();
+        }
+      }
+    };
+    focusNow();
+    requestAnimationFrame(focusNow);
+  }, []);
+
   const handleSelectOSModule = (mod: ModuleType) => {
+    if (authUser && !canUserAccessModule(authUser, mod)) {
+      showOsToast(`Access restricted: your account does not have permission for "${mod}".`);
+      return;
+    }
+    if (mod === 'chat') {
+      restoreAndFocusChatComposerSync(true);
+    }
     setOpenModules((prev) => (prev.includes(mod) ? prev : [...prev, mod]));
     if (mod === 'chat' && isChatDetached) {
       setChatPipMinimized((cur) => (cur ? false : cur));
@@ -1385,7 +1577,7 @@ export default function App() {
 
   const handleTriggerEngineeringEngine = async () => {
     try {
-      await fetch('/api/sovereign-engineer/execute', {
+      await apiFetch('/api/sovereign-engineer/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task: 'audit-codebase', directive: 'Sovereign Self-Continuity Audit' })
@@ -1420,6 +1612,20 @@ export default function App() {
       if (!currentUser) {
         await verifyFirestoreReachability();
         return;
+      }
+
+      // Bridge verified Google Firebase Auth user into our server RBAC session seamlessly
+      if (currentUser.emailVerified) {
+        const curServerUser = authUserRef.current;
+        if (!curServerUser || (curServerUser.authProvider === 'google' && curServerUser.firebaseUid !== currentUser.uid)) {
+          try {
+            const idToken = await currentUser.getIdToken();
+            const sessionRes = await loginWithGoogleToken(idToken);
+            if (active) applyAuthSessionResponse(sessionRes);
+          } catch (bridgeErr) {
+            console.warn('[Auth] Google Authority sync note:', bridgeErr instanceof Error ? bridgeErr.message : String(bridgeErr));
+          }
+        }
       }
 
       try {
@@ -1660,7 +1866,20 @@ export default function App() {
         spatial: 'spatial-arena',
         arena: 'spatial-arena',
         distillery: 'ai-genesis-distillery',
-        genesis: 'ai-genesis-distillery'
+        genesis: 'ai-genesis-distillery',
+        sos: 'lora-mesh',
+        'sos-mesh': 'lora-mesh',
+        sosmesh: 'lora-mesh',
+        lora: 'lora-mesh',
+        mesh: 'lora-mesh',
+        discord: 'lora-mesh',
+        admin: 'admin-command',
+        'admin-command': 'admin-command',
+        'command-center': 'admin-command',
+        'sovereign-command': 'admin-command',
+        batch: 'batch-processor',
+        'batch-processor': 'batch-processor',
+        queue: 'batch-processor'
       };
       return map[k] || (String(raw).trim() as ModuleType);
     };
@@ -1845,7 +2064,7 @@ export default function App() {
       coordinate: coordinateSubsystem,
       controlOS: (cmd: Record<string, any>) => osCommandRef.current(cmd),
       orchestrate: async (directive: string, targetModule?: ModuleType) => {
-        const res = await fetch('/api/orchestrator/dispatch', {
+        const res = await apiFetch('/api/orchestrator/dispatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1877,7 +2096,7 @@ export default function App() {
       openSplit: (primary: ModuleType, secondary: ModuleType) => handleLaunchSplitPreset(primary, secondary),
       closeSplit: () => setIsSplitMode(false),
       executeOnDevice: async (command: string) => {
-        const res = await fetch('/api/orchestrator/dispatch', {
+        const res = await apiFetch('/api/orchestrator/dispatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'system-exec', command })
@@ -1885,7 +2104,7 @@ export default function App() {
         return res.json();
       },
       triggerHardware: async (type: string, payload?: any) => {
-        const res = await fetch('/api/orchestrator/dispatch', {
+        const res = await apiFetch('/api/orchestrator/dispatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'hardware', options: { type, payload } })
@@ -2041,6 +2260,8 @@ export default function App() {
         );
       case 'transfer-hub':
         return <TransferHubModule onNavigateModule={handleSelectOSModule} />;
+      case 'batch-processor':
+        return <BatchProcessorModule onSelectModule={handleSelectOSModule} onInjectIntoChat={handleInjectIntoChat} />;
       case 'packager':
         return <PackagerModule />;
       case 'drive':
@@ -2097,7 +2318,7 @@ export default function App() {
       case 'macro-telemetry':
         return <MacroTelemetryModule onSelectModule={handleSelectOSModule} onInjectIntoChat={handleInjectIntoChat} />;
       case 'file-manager':
-        return <SovereignFilesModule onSelectModule={handleSelectOSModule} onInjectToChat={handleInjectIntoChat} />;
+        return <SovereignFilesModule authUser={authUser} onSelectModule={handleSelectOSModule} onInjectToChat={handleInjectIntoChat} />;
       case 'terminal':
         return <SovereignTerminalModule onSelectModule={handleSelectOSModule} onInjectToChat={handleInjectIntoChat} />;
       case 'task-manager':
@@ -2117,6 +2338,16 @@ export default function App() {
           <UniversalInstallerModule
             onSelectModule={handleSelectOSModule}
             onOpenUrlInBrowser={handleNavigateUrlInBrowser}
+          />
+        );
+      case 'lora-mesh':
+        return <LoRaMeshChatModule currentUser={authUser} />;
+      case 'admin-command':
+        return (
+          <AdminSovereignCommandCenter
+            currentUser={authUser}
+            onSelectModule={handleSelectOSModule}
+            onRefreshSession={refreshAuthSession}
           />
         );
       default:
@@ -2158,26 +2389,6 @@ export default function App() {
 
   const isChatVisible = activeModule === 'chat' || (isSplitMode && secondaryModule === 'chat');
   const chatRole: 'primary' | 'secondary' = activeModule === 'chat' ? 'primary' : 'secondary';
-  const [hasActivatedChat, setHasActivatedChat] = useState<boolean>(() => {
-    try {
-      return (
-        localStorage.getItem('aurelius_infinite_workflow_active') === 'true' ||
-        localStorage.getItem('sovereign_workflow_window_open_v1') === 'true'
-      );
-    } catch {
-      return false;
-    }
-  });
-  useEffect(() => {
-    if (isChatDetached || !desktopActive || (openModules.includes('chat') && !windowStates.chat?.minimized)) {
-      setHasActivatedChat(true);
-    }
-  }, [isChatDetached, desktopActive, openModules, windowStates.chat?.minimized]);
-  useEffect(() => {
-    const onWorkflowOpen = () => setHasActivatedChat(true);
-    window.addEventListener('sovereign_workflow_open', onWorkflowOpen);
-    return () => window.removeEventListener('sovereign_workflow_open', onWorkflowOpen);
-  }, []);
   const isBrowserDetached = detachedExtraModules.includes('browser');
   const isBrowserMounted = openModules.includes('browser') || activeModule === 'browser' || (isSplitMode && secondaryModule === 'browser') || isBrowserDetached;
   const isBrowserVisible = activeModule === 'browser' || (isSplitMode && secondaryModule === 'browser');
@@ -2260,6 +2471,34 @@ export default function App() {
     stableToggleDetachChatRef.current();
   }, []);
 
+  // Fast-path Auth Gate: before session check finishes or before user logs in,
+  // render ONLY the lightweight boot splash or Login Gate — NEVER mount heavy Desktop/Chat/Voice modules behind it!
+  if (!authLoaded) {
+    return (
+      <div className="h-[var(--sovereign-app-height,100dvh)] w-full bg-zinc-950 text-zinc-200 flex flex-col items-center justify-center gap-3 font-sans">
+        <div className="w-8 h-8 rounded-xl border-2 border-amber-500/30 border-t-amber-400 animate-spin" />
+        <div className="text-xs font-mono text-zinc-400">Initializing Lysander Sovereign OS...</div>
+      </div>
+    );
+  }
+
+  const requiresLoginGate = authPolicy.requireLoginOnBoot && (!authUser || authUser.status !== 'active');
+  if (requiresLoginGate) {
+    return (
+      <div className="h-[var(--sovereign-app-height,100dvh)] w-full bg-zinc-950 text-zinc-100 font-sans">
+        <AuthGateModal
+          mode="gate"
+          currentUser={authUser}
+          adminClaimed={authAdminClaimed}
+          envAdminConfigured={authEnvAdminConfigured}
+          policy={authPolicy}
+          onAuthenticated={applyAuthSessionResponse}
+          onSignedOut={handleLogoutAccount}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="h-[var(--sovereign-app-height,100dvh)] w-full overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-200">
       {/* Sovereign UI HTML Mutation Patch Container */}
@@ -2269,13 +2508,17 @@ export default function App() {
 
       <Header
         user={user}
+        authUser={authUser}
+        onOpenAuth={() => setShowLoginModal(true)}
+        onOpenUserPrivileges={() => setShowUserPrivilegesModal(true)}
+        onLogoutAccount={handleLogoutAccount}
         firebaseOnline={firebaseOnline}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         devMode={devMode}
         onToggleDevMode={handleToggleDevMode}
         onSelectModule={handleSelectOSModule}
         activeModule={activeModule}
-        activeAccountEmail={activeAccountEmail}
+        activeAccountEmail={authUser?.email || activeAccountEmail}
         onSwitchAccountEmail={handleSwitchAccountEmail}
         onToggleMobileNav={() => setMobileNavOpen(true)}
         isTelemetryOpen={isTelemetryOpen}
@@ -2295,6 +2538,7 @@ export default function App() {
           onCloseMobile={() => setMobileNavOpen(false)}
           hiddenOnDesktop={desktopActive && !showDesktopSidebar}
           hideMobileDock={desktopActive}
+          authUser={authUser}
         />
 
         <main
@@ -2316,6 +2560,7 @@ export default function App() {
               onCascadeWindows={handleCascadeWindows}
               onMinimizeAll={handleMinimizeAllWindows}
               onSwitchWorkspaceMode={() => setShellViewMode('workspace')}
+              authUser={authUser}
             />
           )}
 
@@ -2342,7 +2587,11 @@ export default function App() {
                     handleMoveResizeWindow('chat', { zIndex: ++topZRef.current + 16 });
                   }
                 } else {
-                  handleSelectOSModule('chat');
+                  setOpenModules((prev) => (prev.includes('chat') ? prev : [...prev, 'chat']));
+                  focusDesktopWindow('chat');
+                  if (activeModule !== 'chat') {
+                    setActiveModule('chat');
+                  }
                 }
               }}
               onMinimize={() => {
@@ -2356,7 +2605,10 @@ export default function App() {
               onSnapLeft={() => handleSnapWindow('chat', 'left')}
               onSnapRight={() => handleSnapWindow('chat', 'right')}
               onToggleDetach={() => handleToggleDetachChat()}
-              onRestorePip={() => setChatPipMinimized(false)}
+              onRestorePip={() => {
+                setChatPipMinimized(false);
+                restoreAndFocusChatComposerSync(true);
+              }}
               onClose={() => handleCloseOpenModule('chat')}
               onMoveResize={(next) => handleMoveResizeWindow('chat', next)}
             >
@@ -2366,14 +2618,15 @@ export default function App() {
                 pendingInput={pendingChatInput}
                 onClearPendingInput={stableClearPendingChatInput}
                 userId={user?.uid}
+                authUser={authUser}
                 isDetached={isChatDetached}
                 onToggleDetach={stableToggleDetachChat}
               />
             </SovereignOSWindowFrame>
           )}
 
-          {/* Persistent Sovereign Google Chrome Browser Window (Mounts when un-minimized or workspace active) */}
-          {isBrowserMounted && (isBrowserDetached || !desktopActive || !windowStates.browser?.minimized) && (
+          {/* Persistent Sovereign Google Chrome Browser Window (ZERO-Unmount Keep-Alive once opened) */}
+          {isBrowserMounted && (
             <SovereignOSWindowFrame
               moduleId="browser"
               mode={isBrowserDetached ? 'pip' : desktopActive ? 'floating' : 'tiled'}
@@ -2645,23 +2898,32 @@ export default function App() {
 
       {desktopActive && osBarNode}
 
-      <CommandPalette
-        isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-        onSelectModule={handleSelectOSModule}
-        artifacts={artifacts}
-        onNavigateUrlInBrowser={handleNavigateUrlInBrowser}
-        onTriggerEngineeringEngine={handleTriggerEngineeringEngine}
-        userId={user?.uid}
-      />
+      {isCommandPaletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            isOpen={isCommandPaletteOpen}
+            onClose={() => setIsCommandPaletteOpen(false)}
+            onSelectModule={handleSelectOSModule}
+            artifacts={artifacts}
+            onNavigateUrlInBrowser={handleNavigateUrlInBrowser}
+            onTriggerEngineeringEngine={handleTriggerEngineeringEngine}
+            userId={user?.uid}
+            authUser={authUser}
+          />
+        </Suspense>
+      )}
 
       {/* Real-Time System Health & Latency Telemetry Drawer (Triggered from Header) */}
-      <SystemHealthDashboard
-        isOpen={isTelemetryOpen}
-        onToggleOpen={() => setIsTelemetryOpen(prev => !prev)}
-        onSelectModule={handleSelectOSModule}
-        activeModule={activeModule}
-      />
+      {isTelemetryOpen && (
+        <Suspense fallback={null}>
+          <SystemHealthDashboard
+            isOpen={isTelemetryOpen}
+            onToggleOpen={() => setIsTelemetryOpen(prev => !prev)}
+            onSelectModule={handleSelectOSModule}
+            activeModule={activeModule}
+          />
+        </Suspense>
+      )}
 
       {showTouchControllerOverlay && (
         <Suspense fallback={null}>
@@ -2671,19 +2933,51 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* Global Persistent Hands-Free Peer Talk Dock (Survives All OS Window Switches) */}
-      <PersistentTalkDock
-        isActive={persistentTalkActive}
-        onDeactivate={() => setPersistentTalkActive(false)}
-        activeModule={activeModule}
-        openModules={openModules}
-        onSelectModule={handleSelectOSModule}
-        onNavigateBrowserUrl={handleNavigateUrlInBrowser}
-        onSaveToVault={(title, content, model, metadataJson) =>
-          handleSaveToVault('transcription', title, content, model, undefined, metadataJson)
-        }
-        onStatusChange={setPersistentTalkStatus}
-      />
+      {/* Global Persistent Voice & Read-Aloud Engine (Always mounted when authenticated so Read Out Loud works 24/7; live mic/WS activates only when persistentTalkActive=true) */}
+      {authUser &&
+        authUser.status === 'active' &&
+        (authUser.role === 'admin' || authUser.privileges.canUseVoiceChat) && (
+          <PersistentTalkDock
+            isActive={persistentTalkActive}
+            onDeactivate={() => setPersistentTalkActive(false)}
+            activeModule={activeModule}
+            openModules={openModules}
+            onSelectModule={handleSelectOSModule}
+            onNavigateBrowserUrl={handleNavigateUrlInBrowser}
+            onSaveToVault={(title, content, model, metadataJson) =>
+              handleSaveToVault('transcription', title, content, model, undefined, metadataJson)
+            }
+            onStatusChange={setPersistentTalkStatus}
+          />
+        )}
+
+      {/* Sovereign OS Account Switcher Modal */}
+      {showLoginModal && (
+        <AuthGateModal
+          mode="modal"
+          currentUser={authUser}
+          adminClaimed={authAdminClaimed}
+          envAdminConfigured={authEnvAdminConfigured}
+          policy={authPolicy}
+          onAuthenticated={applyAuthSessionResponse}
+          onSignedOut={handleLogoutAccount}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
+
+      {/* Admin Custom User Privileges & Login Policy Console */}
+      {showUserPrivilegesModal &&
+        authUser &&
+        (authUser.role === 'admin' || authUser.privileges.canManageUsers) && (
+          <Suspense fallback={null}>
+            <UserPrivilegesManagerModal
+              isOpen={showUserPrivilegesModal}
+              currentUser={authUser}
+              onClose={() => setShowUserPrivilegesModal(false)}
+              onPolicyOrSelfUpdated={refreshAuthSession}
+            />
+          </Suspense>
+        )}
 
       <OfflineIndicator />
     </div>

@@ -37,6 +37,7 @@
 import { healReasoningStream } from './janusUtils';
 import { dev_null } from './devNullLogger';
 import { audioSwarm } from './AudioSwarm';
+import { buildAuthHeaders } from './authClient';
 
 export type JanusFace = 'FACE_1_SOVEREIGN_ANCHOR' | 'FACE_2_SPECULATIVE_CONTINUUM' | 'DUAL_SYNCHRONIZED';
 
@@ -212,7 +213,8 @@ class JanusGateService {
         try {
           const res = await fetch('/api/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
               prompt,
               agentId,

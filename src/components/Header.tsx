@@ -34,11 +34,13 @@ import {
   X,
   Scale,
   Copy,
-  Download
+  Download,
+  Sliders
 } from 'lucide-react';
 import { auth, googleProvider, signInWithPopup, signOut, measureFirestoreLatency, type User } from '../firebase';
 import { SystemManualModal } from './SystemManualModal';
 import { PWAInstallButton } from './PWAInstallButton';
+import { HardwarePermissionsPanel } from './HardwarePermissionsPanel';
 import { getModuleMeta } from './Navigation';
 import {
   JHAMMERZ_MIT_AND_HFID_HEADER,
@@ -48,6 +50,7 @@ import {
   JHAMMERZ_COMBINED_FULL_LICENSE
 } from '../constants/jhammerzLicense';
 import type { ModuleType } from '../types';
+import type { AuthUserPublic } from '../types/auth';
 
 export interface ConnectedAccount {
   email: string;
@@ -83,7 +86,10 @@ export const FEDERATED_ACCOUNTS: ConnectedAccount[] = [
 
 interface HeaderProps {
   user: User | null;
+  authUser?: AuthUserPublic | null;
   onOpenAuth?: () => void;
+  onOpenUserPrivileges?: () => void;
+  onLogoutAccount?: () => void;
   firebaseOnline: boolean;
   onOpenCommandPalette?: () => void;
   devMode?: boolean;
@@ -101,6 +107,10 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   user,
+  authUser = null,
+  onOpenAuth,
+  onOpenUserPrivileges,
+  onLogoutAccount,
   firebaseOnline,
   onOpenCommandPalette,
   devMode = true,
@@ -122,6 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [activeLicenseTab, setActiveLicenseTab] = useState<'all' | 'mit' | 'twenty47' | 'eula' | 'hfid'>('all');
   const [licenseCopied, setLicenseCopied] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showHardwarePopover, setShowHardwarePopover] = useState(false);
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
   const [activePort, setActivePort] = useState<number>(3000);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'pending' | 'conflict'>('synced');
@@ -130,6 +141,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [showSyncPopover, setShowSyncPopover] = useState<boolean>(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const syncPopoverRef = useRef<HTMLDivElement>(null);
+  const hardwarePopoverRef = useRef<HTMLDivElement>(null);
 
   const activeMeta = getModuleMeta(activeModule);
   const ActiveModuleIcon = activeMeta.icon;
@@ -208,11 +220,15 @@ export const Header: React.FC<HeaderProps> = ({
       if (syncPopoverRef.current && !syncPopoverRef.current.contains(e.target as Node)) {
         setShowSyncPopover(false);
       }
+      if (hardwarePopoverRef.current && !hardwarePopoverRef.current.contains(e.target as Node)) {
+        setShowHardwarePopover(false);
+      }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowAccountMenu(false);
         setShowSyncPopover(false);
+        setShowHardwarePopover(false);
         setShowAccountsModal(false);
       }
     };
@@ -225,6 +241,11 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const handleGoogleSignIn = async () => {
+    if (onOpenAuth) {
+      setShowAccountMenu(false);
+      onOpenAuth();
+      return;
+    }
     try {
       setAuthLoading(true);
       await signInWithPopup(auth, googleProvider);
@@ -238,14 +259,19 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
       setShowAccountMenu(false);
+      if (onLogoutAccount) {
+        onLogoutAccount();
+      } else {
+        await signOut(auth);
+      }
     } catch (err) {
       console.error('Sign out error:', err);
     }
   };
 
-  const accountShortName = user?.displayName || activeAccountEmail.split('@')[0];
+  const canManageUsers = Boolean(authUser && (authUser.role === 'admin' || authUser.privileges?.canManageUsers));
+  const accountShortName = authUser?.displayName || authUser?.username || user?.displayName || activeAccountEmail.split('@')[0];
 
   return (
     <header
@@ -416,6 +442,46 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
           </div>
+
+          {/* Device Hardware & Privileges Quick Sliders (Zero Boot Popups) */}
+          <div className="relative" ref={hardwarePopoverRef}>
+            <button
+              type="button"
+              onClick={() => setShowHardwarePopover((prev) => !prev)}
+              className={`flex items-center gap-1 border transition-colors cursor-pointer whitespace-nowrap ${
+                compactOsTopBar ? 'rounded-md px-1.5 py-0.5 text-[10px]' : 'rounded-lg px-2 sm:px-2.5 py-1.5 text-xs gap-1.5'
+              } ${
+                showHardwarePopover
+                  ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
+                  : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 hover:border-emerald-500/40 text-zinc-300 hover:text-white'
+              }`}
+              title="Toggle Microphone, Camera, Location & Notifications Sliders"
+              aria-label="Device Hardware Privileges"
+            >
+              <Sliders className={`${compactOsTopBar ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-emerald-400 shrink-0`} />
+              <span className="hidden sm:inline font-medium">Devices</span>
+            </button>
+
+            {showHardwarePopover && (
+              <HardwarePermissionsPanel variant="popover" onClose={() => setShowHardwarePopover(false)} />
+            )}
+          </div>
+
+          {/* Admin User & Custom Privileges Manager Shortcut */}
+          {canManageUsers && onOpenUserPrivileges && (
+            <button
+              type="button"
+              onClick={onOpenUserPrivileges}
+              className={`flex items-center gap-1 border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 transition-colors cursor-pointer whitespace-nowrap ${
+                compactOsTopBar ? 'rounded-md px-1.5 py-0.5 text-[10px]' : 'rounded-lg px-2 sm:px-2.5 py-1.5 text-xs gap-1.5'
+              }`}
+              title="Manage User Logins & Custom Privileges"
+              aria-label="Manage User Privileges"
+            >
+              <Shield className={`${compactOsTopBar ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-amber-400 shrink-0`} />
+              <span className="hidden md:inline font-semibold">Privileges</span>
+            </button>
+          )}
 
           {/* Quick Command (Ctrl+K) */}
           {onOpenCommandPalette && (
@@ -699,19 +765,37 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 )}
 
+                {/* Admin User Access & Privileges */}
+                {canManageUsers && onOpenUserPrivileges && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAccountMenu(false);
+                      onOpenUserPrivileges();
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs text-amber-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Users &amp; Custom Privileges</span>
+                    </span>
+                    <span className="font-mono text-[10px] text-amber-400 uppercase">{authUser?.role}</span>
+                  </button>
+                )}
+
                 {/* PWA Install */}
                 <PWAInstallButton variant="menu" onAction={() => setShowAccountMenu(false)} />
 
                 {/* Sign In / Sign Out */}
                 <div className="pt-1 border-t border-zinc-800/80">
-                  {user ? (
+                  {authUser || user ? (
                     <button
                       type="button"
                       onClick={handleSignOut}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-rose-300 hover:bg-rose-950/50 transition-colors cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
-                      <span>Sign Out</span>
+                      <span>Sign Out ({authUser?.username || user?.email || 'Session'})</span>
                     </button>
                   ) : (
                     <button
@@ -721,7 +805,7 @@ export const Header: React.FC<HeaderProps> = ({
                       className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <LogIn className="w-3.5 h-3.5" />
-                      <span>{authLoading ? 'Connecting...' : 'Sign In with Google'}</span>
+                      <span>{authLoading ? 'Connecting...' : 'Sign In / Create Account'}</span>
                     </button>
                   )}
                 </div>

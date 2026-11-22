@@ -118,6 +118,12 @@ export class SovereignQuantumKernel {
     } catch (_) {}
   }
 
+  private isBoilerplateContaminated(text: string): boolean {
+    return /\b(?:as an ai(?: language model| assistant)?|an ai doesn['’]?t have the ability|only text on a screen|reach(?:ing)? out to a trusted friend|housing support service|social worker|i hear how frustrating it is|i['’]?m just an ai|i am just a text-based)\b/i.test(
+      text || ''
+    );
+  }
+
   public recordEvolutiveAxiom(
     category: string,
     principle: string,
@@ -125,16 +131,31 @@ export class SovereignQuantumKernel {
     originTurn: string = ''
   ): { id: string; principle: string; evolutionCount: number } {
     const cleanPrinciple = principle.trim();
+    if (!cleanPrinciple || this.isBoilerplateContaminated(cleanPrinciple)) {
+      return { id: 'ax-filtered-purity', principle: cleanPrinciple, evolutionCount: 0 };
+    }
+    const normalizedKey = cleanPrinciple.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
     if (this.db) {
       try {
-        const existing = this.db.prepare('SELECT id, evolution_count, weight FROM evolutive_axioms WHERE lower(principle) = lower(?) OR lower(principle) LIKE ?').get(cleanPrinciple, `%${cleanPrinciple.slice(0, 30)}%`) as any;
+        const candidates = this.db
+          .prepare('SELECT id, principle, evolution_count, weight FROM evolutive_axioms WHERE lower(principle) = lower(?) LIMIT 5')
+          .all(cleanPrinciple) as any[];
+        let existing = candidates[0];
+        if (!existing && normalizedKey.length >= 16) {
+          const recentRows = this.db
+            .prepare('SELECT id, principle, evolution_count, weight FROM evolutive_axioms ORDER BY updated_at DESC LIMIT 120')
+            .all() as any[];
+          existing = recentRows.find(
+            (r) => String(r.principle || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === normalizedKey
+          );
+        }
         if (existing) {
           const newCount = (existing.evolution_count || 1) + 1;
-          const newWeight = (existing.weight || 1.0) + 0.2;
+          const newWeight = Number(((existing.weight || 1.0) + 0.25).toFixed(2));
           this.db.prepare('UPDATE evolutive_axioms SET evolution_count = ?, weight = ?, context = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-            .run(newCount, newWeight, context, existing.id);
-          return { id: existing.id, principle: cleanPrinciple, evolutionCount: newCount };
+            .run(newCount, newWeight, context || originTurn, existing.id);
+          return { id: existing.id, principle: existing.principle || cleanPrinciple, evolutionCount: newCount };
         }
 
         const id = `ax-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -144,10 +165,12 @@ export class SovereignQuantumKernel {
       } catch (_) {}
     }
 
-    const existingIdx = this.inMemoryEvolutiveAxioms.findIndex(a => a.principle.toLowerCase() === cleanPrinciple.toLowerCase());
+    const existingIdx = this.inMemoryEvolutiveAxioms.findIndex(
+      a => String(a.principle || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === normalizedKey
+    );
     if (existingIdx !== -1) {
       this.inMemoryEvolutiveAxioms[existingIdx].evolution_count = (this.inMemoryEvolutiveAxioms[existingIdx].evolution_count || 1) + 1;
-      this.inMemoryEvolutiveAxioms[existingIdx].weight = (this.inMemoryEvolutiveAxioms[existingIdx].weight || 1.0) + 0.2;
+      this.inMemoryEvolutiveAxioms[existingIdx].weight = Number(((this.inMemoryEvolutiveAxioms[existingIdx].weight || 1.0) + 0.25).toFixed(2));
       return { id: this.inMemoryEvolutiveAxioms[existingIdx].id, principle: cleanPrinciple, evolutionCount: this.inMemoryEvolutiveAxioms[existingIdx].evolution_count };
     }
 
@@ -160,46 +183,93 @@ export class SovereignQuantumKernel {
   public getEvolutiveAxioms(limit: number = 25): Array<any> {
     if (this.db) {
       try {
-        const rows = this.db.prepare('SELECT * FROM evolutive_axioms ORDER BY weight DESC, updated_at DESC LIMIT ?').all(limit);
-        if (rows && rows.length > 0) return rows;
+        const rows = this.db.prepare('SELECT * FROM evolutive_axioms ORDER BY weight DESC, updated_at DESC LIMIT ?').all(limit) as any[];
+        if (rows && rows.length > 0) {
+          return rows.filter(r => !this.isBoilerplateContaminated(String(r.principle || '')));
+        }
       } catch (_) {}
     }
-    return this.inMemoryEvolutiveAxioms.slice(0, limit);
+    return this.inMemoryEvolutiveAxioms
+      .filter(r => !this.isBoilerplateContaminated(String(r.principle || '')))
+      .slice(0, limit);
   }
 
   public getActiveEvolutiveContext(query: string = '', limit: number = 8): string {
     try {
-      const axioms = this.getEvolutiveAxioms(limit);
-      if (!axioms || axioms.length === 0) return '';
-      return axioms.map((a, i) => `${i + 1}. [${a.category}] ${a.principle} (Reinforced x${a.evolution_count || 1})`).join('\n');
+      const pool = this.getEvolutiveAxioms(Math.max(limit * 4, 60));
+      if (!pool || pool.length === 0) return '';
+
+      const keywords = String(query || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s_-]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 3 && !['the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'what', 'how', 'can', 'you', 'are'].includes(w));
+
+      let selected: any[] = [];
+      if (keywords.length > 0) {
+        const scored = pool.map(ax => {
+          const hay = `${ax.category || ''} ${ax.principle || ''} ${ax.context || ''}`.toLowerCase();
+          const hits = keywords.reduce((acc, kw) => acc + (hay.includes(kw) ? 1 : 0), 0);
+          return { ax, hits, score: hits * 3 + Number(ax.weight || 1.0) };
+        });
+        const matched = scored.filter(s => s.hits > 0).sort((a, b) => b.score - a.score).map(s => s.ax);
+        const seen = new Set(matched.map(m => m.id));
+        selected = [...matched, ...pool.filter(p => !seen.has(p.id))].slice(0, limit);
+      } else {
+        selected = pool.slice(0, limit);
+      }
+
+      return selected
+        .map((a, i) => `${i + 1}. [${a.category}] ${a.principle} (Reinforced x${a.evolution_count || 1})`)
+        .join('\n');
     } catch (_) {
       return '';
     }
   }
 
   public recordAgenticTurn(role: string, content: string, model?: string, id?: string): void {
+    const cleanContent = String(content || '').trim();
+    if (!cleanContent) return;
+    if (role !== 'user' && this.isBoilerplateContaminated(cleanContent)) return;
+
     const turnId = id || `mem-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const createdAt = new Date().toISOString();
-    const modelName = model || 'Aurelius-Omega-Universal-Supermodel';
+    const modelName = model || 'Lyrailius-Omega-Ultimate-Sovereign-MoE';
 
     if (this.db) {
       try {
         const stmt = this.db.prepare('INSERT OR REPLACE INTO agentic_memory (id, role, content, model) VALUES (?, ?, ?, ?)');
-        stmt.run(turnId, role, content, modelName);
+        stmt.run(turnId, role, cleanContent, modelName);
       } catch (_) {}
     }
 
-    this.inMemoryAgenticMemory.push({ id: turnId, role, content, model: modelName, created_at: createdAt });
+    this.inMemoryAgenticMemory.push({ id: turnId, role, content: cleanContent, model: modelName, created_at: createdAt });
+    if (this.inMemoryAgenticMemory.length > 500) {
+      this.inMemoryAgenticMemory = this.inMemoryAgenticMemory.slice(-500);
+    }
   }
 
   public getAgenticMemories(limit: number = 50): Array<{ id: string; role: string; content: string; model: string; created_at: string }> {
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 50));
     if (this.db) {
       try {
-        const rows = this.db.prepare('SELECT * FROM agentic_memory ORDER BY created_at ASC LIMIT ?').all(limit) as any[];
-        if (rows && rows.length > 0) return rows;
+        const rows = this.db.prepare(`
+          SELECT id, role, content, model, created_at FROM (
+            SELECT rowid AS _rowid, id, role, content, model, created_at
+            FROM agentic_memory
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT ?
+          ) sub
+          ORDER BY created_at ASC, _rowid ASC
+        `).all(safeLimit) as any[];
+        if (rows && rows.length > 0) {
+          return rows.filter(r => r.role === 'user' || !this.isBoilerplateContaminated(String(r.content || '')));
+        }
       } catch (_) {}
     }
-    return this.inMemoryAgenticMemory.slice(-limit);
+    return this.inMemoryAgenticMemory
+      .filter(r => r.role === 'user' || !this.isBoilerplateContaminated(String(r.content || '')))
+      .slice(-safeLimit);
   }
 
   public searchMemories(query: string, limit: number = 20): Array<{ id: string; role: string; content: string; model: string; created_at: string }> {

@@ -33,6 +33,7 @@ import type {
 } from '../types';
 import { querySovereignCompendium, generateCompendiumHash } from './sovereignCompendium';
 import { orchestratorRuntime } from './OrchestratorRuntime';
+import { apiFetch } from './authClient';
 
 export interface ForgedToolRecord {
   id: string;
@@ -753,6 +754,21 @@ export const SOVEREIGN_FUNCTION_DEFINITIONS: SovereignFunction[] = [
       { name: 'command', type: 'string', required: false, description: 'Shell command when operation="exec".' },
       { name: 'cwd', type: 'string', required: false, description: 'Working directory when operation="exec".' }
     ]
+  },
+  {
+    id: 'manageBatchProcessor',
+    name: 'Autonomous Batch Processor',
+    category: 'sovereign',
+    description: 'Queues, monitors, pauses, resumes, retries, or rolls back background multi-file transformation and data processing batch jobs.',
+    parameters: [
+      { name: 'action', type: 'string', required: true, defaultValue: 'status', description: 'status | enqueue | inspect_job | pause_job | resume_job | cancel_job | retry_failed | rollback_job | pause_runner | resume_runner | set_concurrency | preview_files' },
+      { name: 'jobId', type: 'string', required: false, description: 'Target batch job ID for job-level actions.' },
+      { name: 'name', type: 'string', required: false, description: 'Batch job title when action="enqueue".' },
+      { name: 'operation', type: 'string', required: false, defaultValue: 'file_format_normalize', description: 'file_regex_replace | file_format_normalize | file_convert_projection | file_hash_manifest | file_ai_transform | data_json_csv_etl | data_js_transform | data_ai_process' },
+      { name: 'dirPath', type: 'string', required: false, description: 'Optional directory path to expand into file tasks.' },
+      { name: 'tasksJson', type: 'string', required: false, description: 'JSON array of task items when action="enqueue".' },
+      { name: 'configJson', type: 'string', required: false, description: 'JSON object of operation parameters.' }
+    ]
   }
 ];
 
@@ -774,7 +790,7 @@ export async function executeSovereignFunction(
     const limit = args.limit || 6;
     let memories: any[] = [];
     try {
-      const res = await fetch(`/api/agentic-memory?q=${q}&limit=${limit}`);
+      const res = await apiFetch(`/api/agentic-memory?q=${q}&limit=${limit}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.memories)) {
         memories = data.memories;
@@ -822,9 +838,9 @@ export async function executeSovereignFunction(
     const filename = String(args.filename || '');
     try {
       const [healRes, fixRes] = await Promise.all([
-        fetch('/api/agents/self-heal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codeOrError: errorInput }) }).then(r => r.json()).catch(() => null),
+        apiFetch('/api/agents/self-heal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codeOrError: errorInput }) }).then(r => r.json()).catch(() => null),
         errorInput
-          ? fetch('/api/agents/fix-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: errorInput, filename }) }).then(r => r.json()).catch(() => null)
+          ? apiFetch('/api/agents/fix-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: errorInput, filename }) }).then(r => r.json()).catch(() => null)
           : Promise.resolve(null)
       ]);
       const elapsedMs = Math.round(performance.now() - t0);
@@ -865,7 +881,7 @@ export async function executeSovereignFunction(
     let serverTool: any = null;
 
     try {
-      const serverRes = await fetch('/api/agents/tools/forge', {
+      const serverRes = await apiFetch('/api/agents/tools/forge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description, code, authorAgent: agentId, category: args.category || 'AUTONOMOUS_SYNTHESIZED' })
@@ -993,7 +1009,7 @@ export async function executeSovereignFunction(
     }
 
     try {
-      const serverRes = await fetch('/api/agents/tools/execute', {
+      const serverRes = await apiFetch('/api/agents/tools/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ toolId, args: inputArgs, code: requiresServerSandbox && tool ? tool.code : undefined })
@@ -1066,7 +1082,7 @@ export async function executeSovereignFunction(
 
   // Dispatch server-side functions to `/api/functions/execute`
   try {
-    const res = await fetch('/api/functions/execute', {
+    const res = await apiFetch('/api/functions/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1411,7 +1427,7 @@ export async function detectAndExecuteConversationalTool(
 
   if (subcommand === 'forge' && payload) {
     try {
-      const smartRes = await fetch('/api/agents/tools/forge-smart', {
+      const smartRes = await apiFetch('/api/agents/tools/forge-smart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: payload, authorAgent: agentId })
@@ -2080,22 +2096,22 @@ export async function executeAutonomousModelDirectives(
         const toolsList = getRegisteredTools();
         results.push({ tag: 'LIST_TOOLS', action: 'List Forged Tools', success: true, summary: `${toolsList.length} forged tool(s) available`, output: toolsList });
       } else if (tag === 'SCAN_GAMES') {
-        const res = await fetch('/api/games/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const res = await apiFetch('/api/games/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
         const data = await res.json();
         results.push({ tag: 'GAME_SCANNER', action: 'Auto-Scan Existing Games', success: Boolean(data.success), summary: `Detected ${data.count || 0} game(s)`, output: data });
       } else if (tag === 'MOD_GAME') {
         const data = payload.startsWith('{') ? JSON.parse(payload) : { modPrompt: payload };
-        const res = await fetch('/api/games/mod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const res = await apiFetch('/api/games/mod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         const out = await res.json();
         results.push({ tag: 'GAME_MOD', action: `Autonomous Game Mod`, success: Boolean(out.success), summary: out.summary || 'Game mod applied', output: out });
       } else if (tag === 'FORGE_ENGINE_TOOL') {
         const data = payload.startsWith('{') ? JSON.parse(payload) : { toolName: 'Procedural Tool', description: payload };
-        const res = await fetch('/api/spatial/forge-tool', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const res = await apiFetch('/api/spatial/forge-tool', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         const out = await res.json();
         results.push({ tag: 'ENGINE_FORGE_TOOL', action: `Forge 3D Engine Tool`, success: Boolean(out.success), summary: `Forged ${out.tool?.name || 'tool'}`, output: out });
       } else if (tag === 'EVOLVE_SKILL') {
         const data = payload.startsWith('{') ? JSON.parse(payload) : { customIntent: payload };
-        const res = await fetch('/api/spatial/evolve-skill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const res = await apiFetch('/api/spatial/evolve-skill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         const out = await res.json();
         if (typeof window !== 'undefined' && out.command) {
           window.dispatchEvent(new CustomEvent('aurelius_spatial_command', { detail: { module: 'spatial-arena', command: out.command } }));

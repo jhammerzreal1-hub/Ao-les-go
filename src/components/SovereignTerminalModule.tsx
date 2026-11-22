@@ -12,6 +12,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, Trash2, Copy, Check, RefreshCw, Play, Folder, Link2, Server } from 'lucide-react';
 import type { ModuleType } from '../types';
+import { apiFetch } from '../utils/authClient';
 
 interface ShellEntry {
   id: string;
@@ -58,7 +59,7 @@ export const SovereignTerminalModule: React.FC<SovereignTerminalModuleProps> = (
   };
 
   useEffect(() => {
-    fetch('/api/os/runtime-info')
+    apiFetch('/api/os/runtime-info')
       .then((r) => r.json())
       .then((d) => {
         if (d.cwd) setCwd(d.cwd);
@@ -104,7 +105,8 @@ export const SovereignTerminalModule: React.FC<SovereignTerminalModuleProps> = (
         headers['X-Lysander-Token'] = cfg.token;
       }
 
-      const res = await fetch(endpoint, {
+      const fetcher = shellTarget === 'physical-bridge' ? fetch : apiFetch;
+      const res = await fetcher(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify({ command: cmd, cwd: cwd || undefined })

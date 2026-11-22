@@ -19,6 +19,7 @@ import {
   Sparkles,
   Play
 } from 'lucide-react';
+import { apiFetch } from '../utils/authClient';
 
 interface UniversalCompatCapability {
   id: string;
@@ -92,7 +93,7 @@ export const UniversalCompatMatrixPanel: React.FC = () => {
   const runProbe = async () => {
     setLoading(true);
     try {
-      const r = await fetch('/api/os/compatibility/probe');
+      const r = await apiFetch('/api/os/compatibility/probe');
       const data = await r.json();
       if (data?.success) {
         setProbe(data);
@@ -109,7 +110,7 @@ export const UniversalCompatMatrixPanel: React.FC = () => {
     setRunningId(cap.id);
     setExecOutput(`$ ${cap.installOrRunCommand}\nRunning live on host kernel...`);
     try {
-      const r = await fetch('/api/os/shell/exec', {
+      const r = await apiFetch('/api/os/shell/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: cap.installOrRunCommand })

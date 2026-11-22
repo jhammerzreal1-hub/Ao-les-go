@@ -102,19 +102,15 @@ const WHEEL_CONFIG_PATH = path.join(DATA_DIR, '.proxy_wheel_config.json');
 const CAPABLE_GEMINI_BASELINE: Array<{ model: string; tier: WheelTier; supportsTools: boolean; supportsThinking: boolean }> = [
   { model: 'gemini-4-hydrogen', tier: 'flagship', supportsTools: true, supportsThinking: true },
   { model: 'gemini-3.1-flash-lite', tier: 'flagship', supportsTools: true, supportsThinking: true },
-  { model: 'gemini-3-flash-preview', tier: 'flagship', supportsTools: true, supportsThinking: true },
   { model: 'gemini-4-neon', tier: 'capable', supportsTools: true, supportsThinking: true },
   { model: 'gemini-4-argon', tier: 'capable', supportsTools: true, supportsThinking: true },
   { model: 'gemini-4-carbon', tier: 'capable', supportsTools: true, supportsThinking: true },
-  { model: 'gemini-flash-latest', tier: 'capable', supportsTools: true, supportsThinking: false },
-  { model: 'gemini-flash-lite-latest', tier: 'fast', supportsTools: true, supportsThinking: false },
-  { model: 'gemini-3.1-flash-lite-preview', tier: 'fast', supportsTools: true, supportsThinking: true },
   { model: 'gemma-4-31b-it', tier: 'fast', supportsTools: false, supportsThinking: false },
   { model: 'gemma-4-26b-a4b-it', tier: 'fast', supportsTools: false, supportsThinking: false }
 ];
 
 const OPENROUTER_MODELS: Array<{ model: string; tier: WheelTier }> = [
-  { model: 'google/gemini-2.5-flash', tier: 'flagship' },
+  { model: 'google/gemini-3-flash-preview', tier: 'flagship' },
   { model: 'deepseek/deepseek-r1', tier: 'flagship' },
   { model: 'qwen/qwen-2.5-coder-32b-instruct', tier: 'capable' },
   { model: 'meta-llama/llama-3.3-70b-instruct:free', tier: 'fast' }
@@ -946,13 +942,18 @@ class ProxyLoopWheelManager {
         const previouslyFailed = tierSpokes.filter((s) => s.successes === 0 && s.failures > 0);
         const orderedTier = [...proven, ...unprobedVerified, ...unprobedFallback, ...previouslyFailed];
 
-        // Rotate across distinct keySlots when multiple keys exist without scrambling model hierarchy
+        // Rotate across distinct keySlots when multiple keys exist without ever demoting proven-healthy slots behind unprobed/failing slots
         const distinctSlots = Array.from(new Set(orderedTier.map((s) => s.keySlot)));
         if (distinctSlots.length > 1) {
           const rotatedSlots = rotateArray(distinctSlots, cursor);
           const slotRank = new Map(rotatedSlots.map((slot, i) => [slot, i]));
           orderedTier.sort((a, b) => {
             if (a.model === b.model) {
+              const aProven = a.successes > 0 ? 1 : 0;
+              const bProven = b.successes > 0 ? 1 : 0;
+              if (aProven !== bProven) return bProven - aProven;
+              if (a.keySlot === 'slot-0' && b.successes === 0 && a.failures === 0) return -1;
+              if (b.keySlot === 'slot-0' && a.successes === 0 && b.failures === 0) return 1;
               return (slotRank.get(a.keySlot) ?? 0) - (slotRank.get(b.keySlot) ?? 0);
             }
             return 0;
@@ -1037,8 +1038,17 @@ class ProxyLoopWheelManager {
         cooldownMs = lower.includes('perday') ? 600_000 : 45_000;
       }
       reason = '429_rate_limit';
-    } else if (status === 401 || status === 403 || lower.includes('api key not valid') || lower.includes('invalid api key')) {
-      cooldownMs = 300_000;
+    } else if (
+      status === 401 ||
+      status === 403 ||
+      lower.includes('api key not valid') ||
+      lower.includes('invalid api key') ||
+      lower.includes('permission denied') ||
+      lower.includes('permission_denied') ||
+      lower.includes('unauthenticated') ||
+      lower.includes('api_key_invalid')
+    ) {
+      cooldownMs = 1_800_000;
       reason = 'auth_rejected';
     } else if (
       status === 404 ||
@@ -1054,15 +1064,38 @@ class ProxyLoopWheelManager {
       reason = 'timeout';
     }
 
+    const cooldownUntilTs = Date.now() + cooldownMs;
     this.spokeStats.set(spokeId, {
       avgMs: prev.avgMs,
       successes: prev.successes,
       failures: prev.failures + 1,
       consecutiveFailures: nextConsecutive,
-      cooldownUntil: Date.now() + cooldownMs,
+      cooldownUntil: cooldownUntilTs,
       cooldownReason: reason,
       lastError: cleanMsg
     });
+
+    // If an entire API key slot failed authentication (401/403), cool down sibling models on that exact same provider:keySlot
+    if (reason === 'auth_rejected') {
+      const parts = spokeId.split(':');
+      if (parts.length >= 2) {
+        const slotPrefix = `${parts[0]}:${parts[1]}:`;
+        for (const siblingId of this.spokeCredentials.keys()) {
+          if (siblingId !== spokeId && siblingId.startsWith(slotPrefix)) {
+            const sibPrev = this.spokeStats.get(siblingId);
+            this.spokeStats.set(siblingId, {
+              avgMs: sibPrev?.avgMs || 0,
+              successes: sibPrev?.successes || 0,
+              failures: (sibPrev?.failures || 0) + 1,
+              consecutiveFailures: (sibPrev?.consecutiveFailures || 0) + 1,
+              cooldownUntil: cooldownUntilTs,
+              cooldownReason: 'auth_rejected',
+              lastError: cleanMsg
+            });
+          }
+        }
+      }
+    }
 
     const cred = this.spokeCredentials.get(spokeId);
     this.pushHistory({

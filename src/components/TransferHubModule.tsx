@@ -28,6 +28,7 @@ import {
   loadOSCustomizationProfile,
   importOSCustomizationProfile
 } from '../utils/osCustomizationStore';
+import { apiFetch } from '../utils/authClient';
 
 interface TransferHubModuleProps {
   onNavigateModule?: (moduleId: ModuleType) => void;
@@ -249,13 +250,13 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
     setLoading(true);
     try {
       const [catRes, modRes, bkpRes, histRes, dlRes, volRes, grantsRes] = await Promise.allSettled([
-        fetch('/api/transfer/catalog').then((r) => r.json()),
-        fetch('/api/transfer/modules').then((r) => r.json()),
-        fetch('/api/transfer/backups').then((r) => r.json()),
-        fetch('/api/transfer/history?limit=100').then((r) => r.json()),
-        fetch('/api/os/fs/downloads').then((r) => r.json()),
-        fetch('/api/os/fs/volumes').then((r) => r.json()),
-        fetch('/api/grants/state').then((r) => r.json())
+        apiFetch('/api/transfer/catalog').then((r) => r.json()),
+        apiFetch('/api/transfer/modules').then((r) => r.json()),
+        apiFetch('/api/transfer/backups').then((r) => r.json()),
+        apiFetch('/api/transfer/history?limit=100').then((r) => r.json()),
+        apiFetch('/api/os/fs/downloads').then((r) => r.json()),
+        apiFetch('/api/os/fs/volumes').then((r) => r.json()),
+        apiFetch('/api/grants/state').then((r) => r.json())
       ]);
 
       if (catRes.status === 'fulfilled' && Array.isArray(catRes.value?.items)) {
@@ -320,7 +321,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
     sizeBytes?: number;
   }) => {
     try {
-      await fetch('/api/transfer/history', {
+      await apiFetch('/api/transfer/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -354,7 +355,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
   ): Promise<{ filename: string; sizeBytes: number }> => {
     setDownloadingKey(busyKey);
     try {
-      const res = await fetch(url);
+      const res = await (url.startsWith('/api/') ? apiFetch(url) : fetch(url));
       if (!res.ok) {
         let errText = `Server returned HTTP ${res.status}`;
         try {
@@ -473,7 +474,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
     if (!remoteUrl.trim()) return;
     setFetchingRemote(true);
     try {
-      const res = await fetch('/api/os/packages/download-url', {
+      const res = await apiFetch('/api/os/packages/download-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -544,7 +545,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
 
   const handleCopyModuleBundle = async (moduleId: string) => {
     try {
-      const res = await fetch(`/api/transfer/modules/${encodeURIComponent(moduleId)}/download?format=json`);
+      const res = await apiFetch(`/api/transfer/modules/${encodeURIComponent(moduleId)}/download?format=json`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       await navigator.clipboard.writeText(text);
@@ -565,7 +566,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
     }
     setLoadingSource(true);
     try {
-      const res = await fetch(`/api/transfer/modules/${encodeURIComponent(selectedModule.id)}/source`);
+      const res = await apiFetch(`/api/transfer/modules/${encodeURIComponent(selectedModule.id)}/source`);
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
       const loaded = Array.isArray(data.files) ? data.files : [];
@@ -602,7 +603,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
   ) => {
     setInspecting(true);
     try {
-      const res = await fetch(`/api/transfer/modules/${encodeURIComponent(targetModId)}/inspect`, {
+      const res = await apiFetch(`/api/transfer/modules/${encodeURIComponent(targetModId)}/inspect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files })
@@ -716,7 +717,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
     }
     setReplacing(true);
     try {
-      const res = await fetch(`/api/transfer/modules/${encodeURIComponent(selectedModule.id)}/replace`, {
+      const res = await apiFetch(`/api/transfer/modules/${encodeURIComponent(selectedModule.id)}/replace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -747,7 +748,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
   const handleRollback = async (moduleId: string, backupId: string) => {
     setRollingBackId(backupId);
     try {
-      const res = await fetch(`/api/transfer/modules/${encodeURIComponent(moduleId)}/rollback`, {
+      const res = await apiFetch(`/api/transfer/modules/${encodeURIComponent(moduleId)}/rollback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backupId })
@@ -777,7 +778,7 @@ export const TransferHubModule: React.FC<TransferHubModuleProps> = ({ onNavigate
     const base64 = btoa(binary);
     const cleanDir = dirPath.replace(/\/+$/, '');
     const fullPath = `${cleanDir}/${file.name}`;
-    const res = await fetch('/api/os/fs/write-base64', {
+    const res = await apiFetch('/api/os/fs/write-base64', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: fullPath, base64 })

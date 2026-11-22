@@ -2,9 +2,49 @@
   "enabled": true,
   "idleThresholdMs": 900000,
   "cooldownMs": 600000,
-  "lastDreamAt": 1795117034273,
-  "totalCycles": 5,
+  "lastDreamAt": 1795316495130,
+  "totalCycles": 6,
   "cycles": [
+    {
+      "id": "dream-mwr935ei-4d2d",
+      "triggerSource": "evolution",
+      "memoriesReplayed": 35,
+      "axiomsEvolved": 3,
+      "toolsAudited": 32,
+      "healingApplied": 0,
+      "summary": "Dream Cycle (evolution) replayed 35 unified memories, evolved 3 axiom(s), audited 32 tool(s), tsc=CLEAN.",
+      "insights": [
+        "Memory graph pollution from repeated identical tool blueprints (e.g., four Runtime-AST-Sanitizer-* nodes) and duplicate research logs degrades vector retrieval precision; enforce content-hash deduplication prior to graph insertion.",
+        "Indexing ephemeral liveness probes ('PONG', 'ONLINE') and empty coordinator sync payloads (action=sync-state payload={}) into persistent memory displaces high-signal context across cold reloads; route health telemetry to a volatile ring buffer.",
+        "Cold session reloads must hydrate an atomic state-delta snapshot (resolved identity anchors like JHammerZ, active tool Merkle root, and last non-trivial intent vector) from WAL-checkpointed SQLite stores before servicing main-chat turns to prevent greeting-loop resets.",
+        "TypeScript AST build check verified 100% clean (0 errors)."
+      ],
+      "evolvedAxioms": [
+        {
+          "id": "ax-mwr92w91-o315",
+          "category": "ARCHITECTURAL_PREFERENCE",
+          "principle": "Checkpoint deterministic session state-deltas and identity anchors atomically on every turn to guarantee zero-loss cold reload continuity.",
+          "evolutionCount": 1
+        },
+        {
+          "id": "ax-mwr92w91-ldla",
+          "category": "TOOL_HEURISTIC",
+          "principle": "Compute a canonical hash of tool AST/summary before forging micro-tools to reuse existing blueprints instead of spawning duplicates.",
+          "evolutionCount": 1
+        },
+        {
+          "id": "ax-mwr92w92-odls",
+          "category": "DOMAIN_KNOWLEDGE",
+          "principle": "Exclude stateless liveness probes and empty sync payloads from long-term semantic indexing to preserve associative recall signal-to-noise.",
+          "evolutionCount": 1
+        }
+      ],
+      "forgedTool": null,
+      "compileClean": true,
+      "proofHash": "0xb8d7eff50cf99d44f3e5f498d63e9d86",
+      "elapsedMs": 20045,
+      "createdAt": "2026-11-22T03:01:35.130Z"
+    },
     {
       "id": "dream-mwnyc0f5-f4dd",
       "triggerSource": "manual-ui",

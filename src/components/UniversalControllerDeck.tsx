@@ -82,27 +82,51 @@ export const UniversalControllerDeck: React.FC = () => {
     return () => window.removeEventListener('sovereign_os_customization_changed', onCustom);
   }, []);
 
-  // 60fps real W3C Gamepad API poll loop + hotplug events
+  // Event-woken real W3C Gamepad API poll loop (sleeps with 0 CPU when no gamepads are connected)
   useEffect(() => {
     let rafId = 0;
+    let active = true;
+
+    const hasAnyConnectedGamepad = (): boolean => {
+      try {
+        const list = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (let i = 0; i < list.length; i++) {
+          if (list[i] && list[i]!.connected) return true;
+        }
+      } catch {}
+      return false;
+    };
+
     const poll = () => {
+      rafId = 0;
+      if (!active) return;
+      if (!hasAnyConnectedGamepad()) {
+        setControllers((prev) => (prev.length === 0 ? prev : []));
+        return;
+      }
       const pads = snapshotConnectedGamepads(profile, osProfile.controllerGlyphStyle);
       setControllers(pads);
       rafId = requestAnimationFrame(poll);
     };
-    rafId = requestAnimationFrame(poll);
 
-    const onConnected = () => {
+    const startPollingIfNeeded = () => {
       const pads = snapshotConnectedGamepads(profile, osProfile.controllerGlyphStyle);
-      setControllers(pads);
-      if (pads.length > 0) setSelectedSlot(pads[0].index);
+      setControllers((prev) => (prev.length === 0 && pads.length === 0 ? prev : pads));
+      if (pads.length > 0) {
+        setSelectedSlot(pads[0].index);
+        if (!rafId) rafId = requestAnimationFrame(poll);
+      }
     };
-    window.addEventListener('gamepadconnected', onConnected);
-    window.addEventListener('gamepaddisconnected', onConnected);
+
+    startPollingIfNeeded();
+
+    window.addEventListener('gamepadconnected', startPollingIfNeeded);
+    window.addEventListener('gamepaddisconnected', startPollingIfNeeded);
     return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('gamepadconnected', onConnected);
-      window.removeEventListener('gamepaddisconnected', onConnected);
+      active = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('gamepadconnected', startPollingIfNeeded);
+      window.removeEventListener('gamepaddisconnected', startPollingIfNeeded);
     };
   }, [profile, osProfile.controllerGlyphStyle]);
 

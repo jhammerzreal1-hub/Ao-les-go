@@ -347,13 +347,10 @@ export function extractCoherentOralNarrative(rawText: string): string {
 
   let text = rawText;
 
-  // 1. If the model explicitly wrapped spoken segments in <oral>...</oral> or [ORAL]...[/ORAL], extract those
-  const explicitOralMatches = Array.from(
-    text.matchAll(/<(?:oral|speak|voice)>([\s\S]*?)<\/(?:oral|speak|voice)>|\[(?:ORAL|VOICE_SUMMARY)\]([\s\S]*?)\[\/(?:ORAL|VOICE_SUMMARY)\]/gi)
-  );
-  if (explicitOralMatches.length > 0) {
-    text = explicitOralMatches.map((m) => (m[1] || m[2] || '').trim()).filter(Boolean).join('. ');
-  }
+  // 1. Unwrap any explicit <oral>/<speak>/<voice> or [ORAL]/[VOICE_SUMMARY] tags in-place WITHOUT discarding surrounding prose
+  text = text
+    .replace(/<\/?(?:oral|speak|voice)>/gi, ' ')
+    .replace(/\[\/?(?:ORAL|VOICE_SUMMARY)\]/gi, ' ');
 
   // 2. Remove <think>...</think> reasoning blocks (including unclosed trailing think blocks)
   text = text.replace(/<think>[\s\S]*?<\/think>/gi, ' ');
@@ -369,7 +366,7 @@ export function extractCoherentOralNarrative(rawText: string): string {
   // If there is an unclosed code block at the very end of a streaming message, omit the raw code body
   text = text.replace(/```[a-zA-Z0-9_-]*\n[\s\S]*$/g, ' ');
 
-  // 5. Filter line-by-line to remove diff hunks, numbered file lines, table borders, and raw code lines
+  // 5. Filter line-by-line to remove diff hunks, numbered source-code dump lines, table borders, and raw code lines
   const lines = text.split('\n');
   const spokenLines: string[] = [];
 
@@ -382,8 +379,13 @@ export function extractCoherentOralNarrative(rawText: string): string {
 
     // Skip unified diff markers and hunk headers
     if (/^@@\s*-\d+/.test(trimmed) || /^(\+\+\+|---)\s+\S+/.test(trimmed)) continue;
-    // Skip numbered source file dump lines like "142: const foo = bar;" or "142 | const foo"
-    if (/^\d{1,5}\s*[:|]\s+/.test(trimmed)) continue;
+    // Skip numbered source file dump lines like "142 | const foo" or "142: const foo = bar;" (preserve normal numbered prose!)
+    if (
+      /^\d{1,5}\s*\|\s+/.test(trimmed) ||
+      /^\d{1,5}:\s*(?:import\b|export\b|const\b|let\b|var\b|function\b|return\b|class\b|interface\b|type\b|[{}();/])/.test(trimmed)
+    ) {
+      continue;
+    }
     // Skip markdown table border rows like "|---|---|"
     if (/^\|?[\s\-:|]+\|[\s\-:|]*$/.test(trimmed)) continue;
     // Skip standalone JSON / object / import / export / shell command lines
@@ -395,7 +397,7 @@ export function extractCoherentOralNarrative(rawText: string): string {
 
     // Convert markdown headings and bullets into natural sentence boundaries
     line = line.replace(/^#{1,6}\s+/, '');
-    line = line.replace(/^(?:[-*•+]|\d+\.)\s+/, '');
+    line = line.replace(/^(?:[-*•+]|\d+[.)])\s+/, '');
 
     // Ensure lines that were headings or bullet points end with punctuation so they don't run together
     if (line.length > 0 && !/[.!?:;,]$/.test(line)) {
@@ -432,9 +434,8 @@ export function extractCoherentOralNarrative(rawText: string): string {
     return val;
   });
 
-  // 7. Strip parenthesized file paths / line number references like "(src/components/Foo.tsx, lines 100-200)" or "(line 142)"
+  // 7. Strip parenthesized file paths / line number citations like "(src/components/Foo.tsx, lines 100-200)"
   text = text.replace(/\(\s*(?:lines?\s*\d+[\s\-\d,]*|(?:\/?[\w.-]+\/)+[\w.-]+(?::\d+)?[^)]*)\s*\)/gi, ' ');
-  text = text.replace(/\b(?:lines?\s+\d+(?:\s*(?:-|to|–)\s*\d+)?)\b/gi, ' ');
 
   // 8. Replace bare file paths with line numbers in prose (e.g. src/components/Header.tsx:240) with clean component name
   text = text.replace(/\b(?:\/?[\w.-]+\/)+([\w.-]+)\.(?:tsx|ts|jsx|js|json|md|css|py|sh)(?::\d+(?::\d+)?)?\b/gi, (_m, baseName: string) => {

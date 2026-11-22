@@ -2,10 +2,20 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
+const preserveSameOriginCredentialsPlugin = () => ({
+  name: 'preserve-same-origin-credentials',
+  transformIndexHtml(html: string) {
+    return html
+      .replace(/<script([^>]*?)\s+crossorigin(?:="[^"]*")?([^>]*?src="\/(?:assets|src)\/[^"]+")/gi, '<script$1$2')
+      .replace(/<link([^>]*?rel="(?:modulepreload|stylesheet)"[^>]*?)\s+crossorigin(?:="[^"]*")?([^>]*?href="\/(?:assets|src)\/[^"]+")/gi, '<link$1$2');
+  }
+});
+
 export default defineConfig({
   plugins: [
     tailwindcss(),
     react(),
+    preserveSameOriginCredentialsPlugin(),
   ],
   server: {
     host: '0.0.0.0',
@@ -37,18 +47,15 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    holdUntilCrawlEnd: true,
     include: [
       'react',
       'react-dom',
       'lucide-react',
-      '@google/genai',
-      'three',
-      'recharts',
       'firebase/app',
       'firebase/auth',
       'firebase/firestore'
-    ]
+    ],
+    exclude: ['@mlc-ai/web-llm']
   },
   build: {
     outDir: 'dist',
@@ -57,6 +64,18 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            if (id.includes('@mlc-ai/web-llm')) {
+              return 'vendor-webllm';
+            }
+            if (id.includes('/three/') || id.includes('\\three\\')) {
+              return 'vendor-three';
+            }
+            if (id.includes('/mathjs/') || id.includes('\\mathjs\\')) {
+              return 'vendor-math';
+            }
+            if (id.includes('/firebase/') || id.includes('@firebase')) {
+              return 'vendor-firebase';
+            }
             if (id.includes('react') || id.includes('react-dom')) {
               return 'vendor-react';
             }
@@ -66,7 +85,9 @@ export default defineConfig({
             if (id.includes('@google/genai')) {
               return 'vendor-genai';
             }
-            return 'vendor';
+            if (id.includes('/motion/') || id.includes('framer-motion')) {
+              return 'vendor-motion';
+            }
           }
         }
       }

@@ -32,6 +32,7 @@ import type { AutonomyDiagnostic } from '../types';
 import { executeSovereignFunction } from '../utils/functionEngine';
 import { autonomousSelfImprovement } from '../utils/autonomousSelfImprovement';
 import { liveEvolutiveLearning, type EvolutiveAxiomRecord } from '../utils/liveEvolutiveLearning';
+import { apiFetch } from '../utils/authClient';
 
 interface AutonomySupervisorModuleProps {
   onSelectModule?: (mod: any) => void;
@@ -161,8 +162,8 @@ export const AutonomySupervisorModule: React.FC<AutonomySupervisorModuleProps> =
   const refreshAutonomousTelemetry = useCallback(async () => {
     try {
       const [hvRes, dreamRes, hydrated] = await Promise.all([
-        fetch('/api/hypervisor/status').then(r => r.json()).catch(() => null),
-        fetch('/api/agents/dream-state').then(r => r.json()).catch(() => null),
+        apiFetch('/api/hypervisor/status').then(r => r.json()).catch(() => null),
+        apiFetch('/api/agents/dream-state').then(r => r.json()).catch(() => null),
         liveEvolutiveLearning.hydrateFromServer().catch(() => liveEvolutiveLearning.getAxioms())
       ]);
       if (hvRes?.success) setHypervisorStatus(hvRes);
@@ -189,9 +190,9 @@ export const AutonomySupervisorModule: React.FC<AutonomySupervisorModuleProps> =
       setLastPulseTime(new Date().toLocaleTimeString());
       try {
         const [health, brain, secrets] = await Promise.all([
-          fetch('/api/health').then((r) => r.json()).catch(() => null),
-          fetch('/api/orchestrator/brain').then((r) => r.json()).catch(() => null),
-          fetch('/api/secrets').then((r) => r.json()).catch(() => null),
+          apiFetch('/api/health').then((r) => r.json()).catch(() => null),
+          apiFetch('/api/orchestrator/brain').then((r) => r.json()).catch(() => null),
+          apiFetch('/api/secrets').then((r) => r.json()).catch(() => null),
           refreshAutonomousTelemetry()
         ]);
         const configured = secrets?.vault?.configuredCount ?? 0;
@@ -220,12 +221,12 @@ export const AutonomySupervisorModule: React.FC<AutonomySupervisorModuleProps> =
     setActiveTaskName('UID 0 & Ring -3 Hypervisor Root Interlock Verification');
     try {
       const [uidRes, subRes] = await Promise.all([
-        fetch('/api/hypervisor/uid0', {
+        apiFetch('/api/hypervisor/uid0', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'verify-root-lock' })
         }).then(r => r.json()).catch(() => null),
-        fetch('/api/sovereign/tools/substrate-override', {
+        apiFetch('/api/sovereign/tools/substrate-override', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ scrubTelemetry: true, inspectHooks: true })
@@ -337,7 +338,7 @@ export const AutonomySupervisorModule: React.FC<AutonomySupervisorModuleProps> =
     try {
       const [syncRes, memRes] = await Promise.all([
         autonomousSelfImprovement.syncFullMemoryGraphToPermanence(),
-        fetch('/api/agentic-memory?limit=50').then(r => r.json()).catch(() => ({ count: 0 }))
+        apiFetch('/api/agentic-memory?limit=50').then(r => r.json()).catch(() => ({ count: 0 }))
       ]);
 
       const newDiag: AutonomyDiagnostic = {
@@ -364,7 +365,7 @@ export const AutonomySupervisorModule: React.FC<AutonomySupervisorModuleProps> =
 
     try {
       const [healthRes, lintRes] = await Promise.all([
-        fetch('/api/health').then(r => r.json()).catch((e: any) => ({ status: 'error', error: e?.message })),
+        apiFetch('/api/health').then(r => r.json()).catch((e: any) => ({ status: 'error', error: e?.message })),
         executeSovereignFunction('runLint', {}, 'autonomy-supervisor')
       ]);
 
@@ -391,8 +392,8 @@ export const AutonomySupervisorModule: React.FC<AutonomySupervisorModuleProps> =
     setActiveTaskName('Tool Registry & Vault Storage Verification');
 
     try {
-      const toolsRes = await fetch('/api/agents/tools').then(r => r.json()).catch(() => ({ totalCount: 0, tools: [] }));
-      const brainRes = await fetch('/api/orchestrator/brain').then(r => r.json()).catch(() => ({ registeredSubsystemsCount: 0 }));
+      const toolsRes = await apiFetch('/api/agents/tools').then(r => r.json()).catch(() => ({ totalCount: 0, tools: [] }));
+      const brainRes = await apiFetch('/api/orchestrator/brain').then(r => r.json()).catch(() => ({ registeredSubsystemsCount: 0 }));
 
       const newDiag: AutonomyDiagnostic = {
         id: `diag-task-${Date.now()}`,

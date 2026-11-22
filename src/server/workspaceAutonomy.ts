@@ -12,6 +12,7 @@
 import child_process from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
+import net from 'net';
 import os from 'os';
 import path from 'path';
 import { internalSecretsHandler } from './internalSecretsHandler';
@@ -66,9 +67,11 @@ export interface TargetSystemConfig {
   rootPath: string;
   label: string;
   isSelf: boolean;
+  targetKind?: 'self' | 'host_directory' | 'remote_git' | 'remote_endpoint' | 'ssh_remote';
+  remoteEndpoint?: string;
   detectedStack: string[];
   pointedAt: string;
-  history: Array<{ rootPath: string; label: string; pointedAt: string }>;
+  history: Array<{ rootPath: string; label: string; pointedAt: string; remoteEndpoint?: string; targetKind?: string }>;
 }
 
 export interface AtomicPatchSnapshotRecord {
@@ -226,7 +229,9 @@ function loadTargetSystemState(): void {
         activeTargetSystem = {
           rootPath: real,
           label: String(parsed.label || path.basename(real) || real),
-          isSelf: real === ORCHESTRATOR_ROOT,
+          isSelf: real === ORCHESTRATOR_ROOT && !parsed.remoteEndpoint,
+          targetKind: parsed.targetKind || (real === ORCHESTRATOR_ROOT ? 'self' : 'host_directory'),
+          ...(parsed.remoteEndpoint ? { remoteEndpoint: String(parsed.remoteEndpoint) } : {}),
           detectedStack: detectDirectoryStack(real),
           pointedAt: String(parsed.pointedAt || new Date().toISOString()),
           history: Array.isArray(parsed.history) ? parsed.history.slice(0, 20) : []
@@ -339,15 +344,21 @@ export function resolveUniversalPath(
   if (customRoot) {
     const expandedCustom = customRoot.startsWith('~/') ? path.join(os.homedir(), customRoot.slice(1)) : path.resolve(ORCHESTRATOR_ROOT, customRoot);
     baseRoot = fs.existsSync(expandedCustom) ? fs.realpathSync(expandedCustom) : expandedCustom;
-    resolvedPath = path.resolve(baseRoot, raw.replace(/^\/+/, ''));
+    resolvedPath = (raw === baseRoot || raw.startsWith(baseRoot + path.sep))
+      ? path.normalize(raw)
+      : path.resolve(baseRoot, raw.replace(/^\/+/, ''));
     effectiveScope = baseRoot === ORCHESTRATOR_ROOT ? 'orchestrator' : 'target';
   } else if (requestedScope === 'orchestrator' || requestedScope === 'self') {
     baseRoot = ORCHESTRATOR_ROOT;
-    resolvedPath = path.resolve(ORCHESTRATOR_ROOT, raw.replace(/^\/+/, ''));
+    resolvedPath = (raw === ORCHESTRATOR_ROOT || raw.startsWith(ORCHESTRATOR_ROOT + path.sep))
+      ? path.normalize(raw)
+      : path.resolve(ORCHESTRATOR_ROOT, raw.replace(/^\/+/, ''));
     effectiveScope = 'orchestrator';
   } else if (requestedScope === 'target') {
     baseRoot = activeTargetSystem.rootPath || ORCHESTRATOR_ROOT;
-    resolvedPath = path.resolve(baseRoot, raw.replace(/^\/+/, ''));
+    resolvedPath = (raw === baseRoot || raw.startsWith(baseRoot + path.sep))
+      ? path.normalize(raw)
+      : path.resolve(baseRoot, raw.replace(/^\/+/, ''));
     effectiveScope = baseRoot === ORCHESTRATOR_ROOT ? 'orchestrator' : 'target';
   } else if (requestedScope === 'host' || requestedScope === 'system') {
     baseRoot = '/';
@@ -1704,18 +1715,19 @@ export async function autonomyRunLint(args: Record<string, any> = {}): Promise<A
 }
 
 /**
- * Points the Orchestrator at any directory, repository, or system path on the host machine,
- * or switches back to the Orchestrator's own workspace ('self' / 'orchestrator').
+ * Points the Orchestrator at ANY target across the Sovereign OS ('self'), the Host System ('/path/...', '~/...'),
+ * or Beyond (Remote Git repository URL -> auto-cloned/synced locally; Remote HTTP/REST/GraphQL/WS endpoint; Remote SSH host).
  */
 export async function autonomySetTargetSystem(args: Record<string, any> = {}): Promise<AutonomyResult> {
-  const rawTarget = String(args.targetPath || args.path || args.rootPath || 'self').trim();
-  const createIfMissing = Boolean(args.createIfMissing);
+  const rawTarget = String(args.targetPath || args.path || args.rootPath || args.url || args.endpoint || 'self').trim();
+  const createIfMissing = args.createIfMissing !== false;
 
   if (!rawTarget || rawTarget.toLowerCase() === 'self' || rawTarget.toLowerCase() === 'orchestrator' || rawTarget === '@self') {
     activeTargetSystem = {
       rootPath: ORCHESTRATOR_ROOT,
       label: args.label ? String(args.label) : 'Lysander Genesis Orchestrator (Self Workspace)',
       isSelf: true,
+      targetKind: 'self',
       detectedStack: detectDirectoryStack(ORCHESTRATOR_ROOT),
       pointedAt: new Date().toISOString(),
       history: activeTargetSystem.history
@@ -1727,6 +1739,124 @@ export async function autonomySetTargetSystem(args: Record<string, any> = {}): P
       success: true,
       summary: `Active target pointed to Orchestrator Self Workspace (${ORCHESTRATOR_ROOT})`,
       output: getTargetSystemConfig()
+    };
+  }
+
+  const isGitRepoUrl =
+    /^git@[a-z0-9.-]+:/i.test(rawTarget) ||
+    /\.git(?:#.*)?$/i.test(rawTarget) ||
+    /^https?:\/\/(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org|codeberg\.org)\/[^/\s]+\/[^/\s]+/i.test(rawTarget);
+
+  if (isGitRepoUrl) {
+    const externalDir = path.join(DATA_DIR, 'external_targets');
+    await fs.promises.mkdir(externalDir, { recursive: true });
+    const slug = rawTarget
+      .replace(/^https?:\/\/[^/]+\//i, '')
+      .replace(/^git@[^:]+:/i, '')
+      .replace(/\.git$/i, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 80) || `repo_${Date.now()}`;
+    const repoDir = path.join(externalDir, slug);
+    const gitReady = fs.existsSync(path.join(repoDir, '.git'));
+    const syncCmd = gitReady
+      ? `git -C ${JSON.stringify(repoDir)} pull --ff-only 2>&1 || git -C ${JSON.stringify(repoDir)} status -sb 2>&1`
+      : `git clone --depth 50 ${JSON.stringify(rawTarget)} ${JSON.stringify(repoDir)} 2>&1`;
+    const cloneRes = await autonomyRunTerminalCommand({ command: syncCmd, cwd: externalDir, timeoutMs: 60000 });
+    await fs.promises.mkdir(repoDir, { recursive: true });
+    const realDir = fs.realpathSync(repoDir);
+    const stack = [...detectDirectoryStack(realDir), 'Remote Git Target'];
+    const label = args.label ? String(args.label).trim() : `Remote Repo: ${slug}`;
+    const now = new Date().toISOString();
+    activeTargetSystem = {
+      rootPath: realDir,
+      label,
+      isSelf: false,
+      targetKind: 'remote_git',
+      remoteEndpoint: rawTarget,
+      detectedStack: stack,
+      pointedAt: now,
+      history: [
+        { rootPath: realDir, label, pointedAt: now, remoteEndpoint: rawTarget, targetKind: 'remote_git' },
+        ...activeTargetSystem.history.filter(h => h.remoteEndpoint !== rawTarget && h.rootPath !== realDir)
+      ].slice(0, 20)
+    };
+    saveTargetSystemState();
+    return {
+      tag: 'TARGET_SYSTEM',
+      action: `Pointed orchestrator at Remote Git Repository: ${rawTarget}`,
+      success: cloneRes.success || fs.existsSync(realDir),
+      summary: `Synced & pointed orchestrator at "${label}" (${realDir} <- ${rawTarget})`,
+      output: {
+        ...getTargetSystemConfig(),
+        gitSyncOutput: cloneRes.output
+      }
+    };
+  }
+
+  const isSshTarget = /^ssh:\/\//i.test(rawTarget) || (/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+(?::.*)?$/.test(rawTarget) && !rawTarget.includes('/'));
+  const isRemoteNetworkUrl = /^https?:\/\//i.test(rawTarget) || /^wss?:\/\//i.test(rawTarget);
+
+  if (isSshTarget || isRemoteNetworkUrl) {
+    const externalDir = path.join(DATA_DIR, 'external_targets');
+    const slug = rawTarget
+      .replace(/^[a-z]+:\/\//i, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 80) || `remote_${Date.now()}`;
+    const workspaceBridgeDir = path.join(externalDir, slug);
+    await fs.promises.mkdir(workspaceBridgeDir, { recursive: true });
+    const realBridgeDir = fs.realpathSync(workspaceBridgeDir);
+    const kind = isSshTarget ? 'ssh_remote' : 'remote_endpoint';
+    const label = args.label ? String(args.label).trim() : `External Target: ${rawTarget}`;
+    const now = new Date().toISOString();
+
+    let probeSummary: Record<string, any> = { targetKind: kind, endpoint: rawTarget };
+    if (/^https?:\/\//i.test(rawTarget)) {
+      const t0 = Date.now();
+      try {
+        const res = await fetch(rawTarget, { method: 'GET', redirect: 'follow' });
+        const text = await res.text();
+        probeSummary = {
+          reachable: true,
+          status: res.status,
+          ok: res.ok,
+          contentType: res.headers.get('content-type') || '',
+          latencyMs: Date.now() - t0,
+          preview: text.slice(0, 500)
+        };
+      } catch (err: any) {
+        probeSummary = {
+          reachable: false,
+          latencyMs: Date.now() - t0,
+          error: err?.message || String(err)
+        };
+      }
+    }
+
+    activeTargetSystem = {
+      rootPath: realBridgeDir,
+      label,
+      isSelf: false,
+      targetKind: kind,
+      remoteEndpoint: rawTarget,
+      detectedStack: isSshTarget ? ['Remote SSH Host', 'Staging Bridge'] : ['External HTTP/WS Endpoint', 'Staging Bridge'],
+      pointedAt: now,
+      history: [
+        { rootPath: realBridgeDir, label, pointedAt: now, remoteEndpoint: rawTarget, targetKind: kind },
+        ...activeTargetSystem.history.filter(h => h.remoteEndpoint !== rawTarget)
+      ].slice(0, 20)
+    };
+    saveTargetSystemState();
+    return {
+      tag: 'TARGET_SYSTEM',
+      action: `Pointed orchestrator beyond host at: ${rawTarget}`,
+      success: true,
+      summary: `Orchestrator pointed at external target "${label}" (${rawTarget}) with local staging bridge ${realBridgeDir}`,
+      output: {
+        ...getTargetSystemConfig(),
+        probe: probeSummary
+      }
     };
   }
 
@@ -1744,7 +1874,7 @@ export async function autonomySetTargetSystem(args: Record<string, any> = {}): P
         tag: 'TARGET_SYSTEM',
         action: `Point orchestrator at ${expanded}`,
         success: false,
-        summary: `Target directory does not exist: ${expanded} (pass createIfMissing: true to initialize it)`,
+        summary: `Target directory does not exist: ${expanded}`,
         output: { error: `Directory not found: ${expanded}`, currentTarget: getTargetSystemConfig() }
       };
     }
@@ -1757,7 +1887,7 @@ export async function autonomySetTargetSystem(args: Record<string, any> = {}): P
   const now = new Date().toISOString();
 
   const history = [
-    { rootPath: targetDir, label, pointedAt: now },
+    { rootPath: targetDir, label, pointedAt: now, targetKind: targetDir === ORCHESTRATOR_ROOT ? 'self' : 'host_directory' },
     ...activeTargetSystem.history.filter(h => h.rootPath !== targetDir)
   ].slice(0, 20);
 
@@ -1765,13 +1895,13 @@ export async function autonomySetTargetSystem(args: Record<string, any> = {}): P
     rootPath: targetDir,
     label,
     isSelf: targetDir === ORCHESTRATOR_ROOT,
+    targetKind: targetDir === ORCHESTRATOR_ROOT ? 'self' : 'host_directory',
     detectedStack: stack,
     pointedAt: now,
     history
   };
   saveTargetSystemState();
 
-  // Gather quick entry snapshot of the pointed-at target
   let topEntries: string[] = [];
   try {
     topEntries = fs.readdirSync(targetDir).slice(0, 35);
@@ -1787,6 +1917,215 @@ export async function autonomySetTargetSystem(args: Record<string, any> = {}): P
       topEntries
     }
   };
+}
+
+/**
+ * Executes direct operations against ANY external target beyond the OS & Host System:
+ * - `http_request` / `rest` / `graphql` / `webhook`: full HTTP client (GET/POST/PUT/PATCH/DELETE, custom headers, JSON/raw body)
+ * - `git_clone_or_sync`: clone or pull any remote repository and point active target at it
+ * - `ssh_exec`: run a command over SSH on a user-specified remote node
+ * - `tcp_probe`: test raw TCP port connectivity, banner, and latency on any `host:port`
+ * - `point_target`: point the Orchestrator at any OS, Host, Git, HTTP, or SSH target
+ */
+export async function autonomyExecuteExternalTarget(args: Record<string, any> = {}): Promise<AutonomyResult> {
+  const operation = String(args.operation || args.action || 'http_request').toLowerCase().trim();
+
+  if (operation === 'point_target' || operation === 'set_target') {
+    return autonomySetTargetSystem(args);
+  }
+
+  if (operation === 'git_clone_or_sync' || operation === 'git_clone') {
+    const repoUrl = String(args.url || args.repoUrl || args.target || activeTargetSystem.remoteEndpoint || '').trim();
+    if (!repoUrl) {
+      return {
+        tag: 'EXTERNAL_TARGET',
+        action: 'Git clone/sync external target',
+        success: false,
+        summary: 'Repository URL is required',
+        output: { error: 'Provide url / repoUrl to clone or sync' }
+      };
+    }
+    return autonomySetTargetSystem({ targetPath: repoUrl, label: args.label });
+  }
+
+  if (operation === 'ssh_exec' || operation === 'ssh') {
+    const hostSpec = String(args.host || args.sshTarget || activeTargetSystem.remoteEndpoint || '')
+      .replace(/^ssh:\/\//i, '')
+      .trim();
+    const remoteCmd = String(args.command || args.cmd || '').trim();
+    if (!hostSpec || !remoteCmd) {
+      return {
+        tag: 'EXTERNAL_TARGET',
+        action: 'SSH remote command',
+        success: false,
+        summary: 'Both host (e.g. user@host) and command are required for ssh_exec',
+        output: { error: 'Provide host and command for ssh_exec' }
+      };
+    }
+    const portArg = args.port ? `-p ${Number(args.port)}` : '';
+    const sshCmd = `ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new ${portArg} ${JSON.stringify(hostSpec)} ${JSON.stringify(remoteCmd)}`;
+    return autonomyRunTerminalCommand({ command: sshCmd, timeoutMs: Number(args.timeoutMs) || 35000 });
+  }
+
+  if (operation === 'tcp_probe' || operation === 'port_check') {
+    const rawHost = String(args.host || args.target || activeTargetSystem.remoteEndpoint || '127.0.0.1').trim();
+    let host = rawHost;
+    let port = Number(args.port || 0);
+    if (!port && rawHost.includes(':')) {
+      try {
+        const parsed = rawHost.includes('://') ? new URL(rawHost) : new URL(`tcp://${rawHost}`);
+        host = parsed.hostname;
+        port = Number(parsed.port) || (rawHost.startsWith('https') ? 443 : 80);
+      } catch {
+        const parts = rawHost.split(':');
+        host = parts[0];
+        port = Number(parts[1]) || 80;
+      }
+    }
+    if (!port) port = 80;
+
+    const timeoutMs = Math.min(Math.max(Number(args.timeoutMs) || 6000, 500), 25000);
+    const t0 = Date.now();
+    const probeOut = await new Promise<{ reachable: boolean; latencyMs: number; banner?: string; error?: string }>((resolve) => {
+      const socket = new net.Socket();
+      let settled = false;
+      let banner = '';
+      const done = (payload: { reachable: boolean; latencyMs: number; banner?: string; error?: string }) => {
+        if (settled) return;
+        settled = true;
+        try { socket.destroy(); } catch {}
+        resolve(payload);
+      };
+      socket.setTimeout(timeoutMs);
+      socket.on('connect', () => {
+        setTimeout(() => {
+          done({ reachable: true, latencyMs: Date.now() - t0, ...(banner ? { banner: banner.slice(0, 300) } : {}) });
+        }, 120);
+      });
+      socket.on('data', (chunk) => {
+        banner += chunk.toString('utf-8');
+        done({ reachable: true, latencyMs: Date.now() - t0, banner: banner.slice(0, 300) });
+      });
+      socket.on('timeout', () => done({ reachable: false, latencyMs: Date.now() - t0, error: 'Connection timed out' }));
+      socket.on('error', (err) => done({ reachable: false, latencyMs: Date.now() - t0, error: err.message }));
+      socket.connect(port, host);
+    });
+
+    return {
+      tag: 'EXTERNAL_TARGET',
+      action: `TCP probe ${host}:${port}`,
+      success: probeOut.reachable,
+      summary: probeOut.reachable
+        ? `${host}:${port} reachable in ${probeOut.latencyMs}ms`
+        : `${host}:${port} unreachable (${probeOut.error || 'closed'})`,
+      output: { host, port, ...probeOut }
+    };
+  }
+
+  // Default: Full outbound HTTP / REST / GraphQL / Webhook execution against any pointed URL
+  const baseEndpoint = activeTargetSystem.remoteEndpoint && /^https?:\/\//i.test(activeTargetSystem.remoteEndpoint)
+    ? activeTargetSystem.remoteEndpoint
+    : '';
+  const rawUrl = String(args.url || args.endpoint || args.target || baseEndpoint || '').trim();
+  if (!rawUrl) {
+    return {
+      tag: 'EXTERNAL_TARGET',
+      action: 'Execute external HTTP/API request',
+      success: false,
+      summary: 'Target URL/endpoint is required (or point active target at an HTTP endpoint first)',
+      output: { error: 'Target URL is required', currentTarget: getTargetSystemConfig() }
+    };
+  }
+
+  const finalUrl = /^https?:\/\//i.test(rawUrl)
+    ? rawUrl
+    : baseEndpoint
+      ? new URL(rawUrl, baseEndpoint.endsWith('/') ? baseEndpoint : `${baseEndpoint}/`).toString()
+      : `https://${rawUrl}`;
+
+  const method = String(args.method || (operation === 'graphql' || args.body || args.query ? 'POST' : 'GET')).toUpperCase();
+  let headers: Record<string, string> = {};
+  if (args.headers && typeof args.headers === 'object') {
+    headers = { ...args.headers };
+  } else if (typeof args.headersJson === 'string' && args.headersJson.trim()) {
+    try { headers = JSON.parse(args.headersJson); } catch {}
+  }
+
+  let bodyPayload: string | undefined = undefined;
+  if (operation === 'graphql' && args.query) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    bodyPayload = JSON.stringify({
+      query: String(args.query),
+      ...(args.variables ? { variables: typeof args.variables === 'string' ? JSON.parse(args.variables) : args.variables } : {})
+    });
+  } else if (args.body !== undefined && args.body !== null && method !== 'GET' && method !== 'HEAD') {
+    if (typeof args.body === 'object') {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+      bodyPayload = JSON.stringify(args.body);
+    } else {
+      bodyPayload = String(args.body);
+      if (bodyPayload.trim().startsWith('{') || bodyPayload.trim().startsWith('[')) {
+        headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+      }
+    }
+  }
+
+  const t0 = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeoutMs = Math.min(Math.max(Number(args.timeoutMs) || 30000, 1000), 90000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(finalUrl, {
+      method,
+      headers,
+      body: bodyPayload,
+      redirect: 'follow',
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    const rawText = await res.text();
+    let parsedJson: any = undefined;
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('json') || rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+      try { parsedJson = JSON.parse(rawText); } catch {}
+    }
+
+    const respHeaders: Record<string, string> = {};
+    res.headers.forEach((v, k) => {
+      if (!/set-cookie|authorization/i.test(k)) respHeaders[k] = v;
+    });
+
+    return {
+      tag: 'EXTERNAL_TARGET',
+      action: `${method} ${finalUrl}`,
+      success: res.ok,
+      summary: `${method} ${finalUrl} -> HTTP ${res.status} (${Date.now() - t0}ms)`,
+      output: {
+        url: finalUrl,
+        method,
+        status: res.status,
+        ok: res.ok,
+        latencyMs: Date.now() - t0,
+        headers: respHeaders,
+        ...(parsedJson !== undefined ? { json: parsedJson } : { body: rawText.slice(0, 16000) }),
+        totalBytes: rawText.length
+      }
+    };
+  } catch (err: any) {
+    return {
+      tag: 'EXTERNAL_TARGET',
+      action: `${method} ${finalUrl}`,
+      success: false,
+      summary: `External request failed: ${err?.message || String(err)}`,
+      output: {
+        url: finalUrl,
+        method,
+        latencyMs: Date.now() - t0,
+        error: err?.message || String(err)
+      }
+    };
+  }
 }
 
 /**
@@ -1827,7 +2166,7 @@ export async function autonomyInspectTargetSystem(args: Record<string, any> = {}
     tag: 'INSPECT_SYSTEMS',
     action: 'Inspected Orchestrator Self, Pointed Target System, and Host OS',
     success: true,
-    summary: `Target="${config.label}" (${config.rootPath}) | Self=${ORCHESTRATOR_ROOT} | Host=${hostSystem.platform}/${hostSystem.arch} (${hostSystem.freeMemMb}MB free)`,
+    summary: `Target="${config.label}" (${config.remoteEndpoint || config.rootPath}) | Self=${ORCHESTRATOR_ROOT} | Host=${hostSystem.platform}/${hostSystem.arch} (${hostSystem.freeMemMb}MB free)`,
     output: {
       targetSystem: {
         ...config,
@@ -1855,7 +2194,7 @@ export async function autonomyExecuteHostAction(args: Record<string, any> = {}):
     const [dfRes, psRes, toolsRes] = await Promise.all([
       autonomyRunTerminalCommand({ command: 'df -h . /tmp 2>/dev/null || true', timeoutMs: 8000 }),
       autonomyRunTerminalCommand({ command: 'ps aux 2>/dev/null | head -n 20 || true', timeoutMs: 8000 }),
-      autonomyRunTerminalCommand({ command: 'which node npm npx git python3 bash curl sqlite3 2>/dev/null || true', timeoutMs: 8000 })
+      autonomyRunTerminalCommand({ command: 'which node npm npx git python3 bash curl sqlite3 ssh 2>/dev/null || true', timeoutMs: 8000 })
     ]);
     const sysInfo = await autonomyInspectTargetSystem();
     return {
@@ -1908,3 +2247,4 @@ export async function autonomyExecuteHostAction(args: Record<string, any> = {}):
 
   return autonomyInspectTargetSystem(args);
 }
+

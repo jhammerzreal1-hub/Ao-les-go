@@ -43,6 +43,7 @@ import {
   X
 } from 'lucide-react';
 import { OSINTForgeWorkbench } from './OSINTForgeWorkbench';
+import { apiFetch } from '../utils/authClient';
 
 interface OSINTModuleProps {
   onSaveToVault?: (artifact: { type: string; title: string; prompt: string; model: string; metadataJson?: string }) => void;
@@ -127,7 +128,7 @@ export const OSINTModule: React.FC<OSINTModuleProps> = ({
     setForgeTab('patch');
 
     try {
-      const res = await fetch('/api/osint/forge-remediation', {
+      const res = await apiFetch('/api/osint/forge-remediation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -160,7 +161,7 @@ export const OSINTModule: React.FC<OSINTModuleProps> = ({
     if (!forgeData?.patchCode) return;
     setSimulating(true);
     try {
-      const res = await fetch('/api/osint/simulate-remediation', {
+      const res = await apiFetch('/api/osint/simulate-remediation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -202,7 +203,7 @@ export const OSINTModule: React.FC<OSINTModuleProps> = ({
   const handleInjectToScratchpad = async () => {
     if (!forgeData) return;
     try {
-      await fetch('/api/scratchpads', {
+      await apiFetch('/api/scratchpads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -235,7 +236,7 @@ export const OSINTModule: React.FC<OSINTModuleProps> = ({
     setLiveTlsLoading(true);
     setLiveTlsError(null);
     try {
-      const res = await fetch('/api/osint/ssl-cert-probe', {
+      const res = await apiFetch('/api/osint/ssl-cert-probe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ host, port })
@@ -259,7 +260,7 @@ export const OSINTModule: React.FC<OSINTModuleProps> = ({
     setLiveHeadersLoading(true);
     setLiveHeadersError(null);
     try {
-      const res = await fetch('/api/osint/headers-audit', {
+      const res = await apiFetch('/api/osint/headers-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: rawUrl })
@@ -284,7 +285,7 @@ export const OSINTModule: React.FC<OSINTModuleProps> = ({
     if (!host) return;
     setProbingPorts(true);
     try {
-      const res = await fetch('/api/osint/port-probe', {
+      const res = await apiFetch('/api/osint/port-probe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ host })
@@ -304,7 +305,7 @@ export const OSINTModule: React.FC<OSINTModuleProps> = ({
     if (!scanResult) return;
     setRunningAiAudit(true);
     try {
-      const res = await fetch('/api/osint/ai-analyze', {
+      const res = await apiFetch('/api/osint/ai-analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -332,7 +333,7 @@ export const OSINTModule: React.FC<OSINTModuleProps> = ({
     setAiAuditResult(null);
 
     try {
-      const res = await fetch('/api/osint/full-scan', {
+      const res = await apiFetch('/api/osint/full-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain })

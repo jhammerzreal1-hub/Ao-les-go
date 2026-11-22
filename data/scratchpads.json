@@ -1,5 +1,27 @@
 [
   {
+    "id": "sp-1795311747762",
+    "title": "Untitled Scratchpad",
+    "category": "working-memory",
+    "content": "",
+    "tags": [],
+    "hfidHash": "e537234783803fd4b425a06487008eb15248955d4569cfdd25d35bcabbb68398",
+    "attested": true,
+    "createdAt": "2026-11-22T01:42:27.762Z",
+    "updatedAt": "2026-11-22T01:42:27.762Z"
+  },
+  {
+    "id": "sp-1795311620885",
+    "title": "Untitled Scratchpad",
+    "category": "working-memory",
+    "content": "",
+    "tags": [],
+    "hfidHash": "b9b2456762bfbd8db1ce9e61153afb618b0a7e627baf8f6615de5ec067c6aa91",
+    "attested": true,
+    "createdAt": "2026-11-22T01:40:20.885Z",
+    "updatedAt": "2026-11-22T01:40:20.885Z"
+  },
+  {
     "id": "sp-001",
     "title": "Lysander 3.1 Enterprise Cross-Bridge Invariants",
     "category": "directives",

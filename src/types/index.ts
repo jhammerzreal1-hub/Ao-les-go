@@ -55,7 +55,10 @@ export type ModuleType =
   | 'os-settings'
   | 'crypto-wallet'
   | 'grant-hunter'
-  | 'transfer-hub';
+  | 'transfer-hub'
+  | 'batch-processor'
+  | 'lora-mesh'
+  | 'admin-command';
 
 export type ChatModel =
   | 'gemini-4-hydrogen'

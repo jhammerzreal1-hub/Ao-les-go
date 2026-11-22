@@ -60,6 +60,9 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import type { ModuleType, Artifact } from '../types';
+import { SoSMeshIcon } from './SoSMeshIcon';
+import { AdminCommandIcon } from './AdminCommandIcon';
+import { canAccessAdminCommandCenter, type AuthUserPublic } from '../types/auth';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -69,6 +72,7 @@ interface CommandPaletteProps {
   onNavigateUrlInBrowser: (url: string) => void;
   onTriggerEngineeringEngine?: () => void;
   userId?: string;
+  authUser?: AuthUserPublic | null;
 }
 
 interface CommandItem {
@@ -89,7 +93,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   artifacts,
   onNavigateUrlInBrowser,
   onTriggerEngineeringEngine,
-  userId
+  userId,
+  authUser = null
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -112,6 +117,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     // 1. App Modules (12 Total)
     const modulesConfig: Array<{ id: ModuleType; title: string; desc: string; icon: any; color: string; badge: string }> = [
+      ...(canAccessAdminCommandCenter(authUser)
+        ? [
+            {
+              id: 'admin-command' as ModuleType,
+              title: 'Administrative Sovereign Command Center',
+              desc: 'Executive Architect JHammerZ lock-in, users, sessions, Entity Intelligence charter & lockdown',
+              icon: AdminCommandIcon,
+              color: 'text-amber-400',
+              badge: 'Admin Only'
+            }
+          ]
+        : []),
+      { id: 'lora-mesh', title: 'SoS Mesh (LoRa Social & Voice/Video)', desc: 'Discord-style LoRa Mesh chat, social feed for all 10 OS agents & unlimited voice/camera calls', icon: SoSMeshIcon, color: 'text-cyan-400', badge: 'SoS Mesh' },
       { id: 'war-room', title: 'PC War Room Cockpit', desc: 'Lysander 4.0 Cockpit, Alpha-14 swarm & sovereign nodes', icon: ShieldAlert, color: 'text-amber-400', badge: 'Core-Level' },
       { id: 'browser', title: 'Sovereign Web Browser v126', desc: 'Bare-metal anonymous browser, media player & 0-token crawler', icon: Globe, color: 'text-sky-400', badge: 'Tor-Mesh' },
       { id: 'termux', title: 'Android Termux Edge Module', desc: 'Node-09 CBP Edge coordinator, native haptics, TTS, battery & wake-lock', icon: Smartphone, color: 'text-emerald-400', badge: 'Android' },

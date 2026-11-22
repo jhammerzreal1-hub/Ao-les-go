@@ -13,10 +13,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { installGlobalApiAuthInterceptor } from './utils/authClient';
 import './index.css';
 
-// Signal to index.html boot watchdog that the JS entry point loaded successfully
-(window as any).__SOVEREIGN_BOOT_MOUNTED__ = true;
+installGlobalApiAuthInterceptor();
 
 // Guarantee idempotent AudioContext.close() across all modules and Web Audio libraries
 // (prevents InvalidStateError: "Cannot close a closed AudioContext" during concurrent teardown/StrictMode cycles)

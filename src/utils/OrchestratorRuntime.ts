@@ -17,6 +17,7 @@
 
 import { dev_null } from './devNullLogger';
 import { audioSwarm } from './AudioSwarm';
+import { apiFetch } from './authClient';
 
 export interface SwarmTask {
   id: string;
@@ -111,7 +112,8 @@ export const ALL_ORCHESTRATOR_SUBSYSTEMS = [
   'file-manager',
   'terminal',
   'task-manager',
-  'os-settings'
+  'os-settings',
+  'batch-processor'
 ];
 
 export class OrchestratorRuntime {
@@ -281,7 +283,7 @@ export class OrchestratorRuntime {
 
     let serverResponse: any = null;
     try {
-      const res = await fetch('/api/orchestrator/coordinate', {
+      const res = await apiFetch('/api/orchestrator/coordinate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -314,7 +316,7 @@ export class OrchestratorRuntime {
    * Execute an autonomous multi-step action batch through /api/orchestrator/dispatch
    */
   public async dispatchBatch(actions: Array<{ action: string; module?: string; command?: string; options?: any; payload?: any }>): Promise<any> {
-    const res = await fetch('/api/orchestrator/dispatch', {
+    const res = await apiFetch('/api/orchestrator/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'batch', payload: { actions } })
@@ -326,7 +328,7 @@ export class OrchestratorRuntime {
    * Run a Dream State consolidation & optional autonomous tool synthesis cycle
    */
   public async runDreamCycle(focusTopic?: string, forgeIfHelpful: boolean = true): Promise<any> {
-    const res = await fetch('/api/orchestrator/dispatch', {
+    const res = await apiFetch('/api/orchestrator/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -341,7 +343,7 @@ export class OrchestratorRuntime {
    * Trigger multi-round TypeScript self-healing across the workspace
    */
   public async runSelfHeal(maxRounds: number = 6): Promise<any> {
-    const res = await fetch('/api/orchestrator/dispatch', {
+    const res = await apiFetch('/api/orchestrator/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -356,7 +358,7 @@ export class OrchestratorRuntime {
    * Synthesize & verify a new executable tool in dynamic_tools.json
    */
   public async forgeTool(prompt: string, name?: string, category?: string): Promise<any> {
-    const res = await fetch('/api/orchestrator/dispatch', {
+    const res = await apiFetch('/api/orchestrator/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -371,7 +373,7 @@ export class OrchestratorRuntime {
    * Execute any registered dynamic micro-tool by id or name
    */
   public async executeTool(toolIdOrName: string, args: Record<string, any> = {}): Promise<any> {
-    const res = await fetch('/api/orchestrator/dispatch', {
+    const res = await apiFetch('/api/orchestrator/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -386,7 +388,7 @@ export class OrchestratorRuntime {
    * Audit complete orchestrator autonomy health (tsc, Dream State, dynamic tools, macro telemetry)
    */
   public async runAutonomyAudit(): Promise<any> {
-    const res = await fetch('/api/orchestrator/dispatch', {
+    const res = await apiFetch('/api/orchestrator/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'autonomy-audit' })

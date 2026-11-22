@@ -299,6 +299,45 @@ export const DIRTY_DOZEN_CASES: DirtyDozenCase[] = [
     },
     expectedResult: 'PERMISSION_DENIED',
   },
+  {
+    id: 19,
+    name: 'Non-admin self-privilege escalation via privileges map on UserProfile update',
+    collectionPath: 'users/userA',
+    operation: 'update',
+    auth: { uid: 'userA', email: 'a@example.com', email_verified: true },
+    payload: {
+      uid: 'userA',
+      email: 'a@example.com',
+      role: 'user',
+      status: 'active',
+      privileges: {
+        allowedModules: ['chat', 'api-secrets'],
+        canUseVoiceChat: true,
+        canRunAutonomousWorkflow: true,
+        canModifyAgentSettings: true,
+        canExecuteTerminalAndTools: true,
+        canAccessSecretsAndWallets: true,
+        canManageUsers: true,
+      },
+      createdAt: '2026-11-17T00:00:00Z',
+      updatedAt: '2026-11-21T00:00:00Z',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+  },
+  {
+    id: 20,
+    name: 'Non-admin self-reactivation tampering status from suspended to active',
+    collectionPath: 'users/userA',
+    operation: 'update',
+    auth: { uid: 'userA', email: 'a@example.com', email_verified: true },
+    payload: {
+      uid: 'userA',
+      email: 'a@example.com',
+      role: 'user',
+      status: 'active',
+      createdAt: '2026-11-17T00:00:00Z',
+      updatedAt: '2026-11-21T00:00:00Z',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+  },
 ];
-
-

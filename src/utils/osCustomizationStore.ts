@@ -224,7 +224,14 @@ export const SOVEREIGN_THEME_PRESETS: SovereignThemePreset[] = [
   }
 ];
 
-const STORAGE_KEY = 'sovereign_os_customization_profile_v1';
+const LEGACY_STORAGE_KEY = 'sovereign_os_customization_profile_v1';
+let activeCustomizationUserId: string | null = null;
+let activeCustomizationIsArchitect = true;
+
+function getActiveStorageKey(): string {
+  if (!activeCustomizationUserId) return LEGACY_STORAGE_KEY;
+  return `sovereign_os_customization_profile_v2_${activeCustomizationUserId}`;
+}
 
 export const DEFAULT_CUSTOMIZATION_PROFILE: SovereignOSCustomizationProfile = {
   themeId: 'aurelius-gold',
@@ -299,25 +306,59 @@ export const DEFAULT_CUSTOMIZATION_PROFILE: SovereignOSCustomizationProfile = {
   ]
 };
 
+export const CLEAN_PERSONAL_CUSTOMIZATION_PROFILE: SovereignOSCustomizationProfile = {
+  ...DEFAULT_CUSTOMIZATION_PROFILE,
+  workspaceNames: [
+    '1: Personal Home',
+    '2: Build & Projects',
+    '3: Chat & Social',
+    '4: Play & Media'
+  ],
+  desktopWidgets: {
+    showKernelHud: false,
+    showMarketTickerHud: false,
+    showCryptoVaultHud: false,
+    showClipboardHud: false
+  },
+  clipboardHistory: []
+};
+
+function getBaseDefaultProfile(): SovereignOSCustomizationProfile {
+  return activeCustomizationIsArchitect ? DEFAULT_CUSTOMIZATION_PROFILE : CLEAN_PERSONAL_CUSTOMIZATION_PROFILE;
+}
+
+export function setActiveCustomizationUserScope(userId: string | null, isArchitect = true): SovereignOSCustomizationProfile {
+  activeCustomizationUserId = userId;
+  activeCustomizationIsArchitect = isArchitect;
+  const loaded = loadOSCustomizationProfile();
+  if (typeof window !== 'undefined') {
+    applyOSCustomizationToDOM(loaded);
+    window.dispatchEvent(new CustomEvent('sovereign_os_customization_changed', { detail: loaded }));
+  }
+  return loaded;
+}
+
 export function loadOSCustomizationProfile(): SovereignOSCustomizationProfile {
-  if (typeof window === 'undefined') return DEFAULT_CUSTOMIZATION_PROFILE;
+  const baseDefault = getBaseDefaultProfile();
+  if (typeof window === 'undefined') return baseDefault;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_CUSTOMIZATION_PROFILE;
+    const key = getActiveStorageKey();
+    const raw = localStorage.getItem(key) ?? (activeCustomizationIsArchitect ? localStorage.getItem(LEGACY_STORAGE_KEY) : null);
+    if (!raw) return baseDefault;
     const parsed = JSON.parse(raw);
     return {
-      ...DEFAULT_CUSTOMIZATION_PROFILE,
+      ...baseDefault,
       ...parsed,
       desktopWidgets: {
-        ...DEFAULT_CUSTOMIZATION_PROFILE.desktopWidgets,
+        ...baseDefault.desktopWidgets,
         ...(parsed.desktopWidgets || {})
       },
       notifications: {
-        ...DEFAULT_CUSTOMIZATION_PROFILE.notifications,
+        ...baseDefault.notifications,
         ...(parsed.notifications || {})
       },
       hotkeys: {
-        ...DEFAULT_CUSTOMIZATION_PROFILE.hotkeys,
+        ...baseDefault.hotkeys,
         ...(parsed.hotkeys || {})
       },
       hiddenDesktopIcons: Array.isArray(parsed.hiddenDesktopIcons)
@@ -336,13 +377,13 @@ export function loadOSCustomizationProfile(): SovereignOSCustomizationProfile {
       workspaceNames:
         Array.isArray(parsed.workspaceNames) && parsed.workspaceNames.length === 4
           ? (parsed.workspaceNames as [string, string, string, string])
-          : DEFAULT_CUSTOMIZATION_PROFILE.workspaceNames,
+          : baseDefault.workspaceNames,
       clipboardHistory: Array.isArray(parsed.clipboardHistory)
         ? parsed.clipboardHistory
-        : DEFAULT_CUSTOMIZATION_PROFILE.clipboardHistory
+        : baseDefault.clipboardHistory
     };
   } catch {
-    return DEFAULT_CUSTOMIZATION_PROFILE;
+    return baseDefault;
   }
 }
 
@@ -390,7 +431,7 @@ export function saveOSCustomizationProfile(
   };
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      localStorage.setItem(getActiveStorageKey(), JSON.stringify(merged));
     } catch {}
     applyOSCustomizationToDOM(merged);
     window.dispatchEvent(

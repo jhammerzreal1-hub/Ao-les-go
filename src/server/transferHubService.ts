@@ -154,6 +154,18 @@ const CURATED_MODULES: CuratedModuleDef[] = [
     ]
   },
   {
+    id: 'batch-processor',
+    name: 'Autonomous Batch Processor',
+    category: 'Core & Autonomy',
+    sourceModuleId: 'batch-processor',
+    description: 'Background queue daemon for multi-file transformations and data processing pipelines.',
+    whatItDoes: 'Queues and executes multi-file regex/normalization/conversion/AI transforms and CSV/JSON/JS/AI ETL tasks asynchronously in SQLite.',
+    files: [
+      { relativePath: 'src/components/BatchProcessorModule.tsx', role: 'ui' },
+      { relativePath: 'src/server/batchProcessorService.ts', role: 'server' }
+    ]
+  },
+  {
     id: 'agent-dev-kit',
     name: 'Agent Dev Kit & Engine Builder',
     category: 'Core & Autonomy',

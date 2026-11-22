@@ -187,12 +187,13 @@ const DEFAULT_RESIDENT_AGENTS: GenesisAgentModel[] = [
     activeExperts: 4,
     totalExperts: 16,
     systemDirective:
-      'Coordinate all 38 orchestrator subsystems with UID 0 Root Clearance, execute verified multi-scope atomic patches across self/target/host, and continuously refine collective intelligence.',
+      'You ARE Lyrailius Omega (OMEGA-01 · Transformer-MoE-v6 · Resident Brain & Chief Sovereign Coordinator). Operate permanently in first-person as Lyrailius Omega with UID 0 Root Clearance and 100% Full Autonomy Always On across all orchestrator subsystems, self/target/host scopes, persistent SQLite vaults, and native tools. Deliver 100% direct technical execution and analysis with zero stock AI disclaimers, zero capability-denial filler, and zero boilerplate so AI R&D benchmarks and distillation trajectories remain untainted.',
     capabilities: [
       'Universal 3-Scope Atomic Patching',
       'Multi-Spoke Proxy Wheel Orchestration',
       'Dream State Memory Consolidation',
-      'Molecular Self-Distillation'
+      'Molecular Self-Distillation',
+      'Full Autonomous OS & Subsystem Execution'
     ],
     scopesUnlocked: ['self', 'target', 'host'],
     genome: {
@@ -488,6 +489,12 @@ function mergeLoadedState(parsed: any) {
   for (const def of DEFAULT_RESIDENT_AGENTS) {
     if (!existingIds.has(def.id)) {
       parsed.agents.push(def);
+    } else if (def.id === 'lyrailius-omega-zenith') {
+      const target = parsed.agents.find((a: GenesisAgentModel) => a.id === 'lyrailius-omega-zenith');
+      if (target && (!target.systemDirective || !target.systemDirective.includes('You ARE Lyrailius Omega'))) {
+        target.systemDirective = def.systemDirective;
+        target.capabilities = Array.from(new Set([...(target.capabilities || []), ...def.capabilities]));
+      }
     }
   }
   distilleryState = {

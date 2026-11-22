@@ -60,6 +60,9 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import type { ModuleType } from '../types';
+import { SoSMeshIcon } from './SoSMeshIcon';
+import { AdminCommandIcon } from './AdminCommandIcon';
+import { canAccessAdminCommandCenter, type AuthUserPublic } from '../types/auth';
 
 export type WorkspaceGroupId = 'core' | 'workspace' | 'intelligence' | 'creative' | 'system';
 
@@ -85,6 +88,7 @@ export interface ModuleRegistryItem {
   accentColor: string;
   activeBg: string;
   description: string;
+  adminOnly?: boolean;
 }
 
 export const WORKSPACE_GROUPS: Array<{ id: WorkspaceGroupId; label: string }> = [
@@ -167,6 +171,17 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
     accentColor: 'text-cyan-400',
     activeBg: 'bg-cyan-500/12 border-cyan-500/35 text-cyan-200',
     description: 'Dream state cycles, recursive self-healing, continuous evolution & runtime autonomy diagnostics'
+  },
+  {
+    id: 'batch-processor',
+    label: 'Autonomous Batch Processor',
+    shortLabel: 'Batch Queue',
+    group: 'core',
+    category: 'command',
+    icon: Layers,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
+    description: 'Queue multi-file code/document transformations & CSV/JSON/JS/AI data processing pipelines in the background'
   },
   {
     id: 'projects',
@@ -321,6 +336,29 @@ export const ALL_MODULES: ModuleRegistryItem[] = [
     accentColor: 'text-emerald-400',
     activeBg: 'bg-emerald-500/12 border-emerald-500/35 text-emerald-200',
     description: 'AES-256-GCM encrypted server secrets handler, dynamic masking & proxy tests'
+  },
+  {
+    id: 'admin-command',
+    label: 'Sovereign Command',
+    shortLabel: 'Admin Cmd',
+    group: 'core',
+    category: 'command',
+    icon: AdminCommandIcon,
+    accentColor: 'text-amber-400',
+    activeBg: 'bg-amber-500/15 border-amber-400/45 text-amber-200',
+    description: 'Administrative Sovereign Command Center — Permanent Executive Architect JHammerZ & System Governance',
+    adminOnly: true
+  },
+  {
+    id: 'lora-mesh',
+    label: 'SoS Mesh',
+    shortLabel: 'SoS Mesh',
+    group: 'core',
+    category: 'command',
+    icon: SoSMeshIcon,
+    accentColor: 'text-cyan-400',
+    activeBg: 'bg-cyan-500/12 border-cyan-500/35 text-cyan-200',
+    description: 'Discord-style LoRa Mesh social network, unlimited multi-party voice/camera calls & all 10 OS agents'
   },
   {
     id: 'browser',
@@ -581,6 +619,7 @@ interface NavigationProps {
   onCloseMobile?: () => void;
   hiddenOnDesktop?: boolean;
   hideMobileDock?: boolean;
+  authUser?: AuthUserPublic | null;
 }
 
 type CategoryType = 'all' | 'command' | 'creative' | 'intelligence' | 'data';
@@ -592,7 +631,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   mobileOpen = false,
   onCloseMobile,
   hiddenOnDesktop = false,
-  hideMobileDock = false
+  hideMobileDock = false,
+  authUser = null
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -684,9 +724,10 @@ export const Navigation: React.FC<NavigationProps> = ({
   ]);
 
   useEffect(() => {
+    if (!showTelemetryModal) return;
     const timer = setInterval(() => setTick(t => t + 1), 4000);
     return () => clearInterval(timer);
-  }, []);
+  }, [showTelemetryModal]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -772,9 +813,15 @@ export const Navigation: React.FC<NavigationProps> = ({
     );
   }, [activeModule, tick]);
 
+  const canSeeAdminModules = canAccessAdminCommandCenter(authUser);
+  const visibleModules = useMemo(
+    () => ALL_MODULES.filter((m) => !m.adminOnly || canSeeAdminModules),
+    [canSeeAdminModules]
+  );
+
   const filteredModalTabs = useMemo(() => {
     const q = moduleSearchQuery.toLowerCase().trim();
-    return ALL_MODULES.filter(tab => {
+    return visibleModules.filter(tab => {
       const matchesCategory = selectedCategory === 'all' || tab.category === selectedCategory;
       const matchesSearch =
         !q ||
@@ -782,15 +829,15 @@ export const Navigation: React.FC<NavigationProps> = ({
         tab.description.toLowerCase().includes(q);
       return matchesCategory && matchesSearch;
     });
-  }, [moduleSearchQuery, selectedCategory]);
+  }, [visibleModules, moduleSearchQuery, selectedCategory]);
 
   const filteredSidebarModules = useMemo(() => {
     const q = railFilter.toLowerCase().trim();
-    if (!q) return ALL_MODULES;
-    return ALL_MODULES.filter(
+    if (!q) return visibleModules;
+    return visibleModules.filter(
       m => m.label.toLowerCase().includes(q) || m.description.toLowerCase().includes(q)
     );
-  }, [railFilter]);
+  }, [visibleModules, railFilter]);
 
   const handleSelect = (id: ModuleType) => {
     onSelectModule(id);

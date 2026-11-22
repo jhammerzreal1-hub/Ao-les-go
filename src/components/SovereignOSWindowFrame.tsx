@@ -8,6 +8,14 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { SoSMeshIcon } from './SoSMeshIcon';
+import { AdminCommandIcon } from './AdminCommandIcon';
+import {
+  canAccessAdminCommandCenter,
+  canUserAccessModule,
+  isExecutiveArchitectUser,
+  type AuthUserPublic
+} from '../types/auth';
 import {
   Minus,
   Square,
@@ -72,6 +80,7 @@ import {
   type CustomDesktopShortcut,
   type SovereignOSCustomizationProfile
 } from '../utils/osCustomizationStore';
+import { apiFetch, buildAuthHeaders } from '../utils/authClient';
 
 export interface OSWindowGeometry {
   x: number;
@@ -218,52 +227,17 @@ const SovereignOSWindowFrameInner: React.FC<SovereignOSWindowFrameProps> = ({
     };
   }, []);
 
-  if (mode === 'tiled') {
-    return (
-      <div className={visible ? tiledClassName : 'hidden'}>
-        {children}
-      </div>
-    );
-  }
-
-  // Detached Mobile/Workspace Pill Minimized State (keeps Window alive with 0 unmounts)
-  if (mode === 'pip' && pipMinimized) {
-    return (
-      <>
-        <div className="hidden" aria-hidden="true">
-          {children}
-        </div>
-        <button
-          type="button"
-          onClick={() => onRestorePip?.()}
-          className={`fixed z-40 px-3.5 py-2 rounded-xl bg-zinc-900/95 hover:bg-zinc-800 border border-amber-500/50 shadow-[0_12px_32px_rgba(0,0,0,0.7)] flex items-center gap-2 text-xs font-semibold text-amber-200 cursor-pointer backdrop-blur-md ${
-            moduleId === 'chat'
-              ? 'right-3 bottom-14'
-              : moduleId === 'browser'
-              ? 'right-3 bottom-24'
-              : 'left-3 bottom-14'
-          }`}
-          title={`Restore Detached ${meta?.label || moduleId}`}
-        >
-          <Icon className={`w-4 h-4 ${meta?.accentColor || 'text-amber-400'}`} />
-          <span>{meta?.shortLabel || meta?.label || moduleId} PiP</span>
-        </button>
-      </>
-    );
-  }
-
-  // Floating Desktop Window OR Detached PiP Overlay Mode (Resizable & Movable Everywhere)
+  const isTiled = mode === 'tiled';
   const rawGeom = geometry || createDefaultWindowGeometry(0, containerSize.width, containerSize.height, 45);
   const safeGeom = clampWindowGeometry(rawGeom, containerSize.width, containerSize.height);
-  const isHidden = mode === 'floating' ? !visible || safeGeom.minimized : !visible;
-
-  if (isHidden) {
-    return (
-      <div className="hidden" aria-hidden="true">
-        {children}
-      </div>
-    );
-  }
+  const isPipPill = mode === 'pip' && pipMinimized;
+  const isHidden = isTiled
+    ? !visible
+    : isPipPill
+    ? true
+    : mode === 'floating'
+    ? !visible || safeGeom.minimized
+    : !visible;
 
   const effectiveZ = alwaysOnTop ? Math.max(safeGeom.zIndex, 46) : safeGeom.zIndex;
 
@@ -517,10 +491,12 @@ const SovereignOSWindowFrameInner: React.FC<SovereignOSWindowFrameProps> = ({
         willChange: isInteracting ? 'transform, left, top, width, height' : undefined
       }
     : {
-        top: safeGeom.y,
+        top: `min(${safeGeom.y}px, max(0px, calc(100% - 220px)))`,
         left: safeGeom.x,
         width: safeGeom.width,
+        maxWidth: 'calc(100% - 8px)',
         height: safeGeom.height,
+        maxHeight: `calc(100% - min(${safeGeom.y}px, max(0px, calc(100% - 220px))) - 6px)`,
         zIndex: effectiveZ,
         willChange: isInteracting ? 'transform, left, top, width, height' : undefined
       };
@@ -530,50 +506,74 @@ const SovereignOSWindowFrameInner: React.FC<SovereignOSWindowFrameProps> = ({
     Boolean(activeResizeEdge && activeResizeEdge.includes(dir));
 
   return (
-    <div
-      ref={wrapperRef}
-      onPointerDownCapture={() => {
-        if (!isFocused) onFocus?.();
-      }}
-      style={windowStyle}
-      className="sovereign-window-wrapper absolute overflow-visible"
-    >
-      {/* Inner Clipped Window Surface */}
+    <>
       <div
-        style={{
-          borderRadius: 'var(--sovereign-window-radius, 14px)'
+        id={`sovereign-window-${moduleId}`}
+        ref={wrapperRef}
+        aria-hidden={isHidden ? 'true' : undefined}
+        onPointerDownCapture={(e) => {
+          if (isTiled || isHidden || isFocused) return;
+          const target = e.target as HTMLElement | null;
+          if (target?.closest('textarea, input, select, [contenteditable="true"]')) {
+            requestAnimationFrame(() => onFocus?.());
+            return;
+          }
+          onFocus?.();
         }}
-        className={`sovereign-window relative w-full h-full flex flex-col overflow-hidden bg-zinc-950 ${
-          isInteracting
-            ? 'border-2 border-sky-400/85 shadow-[0_18px_48px_rgba(0,0,0,0.88)]'
-            : isDetached || alwaysOnTop
-            ? 'border border-amber-400/75 shadow-[0_18px_48px_rgba(0,0,0,0.85)] ring-1 ring-amber-400/35'
-            : isFocused
-            ? 'border border-amber-500/55 shadow-[0_16px_42px_rgba(0,0,0,0.75)] ring-1 ring-amber-500/20'
-            : 'border border-zinc-800/95 shadow-[0_10px_28px_rgba(0,0,0,0.55)]'
-        }`}
+        style={isTiled || isHidden ? undefined : windowStyle}
+        className={
+          isHidden
+            ? 'sovereign-window-wrapper hidden'
+            : isTiled
+            ? tiledClassName
+            : 'sovereign-window-wrapper absolute overflow-visible'
+        }
       >
-        {/* Subtle Visual Edge Glow When Hovering or Dragging a Resize Handle */}
-        {!safeGeom.maximized && edgeGlow('n') && (
-          <div className="pointer-events-none absolute top-0 inset-x-0 h-[2px] bg-sky-400 z-40" />
-        )}
-        {!safeGeom.maximized && edgeGlow('s') && (
-          <div className="pointer-events-none absolute bottom-0 inset-x-0 h-[2px] bg-sky-400 z-40" />
-        )}
-        {!safeGeom.maximized && edgeGlow('w') && (
-          <div className="pointer-events-none absolute left-0 inset-y-0 w-[2px] bg-sky-400 z-40" />
-        )}
-        {!safeGeom.maximized && edgeGlow('e') && (
-          <div className="pointer-events-none absolute right-0 inset-y-0 w-[2px] bg-sky-400 z-40" />
-        )}
-
-        {/* Generous 44px Window Title Bar — Easy Grab & Drag, Separated Mistake-Proof Controls */}
+        {/* Inner Clipped Window Surface (Consistent Fiber depth across all modes so children NEVER unmount) */}
         <div
-          onPointerDown={(e) => startDrag(e, 'move')}
-          onDoubleClick={(e) => {
-            if ((e.target as HTMLElement).closest('button, [data-window-controls="true"]')) return;
-            onToggleMaximize?.();
-          }}
+          style={
+            isTiled
+              ? undefined
+              : {
+                  borderRadius: 'var(--sovereign-window-radius, 14px)'
+                }
+          }
+          className={
+            isTiled
+              ? 'w-full h-full flex flex-col min-h-0 overflow-hidden'
+              : `sovereign-window relative w-full h-full flex flex-col overflow-hidden bg-zinc-950 ${
+                  isInteracting
+                    ? 'border-2 border-sky-400/85 shadow-[0_18px_48px_rgba(0,0,0,0.88)]'
+                    : isDetached || alwaysOnTop
+                    ? 'border border-amber-400/75 shadow-[0_18px_48px_rgba(0,0,0,0.85)] ring-1 ring-amber-400/35'
+                    : isFocused
+                    ? 'border border-amber-500/55 shadow-[0_16px_42px_rgba(0,0,0,0.75)] ring-1 ring-amber-500/20'
+                    : 'border border-zinc-800/95 shadow-[0_10px_28px_rgba(0,0,0,0.55)]'
+                }`
+          }
+        >
+          {/* Subtle Visual Edge Glow When Hovering or Dragging a Resize Handle */}
+          {!isTiled && !isHidden && !safeGeom.maximized && edgeGlow('n') && (
+            <div className="pointer-events-none absolute top-0 inset-x-0 h-[2px] bg-sky-400 z-40" />
+          )}
+          {!isTiled && !isHidden && !safeGeom.maximized && edgeGlow('s') && (
+            <div className="pointer-events-none absolute bottom-0 inset-x-0 h-[2px] bg-sky-400 z-40" />
+          )}
+          {!isTiled && !isHidden && !safeGeom.maximized && edgeGlow('w') && (
+            <div className="pointer-events-none absolute left-0 inset-y-0 w-[2px] bg-sky-400 z-40" />
+          )}
+          {!isTiled && !isHidden && !safeGeom.maximized && edgeGlow('e') && (
+            <div className="pointer-events-none absolute right-0 inset-y-0 w-[2px] bg-sky-400 z-40" />
+          )}
+
+          {/* Generous 44px Window Title Bar — Easy Grab & Drag, Separated Mistake-Proof Controls */}
+          {!isTiled && !isHidden && (
+            <div
+              onPointerDown={(e) => startDrag(e, 'move')}
+              onDoubleClick={(e) => {
+                if ((e.target as HTMLElement).closest('button, [data-window-controls="true"]')) return;
+                onToggleMaximize?.();
+              }}
           className={`h-11 pl-3.5 pr-3 flex items-center justify-between gap-3 shrink-0 select-none touch-none border-b cursor-grab active:cursor-grabbing ${
             isDetached || alwaysOnTop
               ? 'bg-gradient-to-r from-zinc-900 via-amber-950/35 to-zinc-900 border-amber-500/35 text-amber-100'
@@ -707,9 +707,17 @@ const SovereignOSWindowFrameInner: React.FC<SovereignOSWindowFrameProps> = ({
             )}
           </div>
         </div>
+          )}
 
         {/* Window Content Body (never intercept 1-tap focus on inputs/textareas/links) */}
-        <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden bg-zinc-950">
+        <div
+          key="window-body"
+          className={
+            isTiled
+              ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+              : 'relative flex-1 min-h-0 flex flex-col overflow-hidden bg-zinc-950'
+          }
+        >
           {children}
 
           {/* Drag/Resize pointer shield so embedded iframes/canvases never swallow pointermove */}
@@ -720,7 +728,7 @@ const SovereignOSWindowFrameInner: React.FC<SovereignOSWindowFrameProps> = ({
       </div>
 
       {/* Generous Overhanging 8-Way Edge & Corner Resize Handles (Clear of Titlebar Buttons) */}
-      {!safeGeom.maximized && (
+      {!isTiled && !isHidden && !safeGeom.maximized && (
         <>
           {/* Top Edge — sits strictly above the titlebar rim so it never blocks Minimize/Maximize/Close */}
           <div
@@ -793,7 +801,26 @@ const SovereignOSWindowFrameInner: React.FC<SovereignOSWindowFrameProps> = ({
           </div>
         </>
       )}
-    </div>
+      </div>
+
+      {isPipPill && (
+        <button
+          type="button"
+          onClick={() => onRestorePip?.()}
+          className={`fixed z-40 px-3.5 py-2 rounded-xl bg-zinc-900/95 hover:bg-zinc-800 border border-amber-500/50 shadow-[0_12px_32px_rgba(0,0,0,0.7)] flex items-center gap-2 text-xs font-semibold text-amber-200 cursor-pointer backdrop-blur-md ${
+            moduleId === 'chat'
+              ? 'right-3 bottom-14'
+              : moduleId === 'browser'
+              ? 'right-3 bottom-24'
+              : 'left-3 bottom-14'
+          }`}
+          title={`Restore Detached ${meta?.label || moduleId}`}
+        >
+          <Icon className={`w-4 h-4 ${meta?.accentColor || 'text-amber-400'}`} />
+          <span>{meta?.shortLabel || meta?.label || moduleId} PiP</span>
+        </button>
+      )}
+    </>
   );
 };
 
@@ -810,6 +837,7 @@ interface SovereignDesktopCanvasProps {
   onCascadeWindows: () => void;
   onMinimizeAll: () => void;
   onSwitchWorkspaceMode: () => void;
+  authUser?: AuthUserPublic | null;
 }
 
 const DESKTOP_SHORTCUTS: Array<{
@@ -818,8 +846,11 @@ const DESKTOP_SHORTCUTS: Array<{
   subtitle: string;
   icon: React.ComponentType<{ className?: string }>;
   accent: string;
+  adminOnly?: boolean;
 }> = [
+  { id: 'admin-command', label: 'Sovereign Command', subtitle: 'Admin · JHammerZ', icon: AdminCommandIcon, accent: 'text-amber-400', adminOnly: true },
   { id: 'file-manager', label: 'This PC · Files', subtitle: 'Host Filesystem', icon: HardDrive, accent: 'text-amber-300' },
+  { id: 'lora-mesh', label: 'SoS Mesh', subtitle: 'LoRa · Voice · Cam', icon: SoSMeshIcon, accent: 'text-cyan-400' },
   { id: 'chat', label: 'Sovereign Chat', subtitle: 'AI Orchestrator', icon: MessageSquare, accent: 'text-amber-400' },
   { id: 'browser', label: 'Google Chrome', subtitle: 'Full Internet', icon: Globe, accent: 'text-sky-400' },
   { id: 'terminal', label: 'Root Terminal', subtitle: 'UID 0 Shell', icon: Terminal, accent: 'text-emerald-400' },
@@ -828,6 +859,7 @@ const DESKTOP_SHORTCUTS: Array<{
   { id: 'crypto-wallet', label: 'Crypto Wallets', subtitle: 'Personal & Agentic', icon: Wallet, accent: 'text-emerald-400' },
   { id: 'grant-hunter', label: 'Grant Hunter', subtitle: '0% Equity Funding', icon: Award, accent: 'text-emerald-300' },
   { id: 'transfer-hub', label: 'Downloads & Uploads', subtitle: 'Hub · Module Lab', icon: ArrowUpDown, accent: 'text-sky-400' },
+  { id: 'batch-processor', label: 'Batch Processor', subtitle: 'Background Queue', icon: Layers, accent: 'text-amber-400' },
   { id: 'ai-genesis-distillery', label: 'AI Distillery', subtitle: 'Model Forging', icon: Sparkles, accent: 'text-purple-400' },
   { id: 'projects', label: 'Unified Projects', subtitle: 'IDE & Builds', icon: Briefcase, accent: 'text-indigo-400' },
   { id: 'vault', label: 'Encrypted Vault', subtitle: 'AES-256 Store', icon: Archive, accent: 'text-emerald-300' },
@@ -860,7 +892,8 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
   onTileWindows,
   onCascadeWindows,
   onMinimizeAll,
-  onSwitchWorkspaceMode
+  onSwitchWorkspaceMode,
+  authUser = null
 }) => {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -905,6 +938,36 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
     uid: number;
     ring: number;
   } | null>(null);
+  const [preferredNameInput, setPreferredNameInput] = useState<string>('');
+  const [savingPreferredName, setSavingPreferredName] = useState<boolean>(false);
+
+  const handleSaveDesktopPreferredName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleaned = preferredNameInput.trim();
+    if (!cleaned || savingPreferredName) return;
+    setSavingPreferredName(true);
+    try {
+      const resp = await fetch('/api/user-memory/preferred-name', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ preferredName: cleaned })
+      });
+      if (resp.ok) {
+        window.dispatchEvent(
+          new CustomEvent('sovereign_preferred_name_updated', {
+            detail: { userId: authUser?.id, preferredName: cleaned }
+          })
+        );
+        setPreferredNameInput('');
+        showDesktopToast(`All agents will now address you as ${cleaned}.`);
+      }
+    } catch {
+      // ignore network error
+    } finally {
+      setSavingPreferredName(false);
+    }
+  };
 
   const showDesktopToast = (msg: string) => {
     setDesktopToast(msg);
@@ -912,7 +975,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
   };
 
   const refreshDesktopFiles = React.useCallback(() => {
-    fetch('/api/os/desktop/entries')
+    fetch('/api/os/desktop/entries', { credentials: 'include', headers: buildAuthHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data?.success) return;
@@ -936,22 +999,24 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
     const onFsUpdated = () => refreshDesktopFiles();
     window.addEventListener('sovereign_desktop_fs_updated', onFsUpdated);
     return () => window.removeEventListener('sovereign_desktop_fs_updated', onFsUpdated);
-  }, [refreshDesktopFiles]);
+  }, [refreshDesktopFiles, authUser?.id]);
 
   useEffect(() => {
-    applyOSCustomizationToDOM(customProfile);
+    const nextProfile = loadOSCustomizationProfile();
+    setCustomProfile(nextProfile);
+    applyOSCustomizationToDOM(nextProfile);
     const onCustom = (e: Event) => {
       const ce = e as CustomEvent<SovereignOSCustomizationProfile>;
       if (ce.detail) setCustomProfile(ce.detail);
     };
     window.addEventListener('sovereign_os_customization_changed', onCustom);
     return () => window.removeEventListener('sovereign_os_customization_changed', onCustom);
-  }, []);
+  }, [authUser?.id]);
 
   useEffect(() => {
     let active = true;
     const loadHudTelemetry = () => {
-      fetch('/api/macro/telemetry')
+      apiFetch('/api/macro/telemetry')
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (!active || !data?.quotes) return;
@@ -959,7 +1024,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
         })
         .catch(() => {});
 
-      fetch('/api/crypto/wallets')
+      apiFetch('/api/crypto/wallets')
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (!active || !Array.isArray(data?.wallets)) return;
@@ -989,7 +1054,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
   useEffect(() => {
     let active = true;
     const loadInstalled = () => {
-      fetch('/api/os/packages/registry')
+      apiFetch('/api/os/packages/registry')
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (!active || !data?.success || !Array.isArray(data.installed)) return;
@@ -1005,11 +1070,11 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
       active = false;
       window.removeEventListener('sovereign_apps_updated', loadInstalled);
     };
-  }, []);
+  }, [authUser?.id]);
 
   useEffect(() => {
     let active = true;
-    fetch('/api/os/runtime-info')
+    apiFetch('/api/os/runtime-info')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!active || !data?.success) return;
@@ -1060,7 +1125,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
 
   const handleUninstallProgram = async (app: DesktopInstalledApp) => {
     try {
-      const res = await fetch('/api/os/packages/uninstall', {
+      const res = await apiFetch('/api/os/packages/uninstall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appId: app.id })
@@ -1080,7 +1145,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
 
   const handleDeleteDesktopFsEntry = async (entry: { name: string; path: string; type: 'dir' | 'file' }) => {
     try {
-      const res = await fetch('/api/os/fs/delete', {
+      const res = await apiFetch('/api/os/fs/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: entry.path })
@@ -1110,7 +1175,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
       return;
     }
     try {
-      const res = await fetch(`/api/os/fs/read?path=${encodeURIComponent(entry.path)}`);
+      const res = await apiFetch(`/api/os/fs/read?path=${encodeURIComponent(entry.path)}`);
       const data = await res.json();
       if (data?.success && typeof data.content === 'string') {
         setDesktopModal({ type: 'edit-file', name: entry.name, path: entry.path, content: data.content });
@@ -1128,7 +1193,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
         const cleanName = desktopModal.name.trim();
         if (!cleanName) return;
         const fullPath = `${desktopFsPath || 'data/desktop'}/${cleanName}`;
-        const res = await fetch('/api/os/fs/write', {
+        const res = await apiFetch('/api/os/fs/write', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: fullPath, content: desktopModal.content })
@@ -1143,7 +1208,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
         const cleanName = desktopModal.name.trim();
         if (!cleanName) return;
         const fullPath = `${desktopFsPath || 'data/desktop'}/${cleanName}`;
-        const res = await fetch('/api/os/fs/mkdir', {
+        const res = await apiFetch('/api/os/fs/mkdir', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: fullPath })
@@ -1185,7 +1250,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
         if (desktopModal.targetKind === 'fs' && desktopModal.oldPath) {
           const parent = desktopModal.oldPath.slice(0, desktopModal.oldPath.lastIndexOf('/'));
           const newPath = `${parent}/${cleanVal}`;
-          await fetch('/api/os/fs/rename', {
+          await apiFetch('/api/os/fs/rename', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ oldPath: desktopModal.oldPath, newPath })
@@ -1200,7 +1265,7 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
         setDesktopModal(null);
       } else if (desktopModal.type === 'edit-file') {
         setDesktopModal({ ...desktopModal, saving: true });
-        await fetch('/api/os/fs/write', {
+        await apiFetch('/api/os/fs/write', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: desktopModal.path, content: desktopModal.content })
@@ -1253,7 +1318,14 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
   };
 
   const hiddenSet = new Set(customProfile.hiddenDesktopIcons || []);
-  const visibleBuiltinShortcuts = DESKTOP_SHORTCUTS.filter((item) => !hiddenSet.has(item.id));
+  const canSeeAdminCommand = canAccessAdminCommandCenter(authUser);
+  const isArchitectOnDesktop = isExecutiveArchitectUser(authUser);
+  const visibleBuiltinShortcuts = DESKTOP_SHORTCUTS.filter(
+    (item) =>
+      !hiddenSet.has(item.id) &&
+      (!item.adminOnly || canSeeAdminCommand) &&
+      (!authUser || canUserAccessModule(authUser, item.id))
+  );
   const visibleInstalledApps = installedDesktopApps.filter((app) => !hiddenSet.has(`app-${app.id}`));
   const customShortcuts = customProfile.customDesktopShortcuts || [];
 
@@ -1589,6 +1661,96 @@ const SovereignDesktopCanvasInner: React.FC<SovereignDesktopCanvasProps> = ({
 
         {/* Right-Side Live Desktop Telemetry & Customization HUD Widgets (Composited Solid-Alpha for Zero Backdrop-Blur Drag Lag) */}
         <div className="hidden lg:flex flex-col gap-2.5 w-72 shrink-0">
+          {canSeeAdminCommand && (
+            <div className="rounded-2xl bg-gradient-to-br from-[#1b1409]/95 via-zinc-950/95 to-zinc-950/95 border border-amber-500/45 p-3 shadow-[0_0_24px_rgba(245,158,11,0.16)] space-y-2 text-[11px]">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AdminCommandIcon className="w-6 h-6 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="font-bold text-amber-200 truncate">Sovereign Command</div>
+                    <div className="text-[9px] font-mono text-amber-400/90 truncate">
+                      {isArchitectOnDesktop ? 'EXECUTIVE ARCHITECT · JHAMMERZ' : 'ADMIN CLEARANCE ACTIVE'}
+                    </div>
+                  </div>
+                </div>
+                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-[9px] font-mono text-amber-200 shrink-0">
+                  ADMIN ONLY
+                </span>
+              </div>
+              <p className="text-[10px] text-zinc-400 leading-snug">
+                Full control over all users, active sessions, Entity Intelligence charter, security policies &amp; lockdown.
+              </p>
+              <button
+                type="button"
+                onClick={() => onOpenModule('admin-command')}
+                className="w-full py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-[11px] transition-colors cursor-pointer"
+              >
+                Open Sovereign Command Center
+              </button>
+            </div>
+          )}
+
+          {authUser && !canSeeAdminCommand && (
+            <div className="rounded-2xl bg-zinc-950/92 border border-cyan-500/35 p-3 shadow-lg space-y-2.5 text-[11px]">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-bold text-white truncate">
+                    Welcome, {authUser.preferredName || authUser.displayName}
+                  </div>
+                  <div className="text-[10px] font-mono text-cyan-300 truncate">
+                    My Personal Desktop · SQL Memory Active
+                  </div>
+                </div>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-[9px] font-mono uppercase text-emerald-300 shrink-0">
+                  {authUser.role}
+                </span>
+              </div>
+              {!authUser.preferredNameConfirmed ? (
+                <form onSubmit={handleSaveDesktopPreferredName} className="space-y-1.5">
+                  <div className="text-[10px] text-zinc-400">
+                    What name would you like all agents to call you?
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={preferredNameInput}
+                      onChange={(e) => setPreferredNameInput(e.target.value)}
+                      placeholder="Your preferred name..."
+                      className="flex-1 min-w-0 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-white focus:outline-none focus:border-cyan-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!preferredNameInput.trim() || savingPreferredName}
+                      className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-[10px] font-bold cursor-pointer shrink-0"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <p className="text-[10px] text-zinc-400 leading-snug">
+                  Your private files, desktop layout, and tailored agent conversations are saved automatically across sessions.
+                </p>
+              )}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenModule('chat')}
+                  className="flex-1 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/35 border border-cyan-500/40 text-cyan-200 font-semibold text-[11px] cursor-pointer"
+                >
+                  Open Agent Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenModule('file-manager')}
+                  className="flex-1 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-[11px] cursor-pointer"
+                >
+                  My Files
+                </button>
+              </div>
+            </div>
+          )}
+
           {customProfile.desktopWidgets.showKernelHud && (
             <div className="rounded-2xl bg-zinc-950/92 border border-zinc-800/90 p-3 shadow-lg space-y-2 text-[11px] font-mono">
               <div className="flex items-center justify-between">

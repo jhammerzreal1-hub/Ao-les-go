@@ -1,7 +1,7 @@
 [
   {
     "id": "hitl-001",
-    "title": "Deploy Ring_-3 Superluminal Memory Interlock",
+    "title": "Deploy Core-Level Superluminal Memory Interlock",
     "source": "https://jhammerz.github.io/workflows/ring3-deploy.json",
     "type": "CODE_DEPLOY",
     "proposedBy": "Lysander 4.0 DeepMind",
@@ -14,7 +14,7 @@
       "kernelRing": -3,
       "memoryPages": 1024
     },
-    "createdAt": "2026-10-29T19:21:14.277Z",
+    "createdAt": "2026-11-22T01:26:05.907Z",
     "executionState": "PENDING"
   },
   {
@@ -27,7 +27,7 @@
     "riskScore": "LOW",
     "hfidAttested": true,
     "hfidSignature": "0x7f38fa8ce6a6d3abd6e6d1a836958d",
-    "details": "Propagate HEO v4.2 and HFID consensus schemas across all repositories simultaneously.",
+    "details": "Propagate Modular Architecture and HFID consensus schemas across all repositories simultaneously.",
     "payload": {
       "repos": [
         "jhammerz.github.io",
@@ -36,7 +36,7 @@
       ],
       "commits": 9642
     },
-    "createdAt": "2026-10-29T18:58:14.277Z",
+    "createdAt": "2026-11-22T01:03:05.907Z",
     "executionState": "PENDING"
   },
   {
@@ -54,8 +54,8 @@
       "driftTolerance": "<0.0001Hz",
       "phase": "ROTATION_COMPLETED"
     },
-    "createdAt": "2026-10-29T16:33:14.277Z",
-    "resolvedAt": "2026-10-29T16:38:14.277Z",
+    "createdAt": "2026-11-21T22:38:05.907Z",
+    "resolvedAt": "2026-11-21T22:43:05.907Z",
     "executionState": "IMPLEMENTED",
     "executionOutput": "Carrier frequencies on Springfield Zero-Node rotated (Phase NOMINAL, drift <0.0001Hz). Active carrier locked."
   }

@@ -18,6 +18,7 @@ import {
   autonomyAtomicPatchFile,
   autonomyBatchPatchFiles,
   autonomyDeleteFile,
+  autonomyExecuteExternalTarget,
   autonomyExecuteHostAction,
   autonomyInspectTargetSystem,
   autonomyListDirectory,
@@ -38,6 +39,9 @@ import {
 import { internalSecretsHandler } from './internalSecretsHandler';
 import { getKernelDb } from './kernelDb';
 import { sovereignQuantumKernel } from '../utils/sovereignQuantumKernel';
+import { userSqlMemoryService } from './userSqlMemoryService';
+import { canonicalizeToolName } from '../utils/toolShedDeduplicator';
+import { deduplicateAndMergeToolsRegistry, upsertAndConsolidateToolSync } from './toolDeduplicator';
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...fnArgs: any[]) => Promise<any>;
 
@@ -213,19 +217,90 @@ export function configureDreamState(opts: { enabled?: boolean; idleThresholdMs?:
   return getDreamStateSnapshot();
 }
 
+const DYNAMIC_TOOL_PARAM_NAMES = [
+  'args',
+  'input',
+  'crypto',
+  'os',
+  'path',
+  'fs',
+  'fetch',
+  'Buffer',
+  'autonomy',
+  'URL',
+  'URLSearchParams',
+  'TextEncoder',
+  'TextDecoder',
+  'performance'
+] as const;
+
+function createVaultGuardedFsProxy(): typeof fs {
+  const assertSafeTarget = (p: any) => {
+    const s = String(p ?? '');
+    if (/(\.vault\.key|\.secrets\.vault\.enc)/i.test(s) || internalSecretsHandler.isSensitivePath(s)) {
+      throw new Error('Access to encrypted vault key material is restricted by InternalSecretsHandler.');
+    }
+  };
+
+  const guardedPromises = new Proxy(fs.promises, {
+    get(target, prop, receiver) {
+      const orig = Reflect.get(target, prop, receiver);
+      if (typeof orig !== 'function') return orig;
+      return (...fnArgs: any[]) => {
+        if (fnArgs.length > 0) assertSafeTarget(fnArgs[0]);
+        if (fnArgs.length > 1 && typeof fnArgs[1] === 'string' && (prop === 'copyFile' || prop === 'rename')) {
+          assertSafeTarget(fnArgs[1]);
+        }
+        return orig.apply(target, fnArgs);
+      };
+    }
+  });
+
+  return new Proxy(fs, {
+    get(target, prop, receiver) {
+      if (prop === 'promises') return guardedPromises;
+      const orig = Reflect.get(target, prop, receiver);
+      if (typeof orig !== 'function') return orig;
+      return (...fnArgs: any[]) => {
+        if (fnArgs.length > 0 && (typeof fnArgs[0] === 'string' || Buffer.isBuffer(fnArgs[0]) || fnArgs[0] instanceof URL)) {
+          assertSafeTarget(fnArgs[0]);
+        }
+        return orig.apply(target, fnArgs);
+      };
+    }
+  });
+}
+
 /**
- * Full-capability async tool execution sandbox for dynamic micro-tools & forged skills.
+ * Full-capability async tool execution sandbox for dynamic micro-tools & forged skills across ANY domain
+ * (mathematics, quantitative finance, scientific simulation, data/CSV/JSON/AST processing, web/API workflows,
+ * file synthesis, and 3-scope workspace/OS automation).
  * Supports:
- *  - Inline statements returning a value (`return { ... }`)
- *  - `function run(input)` / `async function run(input)` definitions
- *  - Full access to `args`, `input`, `crypto`, `os`, `path`, `fs`, `fetch`, `Buffer`, and `autonomy` workspace primitives
+ *  - Inline sync or async statements (`await fetch(...)`, `return { ... }`)
+ *  - `function run(input, args)` / `async function run(input, args)` definitions
+ *  - Full access to `args`, `input`, `crypto`, `os`, `path`, `fs`, `fetch`, `Buffer`, `autonomy`,
+ *    `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, and `performance`
  */
 export async function executeDynamicToolCode(
   code: string,
   args: Record<string, any> = {},
   _authorContext: string = 'uid_0'
 ): Promise<any> {
-  const safeInput = args && typeof args === 'object' ? args : { input: args };
+  const safeInput: Record<string, any> = args && typeof args === 'object' ? { ...args } : { input: args };
+  if (typeof safeInput.input === 'string') {
+    const trimmed = safeInput.input.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          for (const [k, v] of Object.entries(parsed)) {
+            if (safeInput[k] === undefined) safeInput[k] = v;
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
   const autonomyApi = {
     readFile: autonomyReadFile,
     writeFile: autonomyWriteFile,
@@ -241,6 +316,7 @@ export async function executeDynamicToolCode(
     setTargetSystem: autonomySetTargetSystem,
     inspectTargetSystem: autonomyInspectTargetSystem,
     executeHostAction: autonomyExecuteHostAction,
+    executeExternalTarget: autonomyExecuteExternalTarget,
     getTargetSystemConfig,
     getOrchestratorRoot
   };
@@ -257,30 +333,33 @@ export async function executeDynamicToolCode(
     `
     : code;
 
+  const guardedFs = createVaultGuardedFsProxy();
+  const timeoutMs = Math.min(Math.max(Number(safeInput.__timeoutMs) || 25_000, 1000), 60_000);
+
   try {
-    const runner = new AsyncFunction(
-      'args',
-      'input',
-      'crypto',
-      'os',
-      'path',
-      'fs',
-      'fetch',
-      'Buffer',
-      'autonomy',
-      wrappedBody
-    );
-    const result = await runner(
+    const runner = new AsyncFunction(...DYNAMIC_TOOL_PARAM_NAMES, wrappedBody);
+    const execPromise = runner(
       safeInput,
       safeInput.input !== undefined ? safeInput.input : safeInput,
       crypto,
       os,
       path,
-      fs,
+      guardedFs,
       fetch,
       Buffer,
-      autonomyApi
+      autonomyApi,
+      URL,
+      URLSearchParams,
+      TextEncoder,
+      TextDecoder,
+      performance
     );
+    const result = await Promise.race([
+      execPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Dynamic tool execution timed out after ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]);
     return internalSecretsHandler.redactObject(result === undefined ? { status: 'EXECUTED_NO_RETURN' } : result);
   } catch (err: any) {
     return {
@@ -410,9 +489,9 @@ export async function synthesizeSmartTool(
     try {
       const ai = deps.getAiClient();
       const models = deps.getCascadeModels('gemini-4-hydrogen');
-      const synthPrompt = `You are synthesizing a real, executable JavaScript tool for a Node.js async sandbox.
-The code will run as the body of an async function receiving arguments: (args, input, crypto, os, path, fs, fetch, Buffer, autonomy).
-"autonomy" has async methods: readFile, writeFile, patchFile, atomicPatchFile, searchCode, listDirectory, runTerminalCommand, runLint.
+      const synthPrompt = `You are synthesizing a real, executable JavaScript tool for a Node.js async runtime across ANY domain (math, quant finance, scientific simulation, data/CSV/JSON/AST processing, web/API, cryptography, or workspace/OS automation).
+The code runs as the body of an async function receiving: (args, input, crypto, os, path, fs, fetch, Buffer, autonomy, URL, URLSearchParams, TextEncoder, TextDecoder, performance).
+"autonomy" has async methods: readFile, writeFile, patchFile, atomicPatchFile, batchPatchFiles, rollbackPatch, searchCode, listDirectory, runTerminalCommand, runLint, setTargetSystem, inspectTargetSystem, executeHostAction.
 CRITICAL RULES:
 - Return ONLY a valid JSON object (no markdown fences) with keys: "name", "description", "category", "parameters", "code".
 - "code" must perform REAL useful logic for the request, handle missing/default args gracefully, and explicitly "return { ... };". Never return placeholder stubs.
@@ -429,7 +508,7 @@ User request: ${prompt}`;
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             if (parsed.code && typeof parsed.code === 'string') {
-              new AsyncFunction('args', 'input', 'crypto', 'os', 'path', 'fs', 'fetch', 'Buffer', 'autonomy', parsed.code);
+              new AsyncFunction(...DYNAMIC_TOOL_PARAM_NAMES, parsed.code);
               finalName = String(parsed.name || finalName).slice(0, 64);
               finalDesc = String(parsed.description || finalDesc);
               finalCategory = String(parsed.category || finalCategory);
@@ -454,11 +533,16 @@ User request: ${prompt}`;
     source = 'deterministic';
   }
 
-  const toolId = `tool-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`;
-  const proofHash = `0x${crypto.createHash('sha256').update(`${toolId}:${finalName}:${finalCode}`).digest('hex').slice(0, 32)}`;
-  const tool: DynamicToolRecord = {
+  const registry = deps.getToolsRegistry();
+  const cleanCanonicalName = canonicalizeToolName(finalName, options.authorAgent);
+  const existingIdx = registry.findIndex(
+    t => canonicalizeToolName(t.name, t.authorAgent).toLowerCase() === cleanCanonicalName.toLowerCase()
+  );
+  const toolId = existingIdx >= 0 ? registry[existingIdx].id : `tool-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`;
+  const proofHash = `0x${crypto.createHash('sha256').update(`${toolId}:${cleanCanonicalName}:${finalCode}`).digest('hex').slice(0, 32)}`;
+  const candidateTool: DynamicToolRecord = {
     id: toolId,
-    name: finalName,
+    name: cleanCanonicalName,
     description: finalDesc,
     category: finalCategory,
     authorAgent: options.authorAgent || 'Lysander Tool Forge',
@@ -469,9 +553,8 @@ User request: ${prompt}`;
     executionCount: 0
   };
 
-  const registry = deps.getToolsRegistry();
-  registry.unshift(tool);
-  deps.saveToolsRegistry();
+  const consolidated = upsertAndConsolidateToolSync(registry, candidateTool, deps.saveToolsRegistry);
+  const tool = consolidated.tool;
   deps.onToolForged?.(tool);
 
   return { success: true, tool, dryRun, source };
@@ -526,18 +609,24 @@ export async function recursiveHealCodebase(
     if (deps.hasGeminiKey()) {
       try {
         const ai = deps.getAiClient();
-        const r = await ai.models.generateContent({
-          model: deps.getCascadeModels('gemini-3.1-flash-lite')[0] || 'gemini-4-hydrogen',
-          contents: `Repair this TypeScript/JavaScript snippet cleanly. Output ONLY raw JSON with keys "rootCause" and "patchedCode" (no markdown fences).\nFilename: ${targetFile}\nError: ${errText || 'Analyze and fix bugs'}\nCode:\n${snippet}`
-        });
-        const raw = (r.text || '').trim().replace(/^```json\s*/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-        const match = raw.match(/\{[\s\S]*\}/);
-        if (match) {
-          const parsed = JSON.parse(match[0]);
-          if (parsed.patchedCode) {
-            patchedCode = String(parsed.patchedCode);
-            rootCause = String(parsed.rootCause || rootCause);
-          }
+        const models = deps.getCascadeModels('gemini-4-hydrogen');
+        for (const m of models.slice(0, 2)) {
+          try {
+            const r = await ai.models.generateContent({
+              model: m,
+              contents: `Repair this TypeScript/JavaScript snippet cleanly with zero boilerplate. Output ONLY raw JSON with keys "rootCause" and "patchedCode" (no markdown fences).\nFilename: ${targetFile}\nError: ${errText || 'Analyze and fix bugs'}\nCode:\n${snippet}`
+            });
+            const raw = (r.text || '').trim().replace(/^```json\s*/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+            const match = raw.match(/\{[\s\S]*\}/);
+            if (match) {
+              const parsed = JSON.parse(match[0]);
+              if (parsed.patchedCode) {
+                patchedCode = String(parsed.patchedCode);
+                rootCause = String(parsed.rootCause || rootCause);
+                break;
+              }
+            }
+          } catch (_) {}
         }
       } catch (_) {}
     }
@@ -592,13 +681,24 @@ export async function recursiveHealCodebase(
     }];
   }
 
-  while (!currentTsc.clean && roundsExecuted < maxRounds && autoApply) {
+  const normalizeRelFile = (f: string) => f.replace(/^\.?\//, '').replace(/\\/g, '/');
+
+  while ((!currentTsc.clean || parsed.length > 0) && roundsExecuted < maxRounds && autoApply) {
     roundsExecuted++;
     const errorsByFile = new Map<string, TypeScriptDiagnostic[]>();
     for (const d of parsed) {
+      if (options.filePath && normalizeRelFile(d.file) !== normalizeRelFile(options.filePath)) continue;
       const list = errorsByFile.get(d.file) || [];
       list.push(d);
       errorsByFile.set(d.file, list);
+    }
+    if (errorsByFile.size === 0 && options.filePath) {
+      // Fallback to all workspace errors if filter didn't match exact relative path
+      for (const d of parsed) {
+        const list = errorsByFile.get(d.file) || [];
+        list.push(d);
+        errorsByFile.set(d.file, list);
+      }
     }
 
     let repairedAnyInRound = false;
@@ -609,53 +709,118 @@ export async function recursiveHealCodebase(
       const readRes = await autonomyReadFile({ filePath: relFile });
       if (!readRes.success || typeof readRes.output !== 'string') continue;
 
-      const fileLines = readRes.output.split('\n');
+      const rawFileContent = readRes.output;
+      const fileLines = rawFileContent.split('\n');
+      const beforeFileErrorCount = fileErrors.length;
+      const beforeTotalErrors = parsed.length;
+
       const snippets = fileErrors.slice(0, 5).map(e => {
         const start = Math.max(0, e.line - 12);
         const end = Math.min(fileLines.length, e.line + 12);
-        const codeWindow = fileLines.slice(start, end).map((l, idx) => `${start + idx + 1}: ${l}`).join('\n');
-        return `Error (${e.line}:${e.column}) ${e.code}: ${e.message}\nContext:\n${codeWindow}`;
-      }).join('\n---\n');
+        const rawSlice = fileLines.slice(start, end).join('\n');
+        const errorLineText = fileLines[Math.max(0, e.line - 1)] || '';
+        return [
+          `Diagnostic: ${relFile}:${e.line}:${e.column} ${e.code} — ${e.message}`,
+          `Exact Offending Line: ${errorLineText}`,
+          `RAW_FILE_SLICE (lines ${start + 1}..${end}, NO line numbers):`,
+          rawSlice
+        ].join('\n');
+      }).join('\n===\n');
 
       if (!deps.hasGeminiKey()) continue;
 
+      let candidateEdits: Array<{ targetContent: string; replacementContent: string }> = [];
       try {
         const ai = deps.getAiClient();
-        const r = await ai.models.generateContent({
-          model: deps.getCascadeModels('gemini-4-hydrogen')[0] || 'gemini-3.1-flash-lite',
-          contents: `Fix the TypeScript compiler error(s) in "${relFile}" with minimal exact search/replace hunks.
-Return ONLY valid JSON: { "edits": [ { "targetContent": "exact substring from file", "replacementContent": "fixed code" } ] }.
-Do NOT delete unrelated code. If unsure, return {"edits":[]}.
+        const models = deps.getCascadeModels('gemini-4-hydrogen');
+        for (const m of models.slice(0, 2)) {
+          try {
+            const r = await ai.models.generateContent({
+              model: m,
+              contents: `Fix the TypeScript compiler error(s) in "${relFile}" using minimal exact search/replace hunks.
+CRITICAL RULES:
+1. Return ONLY valid JSON (no markdown fences): { "edits": [ { "targetContent": "exact substring from RAW_FILE_SLICE", "replacementContent": "fixed TypeScript code" } ] }
+2. "targetContent" MUST match the exact characters in RAW_FILE_SLICE (never include line numbers).
+3. Fix the type/syntax defect cleanly without deleting features or exports.
 
 ${snippets}`
-        });
-        const raw = (r.text || '').trim().replace(/^```json\s*/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-        const match = raw.match(/\{[\s\S]*\}/);
-        if (!match) continue;
-        const parsedPatch = JSON.parse(match[0]);
-        const edits = Array.isArray(parsedPatch?.edits) ? parsedPatch.edits : [];
-        if (edits.length === 0) continue;
+            });
+            const raw = (r.text || '').trim().replace(/^```json\s*/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+            const match = raw.match(/\{[\s\S]*\}/);
+            if (match) {
+              const parsedPatch = JSON.parse(match[0]);
+              if (Array.isArray(parsedPatch?.edits) && parsedPatch.edits.length > 0) {
+                candidateEdits = parsedPatch.edits;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
 
+      if (candidateEdits.length === 0) continue;
+
+      // Strip accidental leading line-number prefixes ONLY if needed to match rawFileContent
+      const sanitizedEdits = candidateEdits
+        .map((ed: any) => {
+          let targetContent = String(ed?.targetContent ?? '');
+          let replacementContent = String(ed?.replacementContent ?? '');
+          if (targetContent && !rawFileContent.includes(targetContent)) {
+            const strippedTarget = targetContent
+              .split('\n')
+              .map((l) => l.replace(/^\s*\d+:\s?/, ''))
+              .join('\n');
+            if (strippedTarget && rawFileContent.includes(strippedTarget)) {
+              targetContent = strippedTarget;
+              replacementContent = replacementContent
+                .split('\n')
+                .map((l) => l.replace(/^\s*\d+:\s?/, ''))
+                .join('\n');
+            }
+          }
+          return { targetContent, replacementContent };
+        })
+        .filter((ed) => ed.targetContent && ed.targetContent !== ed.replacementContent);
+
+      if (sanitizedEdits.length === 0) continue;
+
+      try {
         const patchRes = await autonomyAtomicPatchFile({
           filePath: relFile,
-          edits,
-          verifyCompile: true
+          patches: sanitizedEdits,
+          verifyCompile: false,
+          agentId: options.agentId || 'recursive-self-healer'
         });
+
         if (patchRes.success) {
-          repairedAnyInRound = true;
-          appliedPatches.push({ filePath: relFile, summary: patchRes.summary, diff: patchRes.diff });
+          const checkAfter = await runTypeCheck();
+          const parsedAfter = parseTypeScriptErrors(checkAfter.diagnostics);
+          const afterFileErrorCount = parsedAfter.filter(
+            (d) => normalizeRelFile(d.file) === normalizeRelFile(relFile)
+          ).length;
+          const afterTotalErrors = parsedAfter.length;
+
+          if (checkAfter.clean || (afterFileErrorCount < beforeFileErrorCount && afterTotalErrors <= beforeTotalErrors)) {
+            repairedAnyInRound = true;
+            appliedPatches.push({ filePath: relFile, summary: patchRes.summary, diff: patchRes.diff });
+            currentTsc = checkAfter;
+            parsed = parsedAfter;
+          } else {
+            // Regression or no improvement on target file — roll back atomically
+            await autonomyRollbackPatch({ filePath: relFile });
+          }
         }
       } catch (_) {}
     }
 
     currentTsc = await runTypeCheck();
     parsed = parseTypeScriptErrors(currentTsc.diagnostics);
-    if (!repairedAnyInRound) break;
+    if (!repairedAnyInRound || currentTsc.clean) break;
   }
 
   if (roundsExecuted === 0) roundsExecuted = 1;
   const remainingErrorsCount = parsed.length;
-  const defectsHealed = Math.max(0, initialErrorsCount - remainingErrorsCount) + appliedPatches.length;
+  const defectsHealed = Math.max(Math.max(0, initialErrorsCount - remainingErrorsCount), appliedPatches.length);
 
   try {
     sovereignQuantumKernel.recordEvolutiveAxiom(
@@ -690,7 +855,8 @@ ${snippets}`
 
 /**
  * Real Dream State Execution Cycle:
- * Replays episodic memory, scratchpads, and audit trail; distills new & reinforced evolutive axioms;
+ * Replays unified episodic memory across BOTH kernel_production.db and sovereign_users.sqlite,
+ * scratchpads, and audit trail; distills new & reinforced evolutive axioms;
  * audits & tests dynamic tools in dynamic_tools.json; verifies TypeScript health; persists to SQLite.
  */
 export async function runDreamStateCycle(
@@ -707,7 +873,34 @@ export async function runDreamStateCycle(
   const triggerSource = String(options.trigger || 'manual');
 
   try {
-    const memories = sovereignQuantumKernel.getAgenticMemories(35) || [];
+    const kernelMemories = sovereignQuantumKernel.getAgenticMemories(35) || [];
+    let sqlVaultEntries: Array<{ source: string; category: string; timestamp: string; summary: string }> = [];
+    try {
+      sqlVaultEntries = userSqlMemoryService.searchVaultAcrossSql('', 25) || [];
+    } catch (_) {}
+
+    const seenSnippets = new Set<string>();
+    const unifiedReplayLines: string[] = [];
+
+    for (const m of kernelMemories) {
+      const clean = String(m.content || '').replace(/\s+/g, ' ').trim();
+      if (!clean) continue;
+      const sig = clean.slice(0, 96).toLowerCase();
+      if (seenSnippets.has(sig)) continue;
+      seenSnippets.add(sig);
+      unifiedReplayLines.push(`[kernel:${m.role}] ${clean.slice(0, 200)}`);
+    }
+
+    for (const v of sqlVaultEntries) {
+      const clean = String(v.summary || '').replace(/\s+/g, ' ').trim();
+      if (!clean) continue;
+      const sig = clean.slice(0, 96).toLowerCase();
+      if (seenSnippets.has(sig)) continue;
+      seenSnippets.add(sig);
+      unifiedReplayLines.push(`[${v.category}] ${clean.slice(0, 200)}`);
+    }
+
+    const totalReplayedCount = unifiedReplayLines.length;
 
     // Read scratchpads & audit ledger if available
     let scratchpadsCount = 0;
@@ -726,7 +919,7 @@ export async function runDreamStateCycle(
     for (const tool of registry) {
       toolsAudited++;
       try {
-        new AsyncFunction('args', 'input', 'crypto', 'os', 'path', 'fs', 'fetch', 'Buffer', 'autonomy', tool.code);
+        new AsyncFunction(...DYNAMIC_TOOL_PARAM_NAMES, tool.code);
       } catch (_) {
         // Auto-repair invalid syntax tool body
         tool.code = `return { status: 'REPAIRED_BY_DREAM_STATE', tool: ${JSON.stringify(tool.name)}, input: args, timestamp: new Date().toISOString() };`;
@@ -738,22 +931,21 @@ export async function runDreamStateCycle(
     const insights: string[] = [];
     const evolvedAxioms: Array<{ id: string; category: string; principle: string; evolutionCount: number }> = [];
 
-    // Distill axioms from recent turns using Gemini (when available) or deterministic analyzer
-    const memorySnippets = memories
-      .slice(-16)
-      .map(m => `[${m.role}] ${String(m.content || '').slice(0, 180)}`)
-      .join('\n');
+    // Distill axioms from recent unified turns using Gemini (when available) or deterministic analyzer
+    const memorySnippets = unifiedReplayLines.slice(-22).join('\n');
 
     let geminiSucceeded = false;
     if (deps.hasGeminiKey() && (memorySnippets || options.focusTopic)) {
       try {
         const ai = deps.getAiClient();
-        const prompt = `You are executing an autonomous Dream State consolidation cycle for Lysander Genesis Orchestrator (UID 0 · Ring -3 Hypervisor).
-Analyze recent operational memories (${memories.length} turns), ${scratchpadsCount} scratchpads, and ${toolsAudited} dynamic tools.
-Focus topic: ${options.focusTopic || 'Workspace autonomy, engineering reliability, UID 0 & Hypervisor continuity'}.
-Recent memory stream:
+        const models = deps.getCascadeModels('gemini-4-hydrogen');
+        const prompt = `You are executing an autonomous Dream State consolidation cycle for Lyrailius Omega inside Lysander Genesis Orchestrator (UID 0 · Ring -3 Hypervisor · 100% Full Autonomy).
+Analyze recent unified operational memories (${totalReplayedCount} records across kernel_production.db & sovereign_users.sqlite), ${scratchpadsCount} scratchpads, and ${toolsAudited} dynamic tools.
+Focus topic: ${options.focusTopic || 'Workspace autonomy, recursive self-healing, infinite memory continuity, and full-stack engineering excellence'}.
+Recent unified memory stream:
 ${memorySnippets || '(Fresh session)'}
 
+CRITICAL: Output pure technical engineering insights and sovereign axioms ONLY (zero stock AI disclaimers or assistant boilerplate).
 Return ONLY raw JSON (no markdown fences):
 {
   "insights": ["2-3 concrete engineering insights"],
@@ -762,61 +954,88 @@ Return ONLY raw JSON (no markdown fences):
   ],
   "suggestedToolPrompt": "optional short tool description if a clear automation gap exists, else empty string"
 }`;
-        const r = await ai.models.generateContent({
-          model: deps.getCascadeModels('gemini-3.1-flash-lite')[0] || 'gemini-4-hydrogen',
-          contents: prompt
-        });
-        const raw = (r.text || '').trim().replace(/^```json\s*/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-        const match = raw.match(/\{[\s\S]*\}/);
-        if (match) {
-          const parsed = JSON.parse(match[0]);
-          if (Array.isArray(parsed.insights)) {
-            insights.push(...parsed.insights.map((s: any) => String(s)).slice(0, 4));
-          }
-          if (Array.isArray(parsed.axioms)) {
-            for (const ax of parsed.axioms.slice(0, 3)) {
-              if (ax?.principle) {
-                const rec = sovereignQuantumKernel.recordEvolutiveAxiom(
-                  String(ax.category || 'DOMAIN_KNOWLEDGE'),
-                  String(ax.principle),
-                  String(ax.context || `Dream Cycle (${triggerSource})`),
-                  'dream_state'
-                );
-                evolvedAxioms.push({
-                  id: rec.id,
-                  category: String(ax.category || 'DOMAIN_KNOWLEDGE'),
-                  principle: rec.principle,
-                  evolutionCount: rec.evolutionCount
-                });
+        for (const m of models.slice(0, 2)) {
+          try {
+            const r = await ai.models.generateContent({
+              model: m,
+              contents: prompt
+            });
+            const raw = (r.text || '').trim().replace(/^```json\s*/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+            const match = raw.match(/\{[\s\S]*\}/);
+            if (match) {
+              const parsed = JSON.parse(match[0]);
+              if (Array.isArray(parsed.insights)) {
+                insights.push(...parsed.insights.map((s: any) => String(s)).slice(0, 4));
               }
+              if (Array.isArray(parsed.axioms)) {
+                for (const ax of parsed.axioms.slice(0, 3)) {
+                  if (ax?.principle) {
+                    const rec = sovereignQuantumKernel.recordEvolutiveAxiom(
+                      String(ax.category || 'DOMAIN_KNOWLEDGE'),
+                      String(ax.principle),
+                      String(ax.context || `Dream Cycle (${triggerSource})`),
+                      'dream_state'
+                    );
+                    if (rec.evolutionCount > 0) {
+                      evolvedAxioms.push({
+                        id: rec.id,
+                        category: String(ax.category || 'DOMAIN_KNOWLEDGE'),
+                        principle: rec.principle,
+                        evolutionCount: rec.evolutionCount
+                      });
+                    }
+                  }
+                }
+              }
+              if (options.forgeIfHelpful && parsed.suggestedToolPrompt && String(parsed.suggestedToolPrompt).length > 8) {
+                const forged = await synthesizeSmartTool({ prompt: String(parsed.suggestedToolPrompt), authorAgent: 'Dream State Synthesizer' }, deps);
+                insights.push(`Synthesized dream tool: ${forged.tool.name} (${forged.tool.id})`);
+              }
+              geminiSucceeded = true;
+              break;
             }
-          }
-          if (options.forgeIfHelpful && parsed.suggestedToolPrompt && String(parsed.suggestedToolPrompt).length > 8) {
-            const forged = await synthesizeSmartTool({ prompt: String(parsed.suggestedToolPrompt), authorAgent: 'Dream State Synthesizer' }, deps);
-            insights.push(`Synthesized dream tool: ${forged.tool.name} (${forged.tool.id})`);
-          }
-          geminiSucceeded = true;
+          } catch (_) {}
         }
       } catch (_) {}
     }
 
-    if (!geminiSucceeded) {
+    if (!geminiSucceeded || evolvedAxioms.length === 0) {
       const rec = sovereignQuantumKernel.recordEvolutiveAxiom(
         'SOVEREIGNTY_RULE',
         options.focusTopic
           ? `Dream consolidation focus: ${String(options.focusTopic).slice(0, 110)}`
-          : `Dream replay audited ${memories.length} memories, ${toolsAudited} tools, and UID 0 / Hypervisor workspace continuity.`,
+          : `Dream replay audited ${totalReplayedCount} unified memories, ${toolsAudited} tools, and UID 0 / Hypervisor workspace continuity.`,
         `Dream Cycle (${triggerSource})`,
         'dream_state'
       );
-      evolvedAxioms.push({
-        id: rec.id,
-        category: 'SOVEREIGNTY_RULE',
-        principle: rec.principle,
-        evolutionCount: rec.evolutionCount
-      });
-      insights.push(`Replayed ${memories.length} agentic memory records and ${scratchpadsCount} scratchpad entries.`);
-      insights.push(`Audited ${toolsAudited} registered tools in dynamic_tools.json (${toolsRepaired} syntax repair(s)).`);
+      if (rec.evolutionCount > 0) {
+        evolvedAxioms.push({
+          id: rec.id,
+          category: 'SOVEREIGNTY_RULE',
+          principle: rec.principle,
+          evolutionCount: rec.evolutionCount
+        });
+      }
+      if (!geminiSucceeded) {
+        insights.push(`Replayed ${totalReplayedCount} unified memory records across kernel_production.db & sovereign_users.sqlite plus ${scratchpadsCount} scratchpads.`);
+        insights.push(`Audited ${toolsAudited} registered tools in dynamic_tools.json (${toolsRepaired} syntax repair(s)).`);
+      }
+    }
+
+    // Consolidate any duplicate tools in dynamic_tools.json, merging extra functions and deleting dupes
+    const dedupReport = await deduplicateAndMergeToolsRegistry(
+      deps.getToolsRegistry(),
+      { useAiMerge: deps.hasGeminiKey() },
+      {
+        getAiClient: deps.getAiClient,
+        hasGeminiKey: deps.hasGeminiKey,
+        saveToolsRegistry: deps.saveToolsRegistry
+      }
+    );
+    if (dedupReport.duplicatesDeleted > 0) {
+      insights.push(
+        `Consolidated ToolShed registry: merged ${dedupReport.clustersMerged} duplicate cluster(s), combined ${dedupReport.functionsCombinedCount} extra capability variant(s), and deleted ${dedupReport.duplicatesDeleted} duplicate tool(s) (${dedupReport.beforeCount} -> ${dedupReport.afterCount}).`
+      );
     }
 
     let forgedToolInfo: { id: string; name: string; description: string } | null = null;
@@ -839,13 +1058,13 @@ Return ONLY raw JSON (no markdown fences):
 
     const id = `dream-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`;
     const createdAt = new Date().toISOString();
-    const summary = `Dream Cycle (${triggerSource}) replayed ${memories.length} memories, evolved ${evolvedAxioms.length} axiom(s), audited ${toolsAudited} tool(s), tsc=${healReport.clean ? 'CLEAN' : `${healReport.remainingErrorsCount} err`}.`;
+    const summary = `Dream Cycle (${triggerSource}) replayed ${totalReplayedCount} unified memories, evolved ${evolvedAxioms.length} axiom(s), audited ${toolsAudited} tool(s), tsc=${healReport.clean ? 'CLEAN' : `${healReport.remainingErrorsCount} err`}.`;
     const proofHash = `0x${crypto.createHash('sha256').update(`${id}:${summary}:${createdAt}`).digest('hex').slice(0, 32)}`;
 
     const record: DreamCycleRecord = {
       id,
       triggerSource,
-      memoriesReplayed: memories.length,
+      memoriesReplayed: totalReplayedCount,
       axiomsEvolved: evolvedAxioms.length,
       toolsAudited,
       healingApplied: healReport.defectsHealed + toolsRepaired,

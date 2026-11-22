@@ -58,6 +58,7 @@ import {
 import { localLlmManager, AVAILABLE_LOCAL_MODELS, type LocalModelOption } from '../utils/localLlmEngine';
 import { janusGate } from '../utils/janusGate';
 import { ONE_SHOT_INSTALLER_SCRIPT } from '../data/oneShotInstallerScript';
+import { apiFetch } from '../utils/authClient';
 import { sovereignVoiceQueue } from '../utils/voiceEngine';
 
 interface TermuxStatus {
@@ -133,7 +134,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/termux/status');
+      const res = await apiFetch('/api/termux/status');
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
@@ -147,7 +148,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const fetchInstallerScript = async () => {
     try {
-      const res = await fetch('/api/termux/installer-script');
+      const res = await apiFetch('/api/termux/installer-script');
       if (res.ok) {
         const text = await res.text();
         setInstallerScript(text);
@@ -204,7 +205,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const fetchNexusState = async () => {
     try {
-      const res = await fetch('/api/nexus/status');
+      const res = await apiFetch('/api/nexus/status');
       if (res.ok) {
         const data = await res.json();
         setNexusData(data.nexus);
@@ -217,7 +218,7 @@ export const TermuxEdgeModule: React.FC = () => {
   const handleNexusCtl = async (action: string) => {
     setNexusLoading(true);
     try {
-      const res = await fetch('/api/nexus/ctl', {
+      const res = await apiFetch('/api/nexus/ctl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
@@ -237,7 +238,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const fetchHardwareRoadmap = async () => {
     try {
-      const res = await fetch('/api/hardware/roadmap');
+      const res = await apiFetch('/api/hardware/roadmap');
       if (res.ok) {
         const data = await res.json();
         setHardwareProfiles(data.profiles || []);
@@ -250,7 +251,7 @@ export const TermuxEdgeModule: React.FC = () => {
   const handleHardwareAction = async (deviceId: string, action: string, params: any = {}) => {
     setExecutingHw(deviceId);
     try {
-      const res = await fetch('/api/hardware/action', {
+      const res = await apiFetch('/api/hardware/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId, action, params })
@@ -269,7 +270,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const fetchVaultState = async () => {
     try {
-      const res = await fetch('/api/vault/status');
+      const res = await apiFetch('/api/vault/status');
       if (res.ok) {
         const data = await res.json();
         setVaultData(data.vault);
@@ -282,7 +283,7 @@ export const TermuxEdgeModule: React.FC = () => {
   const handleVaultAction = async (action: string) => {
     setVaultLoading(true);
     try {
-      const res = await fetch('/api/vault/action', {
+      const res = await apiFetch('/api/vault/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
@@ -452,7 +453,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const fetchWifiStatus = async () => {
     try {
-      const res = await fetch('/api/termux/wifi');
+      const res = await apiFetch('/api/termux/wifi');
       if (res.ok) {
         const data = await res.json();
         setWifiData(data);
@@ -465,7 +466,7 @@ export const TermuxEdgeModule: React.FC = () => {
   const triggerWifiScan = async () => {
     setScanningWifi(true);
     try {
-      const res = await fetch('/api/termux/wifi-scan');
+      const res = await apiFetch('/api/termux/wifi-scan');
       if (res.ok) {
         const data = await res.json();
         setWifiScanNetworks(data.networks || []);
@@ -480,7 +481,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const fetchCellular = async () => {
     try {
-      const res = await fetch('/api/termux/cellular');
+      const res = await apiFetch('/api/termux/cellular');
       if (res.ok) {
         const data = await res.json();
         setCellularData(data);
@@ -492,7 +493,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const calculateRfBudget = async () => {
     try {
-      const res = await fetch('/api/termux/rf-calculate', {
+      const res = await apiFetch('/api/termux/rf-calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -560,7 +561,7 @@ export const TermuxEdgeModule: React.FC = () => {
             temperature: 30.2
           };
           setClientBattery(batData);
-          fetch('/api/termux/telemetry', {
+          apiFetch('/api/termux/telemetry', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ battery: batData })
@@ -649,7 +650,7 @@ export const TermuxEdgeModule: React.FC = () => {
     }
 
     try {
-      const res = await fetch('/api/termux/vibrate', {
+      const res = await apiFetch('/api/termux/vibrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duration: ms })
@@ -679,7 +680,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
     // 2. Dispatch to Termux TTS daemon
     try {
-      const res = await fetch('/api/termux/tts', {
+      const res = await apiFetch('/api/termux/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: ttsText })
@@ -713,7 +714,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
     // 2. Dispatch to Termux notification API
     try {
-      const res = await fetch('/api/termux/notify', {
+      const res = await apiFetch('/api/termux/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: notifTitle, content: notifContent })
@@ -738,7 +739,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
     // 3. Dispatch to Termux toast daemon
     try {
-      const res = await fetch('/api/termux/toast', {
+      const res = await apiFetch('/api/termux/toast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: toastText })
@@ -770,7 +771,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
     // 2. Dispatch to Termux wake-lock service
     try {
-      const res = await fetch('/api/termux/wake-lock', {
+      const res = await apiFetch('/api/termux/wake-lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ acquire: nextState })
@@ -813,7 +814,7 @@ export const TermuxEdgeModule: React.FC = () => {
       }
 
       // 2. Toggle Termux torch daemon
-      await fetch('/api/termux/torch', {
+      await apiFetch('/api/termux/torch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: nextState })
@@ -847,7 +848,7 @@ export const TermuxEdgeModule: React.FC = () => {
 
   const openInAndroidBrowser = async () => {
     try {
-      const res = await fetch('/api/termux/open-url', {
+      const res = await apiFetch('/api/termux/open-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: window.location.origin })
@@ -865,7 +866,7 @@ export const TermuxEdgeModule: React.FC = () => {
     setCliRunning(true);
     setCliOutput(null);
     try {
-      const res = await fetch('/api/chat', {
+      const res = await apiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -893,7 +894,7 @@ export const TermuxEdgeModule: React.FC = () => {
     if (!cliPrompt) return;
     setCliRunning(true);
     try {
-      const res = await fetch('/api/agents/deepthink', {
+      const res = await apiFetch('/api/agents/deepthink', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: cliPrompt, depth: 5 })
@@ -2377,7 +2378,7 @@ export const TermuxEdgeModule: React.FC = () => {
                       </p>
                     </div>
                     <a
-                      href="/api/sovereign/sync-package"
+                      href="/api/sovereign/sync-package?format=html"
                       download="aurelius-standalone-app.html"
                       className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-emerald-500/20"
                     >
@@ -2403,7 +2404,7 @@ export const TermuxEdgeModule: React.FC = () => {
                       </p>
                     </div>
                     <a
-                      href="/api/sovereign/sync-package"
+                      href="/api/sovereign/sync-package?format=cjs"
                       download="aurelius-standalone.cjs"
                       className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-amber-500/20"
                     >
@@ -2429,7 +2430,7 @@ export const TermuxEdgeModule: React.FC = () => {
                       </p>
                     </div>
                     <a
-                      href="/api/sovereign/sync-package"
+                      href="/api/sovereign/sync-package?format=tar"
                       download="aurelius-sovereign-matrix-v7.0.tar.gz"
                       className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-cyan-500/20"
                     >

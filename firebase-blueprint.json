@@ -2,14 +2,31 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "Authenticated user profile for Lysander Genesis Orchestrator",
+      "description": "Authenticated user profile and custom RBAC privileges for Lysander Genesis Orchestrator",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 64 },
         "email": { "type": "string", "maxLength": 256 },
         "displayName": { "type": "string", "maxLength": 128 },
         "photoURL": { "type": "string", "maxLength": 1024 },
-        "role": { "type": "string", "enum": ["user", "admin"], "maxLength": 16 },
+        "role": { "type": "string", "enum": ["user", "admin", "operator", "collaborator", "viewer"], "maxLength": 16 },
+        "status": { "type": "string", "enum": ["active", "pending", "suspended"], "maxLength": 16 },
+        "privileges": {
+          "type": "object",
+          "properties": {
+            "allModules": { "type": "boolean" },
+            "allowedModules": { "type": "array", "maxItems": 64, "items": { "type": "string", "maxLength": 48 } },
+            "canUseChat": { "type": "boolean" },
+            "canUseVoiceChat": { "type": "boolean" },
+            "canRunAutonomousWorkflow": { "type": "boolean" },
+            "canModifyAgentSettings": { "type": "boolean" },
+            "canExecuteTerminalAndTools": { "type": "boolean" },
+            "canAccessSecretsAndWallets": { "type": "boolean" },
+            "canModifyOSSettings": { "type": "boolean" },
+            "canManageUsers": { "type": "boolean" }
+          }
+        },
         "createdAt": { "type": "string", "maxLength": 64 },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },

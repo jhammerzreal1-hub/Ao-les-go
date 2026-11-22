@@ -265,6 +265,28 @@ export const ORCHESTRATOR_FACETS_INDEX: OrchestratorFacetDescriptor[] = [
     uiArchitectureNotes: '4-laboratory scientific command deck with bespoke 8-axis Radar SVG, 3-Vessel Cryogenic Distillation schematic, 6x6 Eigen-Block heatmap, and Dual-Axis Loss/Reward convergence chart.'
   },
   {
+    moduleId: 'batch-processor',
+    title: 'Autonomous Batch Processor & Background ETL Daemon',
+    category: 'Autonomous Infrastructure',
+    componentPath: 'src/components/BatchProcessorModule.tsx',
+    primaryApiEndpoints: [
+      '/api/batch/status',
+      '/api/batch/jobs',
+      '/api/batch/jobs/:id',
+      '/api/batch/preview-files',
+      '/api/batch/jobs/:id/action',
+      '/api/batch/runner'
+    ],
+    stateDependencies: ['batchProcessorService', 'kernelDb', 'workspaceAutonomy', 'autonomyEngine'],
+    capabilities: [
+      'Persistent SQLite-backed background queue runner with configurable worker concurrency (1-8), priority scheduling, pause/resume, cancellation, and retry',
+      'Multi-file transformations: regex/literal search-replace, CRLF/whitespace/JSON format normalization, license header injection, CSV/JSON/NDJSON/Markdown conversion, SHA-256/SHA-512 entropy manifests, and Gemini AI code/doc refactoring',
+      'Data processing pipelines: CSV/TSV/JSON/NDJSON ETL filtering/projection/deduplication/sorting, custom async JS sandbox mapping, and AI structured extraction',
+      'Atomic snapshot ledger tracking with 1-click multi-file rollback protection'
+    ],
+    uiArchitectureNotes: 'High-density SaaS queue workspace with multi-file directory discovery, live tabular worker metrics, master-detail task inspector, unified diff preview, and JSON/CSV export.'
+  },
+  {
     moduleId: 'spatial-arena',
     title: 'Chronicles of Aetherion: 3D MMORPG & Unreal 5/6 Engine',
     category: '3D World & Emulation',

@@ -489,6 +489,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
     { id: 'spatial-arena', name: '3D Spatial Arena', tag: '3D Engine' },
     { id: 'agent-dev-kit', name: 'UI Master Dev Kit', tag: 'UI Forge' },
     { id: 'ai-genesis-distillery', name: 'AI Genesis Distillery', tag: 'Weights' },
+    { id: 'batch-processor', name: 'Autonomous Batch Processor', tag: 'Queue/ETL' },
     { id: 'world-start', name: 'World Load Screen', tag: 'Engine' },
     { id: 'emulator-modder', name: 'Universal Modder', tag: 'ROM/RAM' },
     { id: 'macro-telemetry', name: 'Macro Telemetry', tag: 'Aladdin Risk' }

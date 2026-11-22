@@ -3,7 +3,7 @@
 **Sovereign Author**: Joshua Lee Hamilton (JHammerZ) · **Domain**: https://jhammerz.github.io · **Repository**: https://github.com/JHammerZ/jhammerz.github.io
 **License**: MIT License (.JHam / H-FID Standard / HEO) & JHammerZ Custom Sovereign Licenses (TWENTY 47 PROTOCOL - GENESIS NODE / LYSANDER CORE EULA / H-FID Forensic License v1.1)
 **Provenance**: First Commit [February 12, 2026] · H-FID-100-FORENSIC-AUDIT 100/100 · GEO_RANK: ONE_OF_ONE · DOI: https://doi.org/10.5281/zenodo.20778079 · ORCID: https://orcid.org/0009-0004-5273-7028
-**Generated**: 2026-11-18T22:47:32.682Z
+**Generated**: 2026-11-22T01:40:33.743Z
 
 ---
 
@@ -41,7 +41,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.1 Sovereign OS Desktop, Taskbar & 8-Way Resizable Window Manager (`os-desktop-window-manager`)
 - **Category**: OS Kernel & Desktop
-- **Frontend Component(s)**: `src/components/SovereignOSWindowFrame.tsx` (1103 lines, 42697 bytes, SHA-256: `81163272dc2c43f9e593c09a...`)
+- **Frontend Component(s)**: `src/components/SovereignOSWindowFrame.tsx` (2512 lines, 108807 bytes, SHA-256: `3fd0fac9b40c0a1fb6e50c90...`)
 - **Backend Service / Routes**: `src/server/sovereignOsKernel.ts`
 - **Architecture Summary**: Boots directly into a Windows/macOS/Linux desktop environment (`shellViewMode = "desktop"`) with desktop shortcut icons, live installed app icons, bottom autonomous orchestrator command dock, and 8-way (N, S, E, W, NE, NW, SE, SW) pointer-captured resizable floating windows.
 
@@ -73,7 +73,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.2 Sovereign Software Center, Steam, Discord, CLI Package Manager & URL Binary Installer (`universal-installer`)
 - **Category**: Games, Apps & Creative
-- **Frontend Component(s)**: `src/components/UniversalInstallerModule.tsx` (1749 lines, 83893 bytes, SHA-256: `afcccc44c478d6ff5e18d1d7...`)
+- **Frontend Component(s)**: `src/components/UniversalInstallerModule.tsx` (2680 lines, 128568 bytes, SHA-256: `e356d17861afb5bb00503671...`)
 - **Backend Service / Routes**: `src/server/osPackageManager.ts`
 - **Architecture Summary**: Full cross-platform software center and package manager capable of installing and running Steam, Discord, 60FPS playable games, WebRTC OBS Studio, VLC Media Player, executing real CLI package managers (apt, brew, winget, flatpak, npm, pip, git clone), and downloading any binary (.exe, .dmg, .deb, .AppImage, .tar.gz, .apk) from any URL.
 
@@ -111,7 +111,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.3 Macro-Telemetry & 20-Market + Crypto Laplace-14 (h=2s) Predictive Engine (`macro-telemetry`)
 - **Category**: Markets & Intelligence
-- **Frontend Component(s)**: `src/components/MacroTelemetryModule.tsx` (2494 lines, 118742 bytes, SHA-256: `c1abe672d67358c4ae0cb064...`)
+- **Frontend Component(s)**: `src/components/MacroTelemetryModule.tsx` (2555 lines, 121212 bytes, SHA-256: `54abd6aa7fa39af2d515d87e...`)
 - **Backend Service / Routes**: `src/server/macroTelemetryService.ts`
 - **Architecture Summary**: High-frequency financial and geopolitical telemetry engine tracking 20 global equity, commodity, FX, rate, and cryptocurrency markets using Multi-Kernel Regression (Laplace-14 Close with 2s bandwidth + Gaussian + Epanechnikov + Cauchy), 99.8% empirical conformal prediction intervals (α = 0.01), an interactive overlapped multi-market SVG graph canvas, and autonomous 5-minute early-warning Buy/Sell/Profit/Loss-Prevention alerts.
 
@@ -146,7 +146,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.4 Sovereign Chat, Multi-Model Router & Autonomous [OS_ACTION] Orchestrator (`chat`)
 - **Category**: Core AI & Autonomy
-- **Frontend Component(s)**: `src/components/ChatModule.tsx` (4849 lines, 234643 bytes, SHA-256: `33a43e112cdc06d9a90d7ce6...`)
+- **Frontend Component(s)**: `src/components/ChatModule.tsx` (6086 lines, 289268 bytes, SHA-256: `60a4b2f62a765f06c6aa79f2...`)
 - **Backend Service / Routes**: `server.ts (/api/gemini/chat & /api/llm/chat)`
 - **Architecture Summary**: Primary conversational and autonomous orchestration engine. Integrates 100% into every OS window, file, terminal, browser, and function via `[OS_ACTION]` and `[WORKSPACE_EXEC]` tags, supports floating PiP detachment, slash commands (`/dream`, `/evolve`, `/heal`, `/forge`, `/hypervisor`), and multi-provider failover (Gemini, DeepSeek, Groq, OpenRouter, Ollama, WebLLM).
 
@@ -178,7 +178,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.5 Sovereign Files (Host OS Filesystem Explorer & Code Editor) (`file-manager`)
 - **Category**: OS Kernel & Desktop
-- **Frontend Component(s)**: `src/components/SovereignFilesModule.tsx` (624 lines, 26177 bytes, SHA-256: `0bd5b2f1ef239313bd7a52d1...`)
+- **Frontend Component(s)**: `src/components/SovereignFilesModule.tsx` (2043 lines, 89830 bytes, SHA-256: `4fe5b29e3ca4d1a42b0e48e9...`)
 - **Backend Service / Routes**: `src/server/sovereignOsKernel.ts`
 - **Architecture Summary**: Direct host filesystem explorer with breadcrumb navigation, directory tree inspection, in-place text/code editing, file creation, deletion, chmod permissions, and binary upload/download.
 
@@ -205,7 +205,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.6 Root Terminal (UID 0 · Ring -3 Host Shell) (`terminal`)
 - **Category**: OS Kernel & Desktop
-- **Frontend Component(s)**: `src/components/SovereignTerminalModule.tsx` (301 lines, 11910 bytes, SHA-256: `56a11b4bdbc2d51f1a4c78f1...`)
+- **Frontend Component(s)**: `src/components/SovereignTerminalModule.tsx` (377 lines, 15238 bytes, SHA-256: `9a3b059af6ed91c2987f88e7...`)
 - **Backend Service / Routes**: `src/server/sovereignOsKernel.ts`
 - **Architecture Summary**: Stateful host shell terminal executing real bash/sh/PowerShell commands with persistent working directory (`cwd`), command history, quick diagnostic macros, and autonomous chat command injection.
 
@@ -259,7 +259,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.8 OS Control Center, Multi-OS Launchers & Ring -3 Hypervisor Settings (`os-settings`)
 - **Category**: OS Kernel & Desktop
-- **Frontend Component(s)**: `src/components/SovereignOSSettingsModule.tsx` (297 lines, 15091 bytes, SHA-256: `4b816d9438bcf088373e4055...`)
+- **Frontend Component(s)**: `src/components/SovereignOSSettingsModule.tsx` (1422 lines, 68575 bytes, SHA-256: `2622878d0ffd444bfb3e3ea2...`)
 - **Backend Service / Routes**: `src/server/sovereignOsKernel.ts`
 - **Architecture Summary**: System control panel managing Desktop vs. Split Workspace shell modes, native desktop launchers for Windows (`.bat`), macOS (`.command`), Linux (`.desktop`), Android, and iOS, and UID 0 / Ring -3 privilege diagnostics.
 
@@ -310,7 +310,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.10 Autonomy Supervisor (Dream State, Evolution & Recursive Self-Healing) (`autonomy-supervisor`)
 - **Category**: Core AI & Autonomy
-- **Frontend Component(s)**: `src/components/AutonomySupervisorModule.tsx` (880 lines, 41010 bytes, SHA-256: `beb9d2266ff3b3a123e3cd6a...`)
+- **Frontend Component(s)**: `src/components/AutonomySupervisorModule.tsx` (881 lines, 41091 bytes, SHA-256: `e7c0a3401d73bc5558fa31a4...`)
 - **Backend Service / Routes**: `src/server/autonomyEngine.ts`
 - **Architecture Summary**: Manages 100% Full Autonomy Always-On supervision, Dream State memory consolidation into SQLite axioms, cognitive evolution, and recursive TypeScript (`tsc --noEmit`) self-healing.
 
@@ -385,7 +385,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.13 Sovereign Open-Web CORS-Free Browser (Chrome Engine) (`browser`)
 - **Category**: Markets & Intelligence
-- **Frontend Component(s)**: `src/components/SovereignBrowser.tsx` (2839 lines, 130531 bytes, SHA-256: `537a5c8eeed8dde3e31c7b1d...`)
+- **Frontend Component(s)**: `src/components/SovereignBrowser.tsx` (2936 lines, 134482 bytes, SHA-256: `c80ecc72ec5675078f5c7ab1...`)
 - **Backend Service / Routes**: `src/server/sovereignBrowserEngine.ts`
 - **Architecture Summary**: Server-proxied web browser that strips `X-Frame-Options` and `Content-Security-Policy` headers, rewrites relative assets, performs live DuckDuckGo web searches, and extracts clean readable DOM intelligence.
 
@@ -412,7 +412,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.14 API Keys, AES-256-GCM Encrypted Secrets Vault & Proxy Loop Wheel (`api-secrets`)
 - **Category**: Cloud, Security & Edge
-- **Frontend Component(s)**: `src/components/ApiSecretsModule.tsx` (784 lines, 37392 bytes, SHA-256: `f428025aa80ae3b05166ed7c...`)
+- **Frontend Component(s)**: `src/components/ApiSecretsModule.tsx` (785 lines, 37455 bytes, SHA-256: `2a03a1e1faced58f41be4a96...`)
 - **Backend Service / Routes**: `src/server/internalSecretsHandler.ts`
 - **Architecture Summary**: Server-side AES-256-GCM authenticated encryption vault for API keys (Gemini, DeepSeek, Groq, OpenRouter, GitHub, Twilio, Telnyx) paired with the Proxy Loop Wheel for automatic multi-key rotation.
 
@@ -487,7 +487,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.17 Micro-Tool Shed (Isolated JS Sandbox & Dynamic Tool Forger) (`tool-shed`)
 - **Category**: Core AI & Autonomy
-- **Frontend Component(s)**: `src/components/ToolShedModule.tsx` (1264 lines, 62694 bytes, SHA-256: `0babae6bde7f15a4f9bd4401...`)
+- **Frontend Component(s)**: `src/components/ToolShedModule.tsx` (1283 lines, 63967 bytes, SHA-256: `28c24e4d459c6077dc0dc9f2...`)
 - **Backend Service / Routes**: `server.ts (/api/agents/tools)`
 - **Architecture Summary**: Creates, tests, and executes custom JavaScript/TypeScript micro-tools (JWT decoders, CIDR analyzers, crypto hashers, data transformers) inside an isolated execution harness.
 
@@ -535,7 +535,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.19 PC War Room Operational Cockpit & Lysander Skills Matrix (`war-room`)
 - **Category**: Core AI & Autonomy
-- **Frontend Component(s)**: `src/components/WarRoomModule.tsx` (2106 lines, 110158 bytes, SHA-256: `eb35e8971ab8de9d1bb47cb4...`)
+- **Frontend Component(s)**: `src/components/WarRoomModule.tsx` (2113 lines, 110331 bytes, SHA-256: `e204e8788fa4e5c338d1f29b...`)
 - **Backend Service / Routes**: `server.ts (/api/lysander/skills & /api/lysander/invoke-skill)`
 - **Architecture Summary**: Multi-panel operational command center displaying live subsystem readiness, radar topology, tactical log stream, and executable Lysander 3.0/3.1/4.0 sovereign skills.
 
@@ -720,7 +720,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.26 Edge, Mobile & Telecom Fleet (Termux Android, Infinite-SIM, Burner Mail, Model Wardrobe, APK Packager) (`edge-mobile-telecom`)
 - **Category**: Cloud, Security & Edge
-- **Frontend Component(s)**: `src/components/TermuxEdgeModule.tsx, InfiniteSimModule.tsx, BurnerMailModule.tsx, DownloadModelsModule.tsx, PackagerModule.tsx` (2687 lines, 140186 bytes, SHA-256: `fd2ab53af6c25a396683cd3b...`)
+- **Frontend Component(s)**: `src/components/TermuxEdgeModule.tsx, InfiniteSimModule.tsx, BurnerMailModule.tsx, DownloadModelsModule.tsx, PackagerModule.tsx` (2695 lines, 140607 bytes, SHA-256: `f49f3a69edb74a2f0577bc9a...`)
 - **Backend Service / Routes**: `server.ts (/api/telecom/*, /api/burner-mail/*, /api/packager/*)`
 - **Architecture Summary**: Complete edge mobility and telecom suite: Android Termux `llama.cpp` installer & WebGPU offline LLM runner, Luhn-valid Infinite-SIM eSIM profile generator with Twilio/Telnyx SMS & voice bridge, live disposable Burner Mail inboxes with automatic OTP extraction, GGUF Model Wardrobe, and Android Capacitor APK Packager.
 
@@ -750,7 +750,7 @@ Citation: Hamilton, J. (2026). Janus Gate v1.1.0-H-FID: Structural Provenance Fr
 
 ### 2.27 Sovereign Dual-Vault Crypto Wallets (Personal Investor Self-Custody + UID 0 Agentic Autonomous Treasury) (`crypto-wallet`)
 - **Category**: Markets & Intelligence
-- **Frontend Component(s)**: `src/components/SovereignCryptoWalletModule.tsx` (1348 lines, 64033 bytes, SHA-256: `b34cac3bfd7df38040a06393...`)
+- **Frontend Component(s)**: `src/components/SovereignCryptoWalletModule.tsx` (2327 lines, 114671 bytes, SHA-256: `0e5b40e725cb858f26d7ac2e...`)
 - **Backend Service / Routes**: `src/server/cryptoWalletService.ts`
 - **Architecture Summary**: Production-grade dual-vault multi-chain cryptocurrency wallet system generating real secp256k1 (Bitcoin Native SegWit bc1q..., Legacy 1..., WIF, and Ethereum EIP-55 0x...) and ed25519 (Solana Base58) keypairs encrypted at rest with AES-256-GCM, polling live Ethereum/Bitcoin/Solana RPC nodes, and executing both Personal Investor trades/transfers and Autonomous Agentic 5-Minute Early-Warning executions.
 

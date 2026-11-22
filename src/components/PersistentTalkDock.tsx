@@ -29,7 +29,11 @@ import {
 } from 'lucide-react';
 import type { ModuleType } from '../types';
 import { ALL_MODULES } from './Navigation';
-import { selectBestSystemVoice } from '../utils/voiceEngine';
+import {
+  selectBestSystemVoice,
+  extractCoherentOralNarrative,
+  splitIntoCoherentSpeechChunks
+} from '../utils/voiceEngine';
 import {
   pushContinuitySettingsPatch,
   saveVoiceContinuityToServer,
@@ -39,17 +43,20 @@ import {
 import {
   probeMediaPermission,
   requestMicrophoneStream,
+  requestMicrophoneStreamOnUserGesture,
+  isMicrophoneBlockedByFramePolicy,
   markMediaPermissionGranted,
   clearMediaPermissionGrant,
   hasRecentUserActivation,
   markVoiceUserGesture,
   loadPersistedMediaPermissions
 } from '../utils/mediaPermissions';
+import { apiFetch, getAuthBearerToken } from '../utils/authClient';
 
 export type LiveVoicePersona = 'Zephyr' | 'Puck' | 'Charon' | 'Kore' | 'Fenrir';
 export type NativeEnglishAccent = 'en-US' | 'en-GB';
 export type MicCaptureMode = 'hybrid' | 'vad' | 'browser-stt';
-export type MicHardwareStatus = 'idle' | 'requesting' | 'active' | 'needs-gesture' | 'denied' | 'unavailable';
+export type MicHardwareStatus = 'idle' | 'requesting' | 'active' | 'needs-gesture' | 'denied' | 'frame-policy-blocked' | 'unavailable';
 
 export interface TalkTranscriptEntry {
   id: string;
@@ -115,6 +122,8 @@ function pcmFloatToBase64(float32: Float32Array, inputSampleRate = 16000): strin
 }
 
 function cleanTextForSpeech(raw: string): string {
+  const narrative = extractCoherentOralNarrative(raw);
+  if (narrative) return narrative;
   return raw
     .replace(/<think>[\s\S]*?<\/think>/gi, ' ')
     .replace(/```[\s\S]*?```/g, ' ')
@@ -183,9 +192,10 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
     }
   });
   const [vaultSavedFlash, setVaultSavedFlash] = useState(false);
-  const [transportMode, setTransportMode] = useState<'gemini-live-pcm' | 'sovereign-duplex-relay'>('gemini-live-pcm');
+  const [transportMode, setTransportMode] = useState<'gemini-live-pcm' | 'sovereign-duplex-relay'>('sovereign-duplex-relay');
   const [interimSpeech, setInterimSpeech] = useState('');
   const [micStatus, setMicStatus] = useState<MicHardwareStatus>('idle');
+  const [micConsentDismissed, setMicConsentDismissed] = useState(false);
   const [micLabel, setMicLabel] = useState<string>(() => {
     try {
       return localStorage.getItem('sovereign_voice_mic_label') || '';
@@ -299,8 +309,12 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
   const nextStartTimeRef = useRef<number>(0);
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const activeAudioElRef = useRef<HTMLAudioElement | null>(null);
+  const playbackSessionIdRef = useRef<number>(0);
+  const activeSpeakAbortRef = useRef<AbortController | null>(null);
+  const activeBrowserUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
+  const speechKeepAliveTimerRef = useRef<number | null>(null);
   const recognitionRef = useRef<any>(null);
-  const relayModeRef = useRef<boolean>(false);
+  const relayModeRef = useRef<boolean>(true);
   const isConnectedRef = useRef(false);
   const isMutedRef = useRef(false);
   const speakerMutedRef = useRef(false);
@@ -658,8 +672,22 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
   }, [refreshMicDevices, safeCloseAudioContext]);
 
   const flushPlaybackQueue = useCallback(() => {
+    playbackSessionIdRef.current += 1;
+    if (activeSpeakAbortRef.current) {
+      try {
+        activeSpeakAbortRef.current.abort();
+      } catch {}
+      activeSpeakAbortRef.current = null;
+    }
+    if (speechKeepAliveTimerRef.current !== null) {
+      window.clearInterval(speechKeepAliveTimerRef.current);
+      speechKeepAliveTimerRef.current = null;
+    }
+    activeBrowserUtterancesRef.current = [];
+
     activeSourcesRef.current.forEach((src) => {
       try {
+        src.onended = null;
         src.stop();
       } catch {}
     });
@@ -667,6 +695,8 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
 
     if (activeAudioElRef.current) {
       try {
+        activeAudioElRef.current.onended = null;
+        activeAudioElRef.current.onerror = null;
         activeAudioElRef.current.pause();
         activeAudioElRef.current.currentTime = 0;
       } catch {}
@@ -686,7 +716,7 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
       window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
     }
 
-    if (outputCtxRef.current) {
+    if (outputCtxRef.current && outputCtxRef.current.state !== 'closed') {
       nextStartTimeRef.current = outputCtxRef.current.currentTime;
     } else {
       nextStartTimeRef.current = 0;
@@ -757,55 +787,42 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
     }
   }, [transcripts, expanded]);
 
-  const speakBrowserFallback = useCallback(
-    (text: string, messageId?: string) => {
-      if (speakerMutedRef.current || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-      const clean = cleanTextForSpeech(text);
-      if (!clean) return;
+  const ensureOutputAudioContext = useCallback((): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+    if (outputCtxRef.current && outputCtxRef.current.state !== 'closed') {
+      if (outputCtxRef.current.state === 'suspended') {
+        outputCtxRef.current.resume().catch(() => {});
+      }
+      return outputCtxRef.current;
+    }
+    const AudioCtxCtor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtxCtor) return null;
+    try {
+      const ctx = new AudioCtxCtor({ sampleRate: 24000 });
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      outputCtxRef.current = ctx;
+      return ctx;
+    } catch {
       try {
-        const voices = window.speechSynthesis.getVoices();
-        const preferredGender = voiceNameRef.current === 'Charon' || voiceNameRef.current === 'Fenrir' ? 'male' : 'female';
-        // STRICT NATIVE ENGLISH ONLY (US / British / CA / AU / NZ / IE) — NEVER speak with a foreign or foreign-accented voice
-        const preferred = selectBestSystemVoice(voices, voiceNameRef.current, preferredGender, voiceAccentRef.current);
-        if (!preferred) {
-          return;
+        const ctx = new AudioCtxCtor();
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
         }
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(clean.slice(0, 1200));
-        utter.voice = preferred;
-        utter.lang = preferred.lang || voiceAccentRef.current;
-        utter.rate = 1.02;
-        speakingMessageIdRef.current = messageId || 'live';
-        isModelSpeakingRef.current = true;
-        setIsModelSpeaking(true);
-        window.dispatchEvent(
-          new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: messageId || null, id: messageId || null } })
-        );
-        utter.onend = () => {
-          speakingMessageIdRef.current = null;
-          isModelSpeakingRef.current = false;
-          setIsModelSpeaking(false);
-          window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
-        };
-        utter.onerror = () => {
-          speakingMessageIdRef.current = null;
-          isModelSpeakingRef.current = false;
-          setIsModelSpeaking(false);
-          window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
-        };
-        window.speechSynthesis.speak(utter);
-      } catch {}
-    },
-    []
-  );
+        outputCtxRef.current = ctx;
+        return ctx;
+      } catch {
+        return null;
+      }
+    }
+  }, []);
 
-  const playNeuralAudioUrl = useCallback(
-    async (audioUrl: string, fallbackText?: string, messageId?: string) => {
-      if (speakerMutedRef.current) return;
-      flushPlaybackQueue();
+  const playSingleAudioChunkAndWait = useCallback(
+    async (audioUrl: string, sessionId: number): Promise<boolean> => {
+      if (speakerMutedRef.current || playbackSessionIdRef.current !== sessionId) return true;
 
-      // Primary: decode & play through the already-unlocked Web Audio outputCtx (100% immune to Chrome async autoplay blocks!)
-      const outCtx = outputCtxRef.current;
+      const outCtx = ensureOutputAudioContext();
       if (outCtx) {
         try {
           if (outCtx.state === 'suspended') {
@@ -813,71 +830,297 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
           }
           const resp = await fetch(audioUrl);
           const arrBuf = await resp.arrayBuffer();
+          if (playbackSessionIdRef.current !== sessionId || speakerMutedRef.current) return true;
           const audioBuf = await outCtx.decodeAudioData(arrBuf.slice(0));
-          const src = outCtx.createBufferSource();
-          src.buffer = audioBuf;
-          src.connect(outCtx.destination);
-          activeSourcesRef.current.add(src);
-          speakingMessageIdRef.current = messageId || 'live';
-          isModelSpeakingRef.current = true;
-          setIsModelSpeaking(true);
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(
-              new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: messageId || null, id: messageId || null } })
-            );
-          }
-          src.onended = () => {
-            activeSourcesRef.current.delete(src);
-            if (activeSourcesRef.current.size === 0) {
-              speakingMessageIdRef.current = null;
-              isModelSpeakingRef.current = false;
-              setIsModelSpeaking(false);
-              window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
+          if (playbackSessionIdRef.current !== sessionId || speakerMutedRef.current) return true;
+
+          return await new Promise<boolean>((resolve) => {
+            try {
+              const src = outCtx.createBufferSource();
+              src.buffer = audioBuf;
+              src.connect(outCtx.destination);
+              activeSourcesRef.current.add(src);
+              let done = false;
+              const finish = (ok: boolean) => {
+                if (done) return;
+                done = true;
+                activeSourcesRef.current.delete(src);
+                resolve(ok);
+              };
+              src.onended = () => finish(true);
+              src.start(0);
+            } catch {
+              resolve(false);
             }
-          };
-          src.start(0);
-          return;
+          });
         } catch {
           // Fall through cleanly to HTMLAudioElement
         }
       }
 
-      try {
-        const audio = new Audio(audioUrl);
-        activeAudioElRef.current = audio;
-        speakingMessageIdRef.current = messageId || 'live';
-        isModelSpeakingRef.current = true;
-        setIsModelSpeaking(true);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: messageId || null, id: messageId || null } })
-          );
+      if (playbackSessionIdRef.current !== sessionId || speakerMutedRef.current) return true;
+      return await new Promise<boolean>((resolve) => {
+        try {
+          const audio = new Audio(audioUrl);
+          activeAudioElRef.current = audio;
+          let done = false;
+          const finish = (ok: boolean) => {
+            if (done) return;
+            done = true;
+            if (activeAudioElRef.current === audio) {
+              activeAudioElRef.current = null;
+            }
+            resolve(ok);
+          };
+          audio.onended = () => finish(true);
+          audio.onerror = () => finish(false);
+          audio.play().catch(() => finish(false));
+        } catch {
+          resolve(false);
         }
-        audio.onended = () => {
-          if (activeAudioElRef.current === audio) {
-            activeAudioElRef.current = null;
-            speakingMessageIdRef.current = null;
-            isModelSpeakingRef.current = false;
-            setIsModelSpeaking(false);
-            window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
+      });
+    },
+    [ensureOutputAudioContext]
+  );
+
+  const speakBrowserChunksAndWait = useCallback(
+    async (text: string, sessionId: number, voiceOverride?: string): Promise<void> => {
+      if (speakerMutedRef.current || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+      const clean = cleanTextForSpeech(text);
+      if (!clean) return;
+      const chunks = splitIntoCoherentSpeechChunks(clean, 185);
+      if (chunks.length === 0) return;
+
+      const synth = window.speechSynthesis;
+      const voices = synth.getVoices();
+      const targetPersona = voiceOverride || voiceNameRef.current;
+      const preferredGender = /charon|fenrir|atlas|daniel|marcus|male/i.test(targetPersona) ? 'male' : 'female';
+      const preferred = selectBestSystemVoice(voices, targetPersona, preferredGender, voiceAccentRef.current);
+      if (!preferred) return;
+
+      if (speechKeepAliveTimerRef.current !== null) {
+        window.clearInterval(speechKeepAliveTimerRef.current);
+      }
+      speechKeepAliveTimerRef.current = window.setInterval(() => {
+        try {
+          if (synth.speaking && synth.paused) {
+            synth.resume();
           }
-        };
-        audio.onerror = () => {
-          if (activeAudioElRef.current === audio) {
-            activeAudioElRef.current = null;
-            isModelSpeakingRef.current = false;
-            setIsModelSpeaking(false);
-          }
-          if (fallbackText) speakBrowserFallback(fallbackText, messageId);
-        };
-        audio.play().catch(() => {
-          if (fallbackText) speakBrowserFallback(fallbackText, messageId);
-        });
-      } catch {
-        if (fallbackText) speakBrowserFallback(fallbackText, messageId);
+        } catch {}
+      }, 4000);
+
+      try {
+        for (const chunk of chunks) {
+          if (playbackSessionIdRef.current !== sessionId || speakerMutedRef.current) break;
+          await new Promise<void>((resolve) => {
+            let settled = false;
+            const utter = new SpeechSynthesisUtterance(chunk);
+            utter.voice = preferred;
+            utter.lang = preferred.lang || voiceAccentRef.current;
+            utter.rate = 1.02;
+            activeBrowserUtterancesRef.current.push(utter);
+
+            const finish = () => {
+              if (settled) return;
+              settled = true;
+              window.clearTimeout(watchdog);
+              activeBrowserUtterancesRef.current = activeBrowserUtterancesRef.current.filter((u) => u !== utter);
+              resolve();
+            };
+
+            const watchdog = window.setTimeout(
+              () => {
+                if (!settled && !synth.speaking) finish();
+              },
+              Math.max(10000, chunk.length * 130 + 5000)
+            );
+
+            utter.onend = finish;
+            utter.onerror = (ev: any) => {
+              if (ev?.error === 'interrupted' || ev?.error === 'canceled') {
+                finish();
+                return;
+              }
+              finish();
+            };
+
+            try {
+              if (synth.paused) synth.resume();
+              synth.speak(utter);
+            } catch {
+              finish();
+            }
+          });
+        }
+      } finally {
+        if (playbackSessionIdRef.current === sessionId && speechKeepAliveTimerRef.current !== null) {
+          window.clearInterval(speechKeepAliveTimerRef.current);
+          speechKeepAliveTimerRef.current = null;
+        }
       }
     },
-    [flushPlaybackQueue, speakBrowserFallback]
+    []
+  );
+
+  // Infinite-length sequential speech streamer with 1-ahead neural prefetch (ZERO character truncation!)
+  const speakInfiniteTextSequence = useCallback(
+    async (rawText: string, messageId?: string, voiceOverride?: string) => {
+      if (speakerMutedRef.current) return;
+      const clean = cleanTextForSpeech(rawText);
+      if (!clean) return;
+
+      flushPlaybackQueue();
+      const sessionId = ++playbackSessionIdRef.current;
+      const abortCtrl = new AbortController();
+      activeSpeakAbortRef.current = abortCtrl;
+
+      const resolvedMsgId = messageId || 'live';
+      const targetVoice = voiceOverride || voiceNameRef.current;
+      const targetAccent = voiceAccentRef.current;
+
+      speakingMessageIdRef.current = resolvedMsgId;
+      isModelSpeakingRef.current = true;
+      setIsModelSpeaking(true);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('sovereign_voice_speaking_id', {
+            detail: { speakingId: messageId || null, id: messageId || null }
+          })
+        );
+      }
+
+      // Split into natural sentence-aligned ~520-char neural chunks with NO upper bound on chunk count
+      const neuralChunks = splitIntoCoherentSpeechChunks(clean, 520);
+      if (neuralChunks.length === 0) {
+        if (playbackSessionIdRef.current === sessionId) {
+          speakingMessageIdRef.current = null;
+          isModelSpeakingRef.current = false;
+          setIsModelSpeaking(false);
+          window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
+        }
+        return;
+      }
+
+      const fetchNeuralChunk = async (chunkText: string): Promise<string | null> => {
+        if (playbackSessionIdRef.current !== sessionId || abortCtrl.signal.aborted) return null;
+        try {
+          const res = await apiFetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: chunkText,
+              voice: targetVoice,
+              accent: targetAccent
+            }),
+            signal: abortCtrl.signal
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data?.audioUrl) {
+            return String(data.audioUrl);
+          }
+        } catch {}
+        return null;
+      };
+
+      try {
+        let nextAudioPromise: Promise<string | null> | null = fetchNeuralChunk(neuralChunks[0]);
+
+        for (let i = 0; i < neuralChunks.length; i++) {
+          if (playbackSessionIdRef.current !== sessionId || speakerMutedRef.current || abortCtrl.signal.aborted) {
+            break;
+          }
+          const currentPromise = nextAudioPromise;
+          // Lookahead prefetch chunk i + 1 while chunk i plays so transitions are 100% gapless!
+          nextAudioPromise = i + 1 < neuralChunks.length ? fetchNeuralChunk(neuralChunks[i + 1]) : null;
+
+          const audioUrl = currentPromise ? await currentPromise : null;
+          if (playbackSessionIdRef.current !== sessionId || speakerMutedRef.current || abortCtrl.signal.aborted) {
+            break;
+          }
+
+          if (audioUrl) {
+            const ok = await playSingleAudioChunkAndWait(audioUrl, sessionId);
+            if (!ok && playbackSessionIdRef.current === sessionId && !speakerMutedRef.current) {
+              await speakBrowserChunksAndWait(neuralChunks[i], sessionId, targetVoice);
+            }
+          } else {
+            await speakBrowserChunksAndWait(neuralChunks[i], sessionId, targetVoice);
+          }
+        }
+      } finally {
+        if (playbackSessionIdRef.current === sessionId) {
+          if (activeSpeakAbortRef.current === abortCtrl) {
+            activeSpeakAbortRef.current = null;
+          }
+          speakingMessageIdRef.current = null;
+          isModelSpeakingRef.current = false;
+          setIsModelSpeaking(false);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
+          }
+        }
+      }
+    },
+    [flushPlaybackQueue, playSingleAudioChunkAndWait, speakBrowserChunksAndWait]
+  );
+
+  const speakBrowserFallback = useCallback(
+    (text: string, messageId?: string, voiceOverride?: string) => {
+      if (speakerMutedRef.current) return;
+      flushPlaybackQueue();
+      const sessionId = ++playbackSessionIdRef.current;
+      speakingMessageIdRef.current = messageId || 'live';
+      isModelSpeakingRef.current = true;
+      setIsModelSpeaking(true);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: messageId || null, id: messageId || null } })
+        );
+      }
+      speakBrowserChunksAndWait(text, sessionId, voiceOverride).finally(() => {
+        if (playbackSessionIdRef.current === sessionId) {
+          speakingMessageIdRef.current = null;
+          isModelSpeakingRef.current = false;
+          setIsModelSpeaking(false);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
+          }
+        }
+      });
+    },
+    [flushPlaybackQueue, speakBrowserChunksAndWait]
+  );
+
+  const playNeuralAudioUrl = useCallback(
+    async (audioUrl: string, fallbackText?: string, messageId?: string) => {
+      if (speakerMutedRef.current) return;
+      flushPlaybackQueue();
+      const sessionId = ++playbackSessionIdRef.current;
+      speakingMessageIdRef.current = messageId || 'live';
+      isModelSpeakingRef.current = true;
+      setIsModelSpeaking(true);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: messageId || null, id: messageId || null } })
+        );
+      }
+      try {
+        const ok = await playSingleAudioChunkAndWait(audioUrl, sessionId);
+        if (!ok && fallbackText && playbackSessionIdRef.current === sessionId) {
+          await speakBrowserChunksAndWait(fallbackText, sessionId);
+        }
+      } finally {
+        if (playbackSessionIdRef.current === sessionId) {
+          speakingMessageIdRef.current = null;
+          isModelSpeakingRef.current = false;
+          setIsModelSpeaking(false);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sovereign_voice_speaking_id', { detail: { speakingId: null, id: null } }));
+          }
+        }
+      }
+    },
+    [flushPlaybackQueue, playSingleAudioChunkAndWait, speakBrowserChunksAndWait]
   );
 
   const schedulePcmPlayback = useCallback((base64Pcm: string) => {
@@ -1057,13 +1300,26 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
       flushPlaybackQueue();
       appendTranscript('user', cleaned);
       const activeMeta = ALL_MODULES.find((m) => m.id === activeModuleRef.current);
+      const chatBridge =
+        typeof window !== 'undefined' ? (window as any).__SOVEREIGN_ACTIVE_CHAT_BRIDGE__?.getSnapshot?.() : null;
       wsRef.current.send(
         JSON.stringify({
           relayTurn: {
             text: cleaned,
             activeModule: activeModuleRef.current,
             activeLabel: activeMeta?.label || activeModuleRef.current,
-            openModules: openModulesRef.current
+            openModules: openModulesRef.current,
+            ...(chatBridge && typeof chatBridge === 'object'
+              ? {
+                  model: chatBridge.model,
+                  agentId: chatBridge.agentId,
+                  agentName: chatBridge.agentName,
+                  customSystemInstruction: chatBridge.customSystemInstruction,
+                  deepthink: chatBridge.deepthink,
+                  useSearchGrounding: chatBridge.useSearchGrounding,
+                  messages: chatBridge.messages
+                }
+              : {})
           }
         })
       );
@@ -1081,7 +1337,7 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
       setVadTranscribing(true);
       try {
         const audioBase64 = await blobToBase64(blob);
-        const res = await fetch('/api/audio/transcribe', {
+        const res = await apiFetch('/api/audio/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1338,118 +1594,92 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
         return null;
       }
 
+      if (isMicrophoneBlockedByFramePolicy()) {
+        setMicStatus('frame-policy-blocked');
+        setErrorMessage(null);
+        return null;
+      }
+
       if (micAcquirePromiseRef.current) {
         return micAcquirePromiseRef.current;
       }
 
-      const allowPrompt =
-        typeof opts?.allowPrompt === 'boolean' ? opts.allowPrompt : hasRecentUserActivation(3000);
+      const allowPrompt = Boolean(opts?.allowPrompt);
 
+      // CRITICAL: When allowPrompt is true (user clicked Allow Microphone / Enable Mic),
+      // invoke requestMicrophoneStreamOnUserGesture IMMEDIATELY with ZERO prior awaits
+      // so transient browser user activation is 100% preserved and the native Allow prompt appears without page refresh!
       const run = (async (): Promise<MediaStream | null> => {
+        if (allowPrompt) {
+          setMicStatus('requesting');
+          const directRes = await requestMicrophoneStreamOnUserGesture(selectedMicIdRef.current);
+          if (directRes.stream) {
+            const audioTrack = directRes.stream.getAudioTracks()[0];
+            if (audioTrack) {
+              audioTrack.enabled = true;
+              const resolvedLabel = audioTrack.label || 'Device Microphone';
+              setMicLabel(resolvedLabel);
+              const resolvedDeviceId = audioTrack.getSettings?.().deviceId;
+              if (resolvedDeviceId && !selectedMicIdRef.current) {
+                prevMicIdRef.current = resolvedDeviceId;
+                selectedMicIdRef.current = resolvedDeviceId;
+                setSelectedMicId(resolvedDeviceId);
+              }
+            }
+            setMicStatus('active');
+            setMicConsentDismissed(true);
+            setErrorMessage(null);
+            refreshMicDevices();
+            return directRes.stream;
+          }
+          if (directRes.status === 'frame-policy-blocked') {
+            setMicStatus('frame-policy-blocked');
+            setErrorMessage(null);
+            return null;
+          }
+          if (directRes.status === 'denied') {
+            setMicStatus('denied');
+            setErrorMessage('Microphone access is blocked in your browser site settings — allow Microphone in the address bar, then click Allow Microphone.');
+            return null;
+          }
+          if (directRes.status === 'needs-gesture') {
+            setMicStatus('needs-gesture');
+            setErrorMessage(null);
+            return null;
+          }
+          setMicStatus('unavailable');
+          setErrorMessage(`Microphone notice: ${directRes.error?.message || 'No audio input device detected.'}`);
+          return null;
+        }
+
+        // Silent check (no unprompted browser dialog): attach automatically ONLY if already granted!
         const probe = await probeMediaPermission('microphone');
         if (probe.browserState === 'denied') {
           setMicStatus('denied');
-          setErrorMessage('Microphone permission blocked — allow microphone access in your browser bar, then click Retry Mic.');
           return null;
         }
-        if (!probe.canAcquireSilently && !allowPrompt) {
-          // Browser currently requires a fresh prompt; do NOT trigger getUserMedia automatically on boot
+        if (!probe.canAcquireSilently) {
           setMicStatus('needs-gesture');
           setErrorMessage(null);
           return null;
         }
 
         setMicStatus('requesting');
-        let chosenId = selectedMicIdRef.current;
-        let savedLabel = '';
-        try {
-          savedLabel = localStorage.getItem('sovereign_voice_mic_label') || '';
-        } catch {}
-
-        try {
-          const enumerated = await navigator.mediaDevices.enumerateDevices?.();
-          const audioInputs = (enumerated || []).filter((d) => d.kind === 'audioinput');
-          if (audioInputs.length > 0) {
-            const idExists = chosenId && audioInputs.some((d) => d.deviceId === chosenId);
-            if (!idExists && savedLabel) {
-              const matchedByLabel = audioInputs.find(
-                (d) => d.label && d.label.toLowerCase() === savedLabel.toLowerCase()
-              );
-              if (matchedByLabel?.deviceId) {
-                chosenId = matchedByLabel.deviceId;
-                prevMicIdRef.current = matchedByLabel.deviceId;
-                selectedMicIdRef.current = matchedByLabel.deviceId;
-                setSelectedMicId(matchedByLabel.deviceId);
-              }
-            }
-          }
-        } catch {}
-
-        const attempts: MediaStreamConstraints[] = [];
-        if (chosenId && chosenId !== 'default') {
-          attempts.push({
-            audio: {
-              deviceId: { ideal: chosenId },
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true
-            }
-          });
-        }
-        attempts.push({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        });
-        attempts.push({ audio: true });
-
-        const result = await requestMicrophoneStream({
-          allowPrompt,
-          constraintsList: attempts
-        });
-
+        const result = await requestMicrophoneStream({ allowPrompt: false });
         if (result.stream) {
           const audioTrack = result.stream.getAudioTracks()[0];
           if (audioTrack) {
             audioTrack.enabled = true;
-            const resolvedLabel = audioTrack.label || 'Device Microphone';
-            setMicLabel(resolvedLabel);
-            const resolvedDeviceId = audioTrack.getSettings?.().deviceId;
-            try {
-              if (resolvedDeviceId && !chosenId) {
-                prevMicIdRef.current = resolvedDeviceId;
-                selectedMicIdRef.current = resolvedDeviceId;
-                setSelectedMicId(resolvedDeviceId);
-              }
-            } catch {}
+            setMicLabel(audioTrack.label || 'Device Microphone');
           }
           setMicStatus('active');
+          setMicConsentDismissed(true);
           setErrorMessage(null);
           refreshMicDevices();
           return result.stream;
         }
 
-        if (result.status === 'needs-gesture') {
-          setMicStatus('needs-gesture');
-          setErrorMessage(null);
-          return null;
-        }
-        if (result.status === 'denied') {
-          setMicStatus('denied');
-          setErrorMessage('Microphone permission blocked — allow microphone access in your browser bar, then click Retry Mic.');
-          return null;
-        }
-
-        const errName = String(result.error?.name || '');
-        if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
-          setMicStatus('unavailable');
-          setErrorMessage('No device microphone detected — plug in or select a mic, then click Retry Mic.');
-        } else {
-          setMicStatus('unavailable');
-          setErrorMessage(`Microphone notice: ${result.error?.message || 'Unable to capture audio input.'}`);
-        }
+        setMicStatus(result.status === 'denied' ? 'denied' : 'needs-gesture');
         return null;
       })();
 
@@ -1693,7 +1923,11 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
 
       const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
       const resumeFlag = transcriptsRef.current.length > 0 || reconnectAttemptsRef.current > 0 ? '1' : '0';
-      const wsUrl = `${protocol}://${location.host}/live?voice=${encodeURIComponent(voiceNameRef.current)}&accent=${encodeURIComponent(voiceAccentRef.current)}&mode=autonomous&peer=1&proactive=${peerExploreRef.current ? '1' : '0'}&sessionId=${encodeURIComponent(liveSessionIdRef.current)}&resume=${resumeFlag}`;
+      const authToken = getAuthBearerToken();
+      const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : '';
+      // Default to 1-to-1 Sovereign Duplex Relay (`transport=relay`) so Voice Chat IS literally the exact same Lyrailius Omega entity,
+      // toolbelt, memory, and zero-guardrail/zero-boilerplate pipeline as Text Chat, connecting in <20ms!
+      const wsUrl = `${protocol}://${location.host}/live?transport=relay&voice=${encodeURIComponent(voiceNameRef.current)}&accent=${encodeURIComponent(voiceAccentRef.current)}&mode=autonomous&peer=1&proactive=${peerExploreRef.current ? '1' : '0'}&sessionId=${encodeURIComponent(liveSessionIdRef.current)}&resume=${resumeFlag}${tokenParam}`;
       if (wsRef.current) {
         try {
           wsRef.current.close();
@@ -1734,7 +1968,8 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
             setIsConnected(true);
             setIsConnecting(false);
 
-            if (isRelay && !isMutedRef.current) {
+            // Start browser SpeechRecognition ONLY when mic stream is already active (never trigger unprompted browser popup)
+            if (isRelay && !isMutedRef.current && streamRef.current) {
               startContinuousRecognition();
             }
 
@@ -1762,7 +1997,7 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
           if (msg.transportSwitch === 'sovereign-duplex-relay') {
             relayModeRef.current = true;
             setTransportMode('sovereign-duplex-relay');
-            if (!isMutedRef.current) {
+            if (!isMutedRef.current && streamRef.current) {
               startContinuousRecognition();
             }
             return;
@@ -1771,7 +2006,13 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
           if (msg.audio) {
             schedulePcmPlayback(msg.audio);
           }
-          if (msg.audioUrl) {
+          if (msg.speakSequence && typeof msg.speakSequence.text === 'string') {
+            speakInfiniteTextSequence(
+              String(msg.speakSequence.text),
+              msg.speakSequence.id || undefined,
+              msg.speakSequence.voice || undefined
+            );
+          } else if (msg.audioUrl) {
             playNeuralAudioUrl(String(msg.audioUrl), lastSpokenReply, msg.speakOnlyId);
           }
           if (msg.speakOnlyFallback?.text) {
@@ -1860,6 +2101,7 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
     appendTranscript,
     schedulePcmPlayback,
     playNeuralAudioUrl,
+    speakInfiniteTextSequence,
     speakBrowserFallback,
     startContinuousRecognition,
     flushPlaybackQueue,
@@ -1916,9 +2158,9 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
     }
   };
 
-  // Unified Read-Aloud / Speak-Text listener so ALL TTS actions across Chat use ONE single voice engine
+  // Unified Read-Aloud / Speak-Text listener: streams infinite sentence-aligned chunks until 100% of text finishes!
   useEffect(() => {
-    const onSpeakRequest = async (e: Event) => {
+    const onSpeakRequest = (e: Event) => {
       const detail = (e as CustomEvent)?.detail;
       if (!detail) return;
       const reqId = String(detail.id || 'msg');
@@ -1926,32 +2168,10 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
         flushPlaybackQueue();
         return;
       }
-      const clean = cleanTextForSpeech(String(detail.text || ''));
-      if (!clean) return;
-
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            speakOnly: { id: reqId, text: clean, voice: voiceNameRef.current, accent: voiceAccentRef.current }
-          })
-        );
-        return;
-      }
-      try {
-        const res = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: clean.slice(0, 1400), voice: voiceNameRef.current, accent: voiceAccentRef.current })
-        });
-        const data = await res.json();
-        if (res.ok && data?.audioUrl) {
-          playNeuralAudioUrl(data.audioUrl, clean, reqId);
-        } else {
-          speakBrowserFallback(clean, reqId);
-        }
-      } catch {
-        speakBrowserFallback(clean, reqId);
-      }
+      const rawText = String(detail.text || '');
+      if (!rawText.trim()) return;
+      const requestedVoice = typeof detail.voice === 'string' && detail.voice.trim() ? detail.voice.trim() : undefined;
+      speakInfiniteTextSequence(rawText, reqId, requestedVoice);
     };
 
     const onControl = (e: Event) => {
@@ -2009,13 +2229,14 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
     activeToolName,
     autoArchiveVault,
     flushPlaybackQueue,
-    playNeuralAudioUrl,
-    speakBrowserFallback,
+    speakInfiniteTextSequence,
     archiveSessionToVault,
     sendRelayUtterance
   ]);
 
-  // Connect cleanly when isActive flips true: immediate on user tap, or settled delay on boot restore (eliminates StrictMode & lazy-load races)
+  // Connect cleanly when user clicks Voice Chat (isActive flips true):
+  // Connects 1-to-1 voice socket in <20ms with ZERO page refresh, silently binds mic if already granted,
+  // or surfaces the clean in-dock "Allow Microphone?" consent prompt if permission is needed!
   useEffect(() => {
     if (bootConnectTimerRef.current !== null) {
       window.clearTimeout(bootConnectTimerRef.current);
@@ -2024,17 +2245,8 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
     if (isActive) {
       manualDisconnectRef.current = false;
       reconnectAttemptsRef.current = 0;
-      const fromUserGesture = hasRecentUserActivation(2500);
-      if (fromUserGesture) {
-        connectSessionRef.current({ allowPrompt: true });
-      } else {
-        bootConnectTimerRef.current = window.setTimeout(() => {
-          bootConnectTimerRef.current = null;
-          if (isActiveRef.current && !manualDisconnectRef.current && !isConnectedRef.current) {
-            connectSessionRef.current({ allowPrompt: false });
-          }
-        }, 280);
-      }
+      setMicConsentDismissed(false);
+      connectSessionRef.current({ allowPrompt: false });
     } else {
       manualDisconnectRef.current = true;
       teardownSessionRef.current();
@@ -2073,11 +2285,25 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
     };
     window.addEventListener('pointerdown', unlockAudioContexts, { passive: true });
     window.addEventListener('keydown', unlockAudioContexts, { passive: true });
+    const onHardwareRevoked = (ev: Event) => {
+      const key = (ev as CustomEvent)?.detail?.key;
+      if (key === 'microphone') {
+        setIsMuted(true);
+        stopContinuousRecognition();
+        stopActiveVadRecorder(true);
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        setMicStatus('needs-gesture');
+        setMicLevel(0);
+      }
+    };
+    window.addEventListener('sovereign_hardware_permission_revoked', onHardwareRevoked);
     return () => {
       window.removeEventListener('pointerdown', unlockAudioContexts);
       window.removeEventListener('keydown', unlockAudioContexts);
+      window.removeEventListener('sovereign_hardware_permission_revoked', onHardwareRevoked);
     };
-  }, [isActive]);
+  }, [isActive, stopActiveVadRecorder, stopContinuousRecognition]);
 
   // Track explicit mic selection (actual device switch is triggered from the dropdown onChange handler)
   const prevMicIdRef = useRef<string>(selectedMicId);
@@ -2202,14 +2428,26 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
 
   const latestLine = transcripts[transcripts.length - 1];
   const barHeights = [0.45, 0.85, 1, 0.72, 0.5].map((scale) =>
-    isMuted || micStatus === 'denied' || micStatus === 'unavailable' || micStatus === 'needs-gesture'
+    isMuted ||
+    micStatus === 'denied' ||
+    micStatus === 'unavailable' ||
+    micStatus === 'needs-gesture' ||
+    micStatus === 'frame-policy-blocked'
       ? 3
       : isModelSpeaking
       ? Math.max(5, Math.round(6 + scale * 12))
       : Math.max(3, Math.round(3 + micLevel * scale * 18))
   );
 
-  const micBlocked = micStatus === 'denied' || micStatus === 'unavailable' || micStatus === 'needs-gesture';
+  const micBlocked =
+    micStatus === 'denied' ||
+    micStatus === 'unavailable' ||
+    micStatus === 'needs-gesture' ||
+    micStatus === 'frame-policy-blocked';
+
+  const showMicConsentCard =
+    !micConsentDismissed &&
+    (micStatus === 'needs-gesture' || micStatus === 'denied' || micStatus === 'frame-policy-blocked');
 
   return (
     <div
@@ -2421,24 +2659,90 @@ export const PersistentTalkDock: React.FC<PersistentTalkDockProps> = ({
         </div>
       )}
 
-      {/* Recovery / Mic Permission Strip */}
-      {errorMessage && (
+      {/* Clean On-Demand Microphone Permission Prompt (Appears ONLY when Voice Chat is opened and mic isn't granted yet; ZERO system refresh!) */}
+      {showMicConsentCard && (
+        <div className="px-3 py-2.5 border-t border-emerald-500/30 bg-zinc-900/95 space-y-2 text-xs">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="font-semibold text-zinc-100 flex items-center gap-1.5">
+                <Mic className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>
+                  {micStatus === 'frame-policy-blocked'
+                    ? 'Hardware Mic Restricted by Preview Frame'
+                    : micStatus === 'denied'
+                    ? 'Microphone Blocked in Browser Settings'
+                    : 'Allow Microphone Access for Voice Chat?'}
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">
+                {micStatus === 'frame-policy-blocked'
+                  ? 'This embedded preview iframe blocks raw mic capture so it never forces a boot reload. Open in a direct browser tab for live mic input, or type below with full spoken voice replies right here.'
+                  : micStatus === 'denied'
+                  ? 'Allow Microphone in your browser address bar site settings, then click Allow Microphone below (no page refresh needed).'
+                  : 'Click Allow Microphone to speak hands-free with Lyrailius Omega (1:1 same entity, tools & memory as Text Chat — zero page refresh).'}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {micStatus === 'frame-policy-blocked' ? (
+              <a
+                href={typeof window !== 'undefined' ? window.location.href : '/'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-[11px] inline-flex items-center gap-1.5 transition-colors"
+              >
+                <Mic className="w-3 h-3" />
+                <span>Open Standalone Tab for Mic</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleRetryMicrophone();
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Mic className="w-3 h-3" />
+                <span>Allow Microphone</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMicConsentDismissed(true);
+                setExpanded(true);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-[11px] font-medium cursor-pointer transition-colors"
+            >
+              Use Text + Voice Output
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Recovery Strip */}
+      {errorMessage && !showMicConsentCard && (
         <div className="px-3 py-2 border-t border-amber-500/30 bg-amber-950/35 flex items-center justify-between gap-2 text-[11px] text-amber-200">
           <span className="truncate">{errorMessage}</span>
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault();
               markVoiceUserGesture();
               if (micBlocked) {
                 handleRetryMicrophone();
               } else {
-                connectSession({ allowPrompt: true });
+                connectSession({ allowPrompt: false });
               }
             }}
             className="px-2 py-1 rounded bg-amber-500/25 hover:bg-amber-500/40 border border-amber-400/50 text-amber-100 font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
           >
             <RefreshCw className="w-3 h-3" />
-            <span>{micBlocked ? 'Retry Mic' : 'Reconnect'}</span>
+            <span>{micBlocked ? 'Allow Mic' : 'Reconnect'}</span>
           </button>
         </div>
       )}

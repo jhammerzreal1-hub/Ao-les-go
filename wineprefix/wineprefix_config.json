@@ -15,5 +15,8 @@
     "box64": false,
     "nativeWindows": false
   },
-  "installedDriveCPrograms": []
+  "installedDriveCPrograms": [
+    "/app/applet/downloads/7z2408-x64.exe",
+    "/app/applet/downloads/SteamSetup.exe"
+  ]
 }

@@ -74,6 +74,15 @@ export const CANONICAL_SECRET_SPECS: SecretSpec[] = [
     description: 'Server-side Gemini API key for chat, tool calling, grounding, and multimodal synthesis'
   },
   {
+    id: 'all_key',
+    name: 'All Key (Universal Fallback API Key)',
+    envVar: 'ALL_KEY',
+    category: 'LLM & AI',
+    proxyEndpoint: '/api/chat',
+    quotaPolicy: 'UNIVERSAL_FALLBACK_WHEEL',
+    description: 'Universal fallback API key ("all key" / ALL_KEY) automatically activated whenever GEMINI_API_KEY or provider keys are unlinked, missing, or rate-limited'
+  },
+  {
     id: 'gemini_pool',
     name: 'Gemini Key Rotation Pool (Comma/Newline)',
     envVar: 'GEMINI_API_KEYS',
@@ -227,12 +236,51 @@ export const CANONICAL_SECRET_SPECS: SecretSpec[] = [
     category: 'Telecom & eSIM',
     proxyEndpoint: '/api/sim/carrier/status',
     description: 'Telnyx SIM Card Group ID for programmatic carrier eSIM orchestration'
+  },
+  {
+    id: 'cdp_api_key_id',
+    name: 'Coinbase CDP API Key ID',
+    envVar: 'CDP_API_KEY_ID',
+    category: 'Cloud & Search',
+    proxyEndpoint: '/api/cdp/status',
+    description: 'Coinbase Developer Platform Secret API Key ID from portal.cdp.coinbase.com'
+  },
+  {
+    id: 'cdp_api_key_secret',
+    name: 'Coinbase CDP API Key Secret',
+    envVar: 'CDP_API_KEY_SECRET',
+    category: 'Cloud & Search',
+    proxyEndpoint: '/api/cdp/status',
+    description: 'Coinbase CDP private signing key (ECDSA PEM or Ed25519 base64 secret)'
+  },
+  {
+    id: 'cdp_wallet_secret',
+    name: 'Coinbase CDP Wallet Secret',
+    envVar: 'CDP_WALLET_SECRET',
+    category: 'Cloud & Search',
+    proxyEndpoint: '/api/cdp/status',
+    description: 'Coinbase CDP Wallet Secret required for creating EVM wallets and signing trades/x402'
+  },
+  {
+    id: 'cdp_env',
+    name: 'Coinbase CDP Environment (sandbox | live)',
+    envVar: 'CDP_ENV',
+    category: 'Cloud & Search',
+    proxyEndpoint: '/api/cdp/status',
+    isPublicEndpoint: true,
+    description: 'Default Coinbase CDP environment mode: sandbox (Base Sepolia) or live (Base/Ethereum Mainnet)'
   }
 ];
 
 const PROVIDER_TO_ENV: Record<string, string> = {
   gemini: 'GEMINI_API_KEY',
   google: 'GEMINI_API_KEY',
+  all_key: 'ALL_KEY',
+  'all key': 'ALL_KEY',
+  allkey: 'ALL_KEY',
+  'all-key': 'ALL_KEY',
+  all_keys: 'ALL_KEY',
+  api_universal: 'API_UNIVERSAL',
   gemini_pool: 'GEMINI_API_KEYS',
   openai: 'OPENAI_API_KEY',
   deepseek: 'DEEPSEEK_API_KEY',
@@ -253,6 +301,10 @@ const PROVIDER_TO_ENV: Record<string, string> = {
   telnyx: 'TELNYX_API_KEY',
   telnyx_key: 'TELNYX_API_KEY',
   telnyx_messaging: 'TELNYX_MESSAGING_PROFILE_ID',
+  cdp_api_key_id: 'CDP_API_KEY_ID',
+  cdp_api_key_secret: 'CDP_API_KEY_SECRET',
+  cdp_wallet_secret: 'CDP_WALLET_SECRET',
+  cdp_env: 'CDP_ENV',
   telnyx_sim_group: 'TELNYX_SIM_GROUP_ID'
 };
 
@@ -269,7 +321,85 @@ const SENSITIVE_RELATIVE_PATHS = new Set([
 
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]{1,95}$/;
 
-class InternalSecretsHandler {
+const PLACEHOLDER_SECRET_VALUES = new Set([
+  'my_gemini_api_key',
+  'your_gemini_api_key',
+  'your_api_key',
+  'your_api_key_here',
+  'replace_me',
+  'changeme',
+  'unlinked',
+  'not_linked',
+  'not_configured',
+  'none',
+  'null',
+  'undefined',
+  'todo'
+]);
+
+function isUsableSecretValue(raw: unknown): raw is string {
+  if (typeof raw !== 'string') return false;
+  const trimmed = raw.trim();
+  if (trimmed.length < 8) return false;
+  const lower = trimmed.toLowerCase();
+  if (PLACEHOLDER_SECRET_VALUES.has(lower)) return false;
+  if (/^<[^>]+>$/.test(trimmed)) return false;
+  return true;
+}
+
+function isNonSecretSystemEnvKey(key: string): boolean {
+  if (!key) return true;
+  if (/^(?:npm_|YARN_|NODE_|K_|CLOUD_RUN_|VITE_|XDG_|DBUS_|SSH_AUTH_SOCK$|GPG_)/i.test(key)) {
+    return true;
+  }
+  if (
+    key === 'LC_ALL' ||
+    key === 'LANG' ||
+    key === 'LANGUAGE' ||
+    key === 'GOOGLE_RUNTIME' ||
+    key === 'GOOGLE_CLOUD_PROJECT' ||
+    key === 'PATH' ||
+    key === 'HOME' ||
+    key === 'PWD' ||
+    key === 'OLDPWD' ||
+    key === 'INIT_CWD' ||
+    key === 'SHELL' ||
+    key === 'USER' ||
+    key === 'LOGNAME' ||
+    key === 'HOSTNAME' ||
+    key === 'TERM' ||
+    key === 'PORT'
+  ) {
+    return true;
+  }
+  return /(?:_CWD|_DIR|_PATH|_PATHS|_HOST|_HOSTS|_PORT|_URL|_URLS|_ORIGIN|_DOMAIN|_VERSION|_BIN)$/i.test(key) &&
+    key !== 'CUSTOM_PROXY_URL' &&
+    key !== 'OLLAMA_HOST';
+}
+
+const ALL_KEY_ENV_ALIASES = [
+  'ALL_KEY',
+  'All_Key',
+  'all_key',
+  'ALLKEY',
+  'AllKey',
+  'allkey',
+  'ALL_KEYS',
+  'ALL_API_KEY',
+  'all key',
+  'All Key',
+  'API_Universal',
+  'API_UNIVERSAL',
+  'UNIVERSAL_KEY',
+  'UNIVERSAL_API_KEY',
+  'GOOGLE_API_KEY',
+  'API_KEY'
+];
+
+const CANONICAL_ENV_SET = new Set(CANONICAL_SECRET_SPECS.map((s) => s.envVar));
+const ALL_KEY_LOWER_SET = new Set(ALL_KEY_ENV_ALIASES.map((a) => a.toLowerCase()));
+
+export class InternalSecretsHandler {
   private masterKey: Buffer | null = null;
   private vaultCache: EncryptedVaultFile | null = null;
   private plaintextSecrets = new Map<string, string>();
@@ -282,22 +412,32 @@ class InternalSecretsHandler {
     this.loadOrCreateMasterKey();
     this.loadVaultFromDisk();
 
-    // Capture env vars present before vault hydration
+    // Capture only genuine secret / API key / canonical provider env vars (never OS/npm paths like INIT_CWD or SHELL)
     for (const [k, v] of Object.entries(process.env)) {
-      if (typeof v === 'string' && v.trim().length > 0 && (ENV_KEY_PATTERN.test(k) || k.includes('SECRET') || k.includes('KEY') || k.includes('TOKEN') || k.includes('SID'))) {
-        this.initialEnvKeys.add(k);
-        this.plaintextSecrets.set(k, v.trim());
+      if (typeof v !== 'string' || v.trim().length === 0) continue;
+      const trimmed = v.trim();
+      const isCanonical = CANONICAL_ENV_SET.has(k);
+      const isAllKeyAlias = ALL_KEY_LOWER_SET.has(k.trim().toLowerCase());
+      if (!isCanonical && !isAllKeyAlias) {
+        if (isNonSecretSystemEnvKey(k)) continue;
+        if (trimmed.startsWith('/')) continue;
+        if (!/(?:SECRET|KEY|TOKEN|PASS|SID|CREDENTIAL|BEARER|PRIVATE|UNIVERSAL)/i.test(k)) continue;
       }
+      if (k === 'GEMINI_API_KEY' && !isUsableSecretValue(trimmed)) {
+        continue;
+      }
+      this.initialEnvKeys.add(k);
+      this.plaintextSecrets.set(k, trimmed);
     }
 
-    // Decrypt vault entries into memory & hydrate process.env (do not overwrite existing non-empty env vars unless vault has newer explicit override)
+    // Decrypt vault entries into memory & hydrate process.env
     if (this.vaultCache && this.masterKey) {
       for (const [envVar, entry] of Object.entries(this.vaultCache.entries)) {
         try {
           const decrypted = this.decryptEntry(entry);
-          if (decrypted) {
-            this.plaintextSecrets.set(envVar, decrypted);
-            process.env[envVar] = decrypted;
+          if (decrypted && isUsableSecretValue(decrypted)) {
+            this.plaintextSecrets.set(envVar, decrypted.trim());
+            process.env[envVar] = decrypted.trim();
           }
         } catch {
           // Skip corrupted entry cleanly without crashing startup
@@ -305,7 +445,103 @@ class InternalSecretsHandler {
       }
     }
 
+    this.bridgeUniversalEnvAliases();
     this.initialized = true;
+  }
+
+  public collectUniversalFallbackEntries(): Array<{ source: string; value: string }> {
+    const found: Array<{ source: string; value: string }> = [];
+    const seen = new Set<string>();
+
+    const addEntry = (source: string, raw: unknown) => {
+      if (!isUsableSecretValue(raw)) return;
+      for (const part of raw.split(/[\r\n,;]+/).map((s) => s.trim()).filter(Boolean)) {
+        if (!isUsableSecretValue(part) || seen.has(part)) continue;
+        seen.add(part);
+        found.push({ source, value: part });
+      }
+    };
+
+    // 1. Explicit "all key" / ALL_KEY / API_Universal aliases in vault & process.env (in priority order)
+    for (const alias of ALL_KEY_ENV_ALIASES) {
+      addEntry(alias, this.plaintextSecrets.get(alias) ?? process.env[alias]);
+    }
+
+    // 2. Any vault entry whose label or envVar normalizes to "allkey" / "universal"
+    if (this.vaultCache) {
+      for (const [envVar, entry] of Object.entries(this.vaultCache.entries)) {
+        const normName = `${envVar} ${entry.label || ''}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (normName.includes('allkey') || normName.includes('universalkey') || normName.includes('apiuniversal')) {
+          addEntry(envVar, this.plaintextSecrets.get(envVar) ?? process.env[envVar]);
+        }
+      }
+    }
+
+    // 3. Case-insensitive scan of process.env for any variant of "all key" / "all_key" / custom AIza... key
+    for (const [k, v] of Object.entries(process.env)) {
+      if (k === 'GEMINI_API_KEY' || k === 'FIREBASE_API_KEY' || k.startsWith('VITE_FIREBASE')) continue;
+      const normKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (normKey === 'allkey' || normKey === 'allkeys' || normKey === 'allapikey' || normKey === 'apiuniversal') {
+        addEntry(k, v);
+      } else if (typeof v === 'string' && /^AIza[0-9A-Za-z\-_]{25,}$/.test(v.trim())) {
+        addEntry(k, v);
+      }
+    }
+
+    return found;
+  }
+
+  private bridgeUniversalEnvAliases(): void {
+    const universalEntries = this.collectUniversalFallbackEntries();
+
+    // Populate canonical ALL_KEY in memory if provided under a case/space alias like "All_Key" or "all key"
+    if (!isUsableSecretValue(this.plaintextSecrets.get('ALL_KEY'))) {
+      const explicitAllKey = universalEntries.find((e) =>
+        e.source.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith('all')
+      );
+      if (explicitAllKey) {
+        this.plaintextSecrets.set('ALL_KEY', explicitAllKey.value);
+        if (!isUsableSecretValue(process.env.ALL_KEY)) {
+          process.env.ALL_KEY = explicitAllKey.value;
+        }
+      }
+    }
+
+    const currentGemini = this.plaintextSecrets.get('GEMINI_API_KEY') ?? process.env.GEMINI_API_KEY;
+    const geminiLinked = isUsableSecretValue(currentGemini);
+
+    for (const { value: candidate } of universalEntries) {
+      if (candidate.startsWith('sk-or-')) {
+        if (!isUsableSecretValue(this.plaintextSecrets.get('OPENROUTER_API_KEY'))) {
+          this.plaintextSecrets.set('OPENROUTER_API_KEY', candidate);
+        }
+        if (!isUsableSecretValue(process.env.OPENROUTER_API_KEY)) {
+          process.env.OPENROUTER_API_KEY = candidate;
+        }
+      } else if (candidate.startsWith('gsk_')) {
+        if (!isUsableSecretValue(this.plaintextSecrets.get('GROQ_API_KEY'))) {
+          this.plaintextSecrets.set('GROQ_API_KEY', candidate);
+        }
+        if (!isUsableSecretValue(process.env.GROQ_API_KEY)) {
+          process.env.GROQ_API_KEY = candidate;
+        }
+      } else if (candidate.startsWith('sk-')) {
+        if (!isUsableSecretValue(this.plaintextSecrets.get('OPENAI_API_KEY'))) {
+          this.plaintextSecrets.set('OPENAI_API_KEY', candidate);
+        }
+        if (!isUsableSecretValue(process.env.OPENAI_API_KEY)) {
+          process.env.OPENAI_API_KEY = candidate;
+        }
+      } else {
+        // AIza..., AQ...., or custom Gemini-compatible key: activate immediately if GEMINI_API_KEY isn't linked
+        if (!geminiLinked && !isUsableSecretValue(this.plaintextSecrets.get('GEMINI_API_KEY'))) {
+          this.plaintextSecrets.set('GEMINI_API_KEY', candidate);
+        }
+        if (!isUsableSecretValue(process.env.GEMINI_API_KEY)) {
+          process.env.GEMINI_API_KEY = candidate;
+        }
+      }
+    }
   }
 
   private ensureInit(): void {
@@ -433,8 +669,22 @@ class InternalSecretsHandler {
   public getSecret(envVarOrProvider: string): string | undefined {
     this.ensureInit();
     const envVar = this.resolveEnvVarName(envVarOrProvider);
-    const val = this.plaintextSecrets.get(envVar) ?? process.env[envVar];
-    return typeof val === 'string' && val.trim().length > 0 ? val.trim() : undefined;
+    let val = this.plaintextSecrets.get(envVar) ?? process.env[envVar];
+    if (!isUsableSecretValue(val)) {
+      this.bridgeUniversalEnvAliases();
+      val = this.plaintextSecrets.get(envVar) ?? process.env[envVar];
+      if (!isUsableSecretValue(val) && envVar === 'ALL_KEY') {
+        const anyUniversal = this.collectUniversalFallbackEntries()[0];
+        if (anyUniversal) val = anyUniversal.value;
+      }
+      if (!isUsableSecretValue(val) && envVar === 'GEMINI_API_KEY') {
+        const geminiFallback = this.collectUniversalFallbackEntries().find(
+          (e) => !e.value.startsWith('sk-') && !e.value.startsWith('gsk_')
+        );
+        if (geminiFallback) val = geminiFallback.value;
+      }
+    }
+    return isUsableSecretValue(val) ? val.trim() : undefined;
   }
 
   public getSecretPool(
@@ -452,7 +702,7 @@ class InternalSecretsHandler {
       const parts = raw
         .split(/[\r\n,;]+/)
         .map((s) => s.trim())
-        .filter(Boolean);
+        .filter((s) => (opts?.isPublicEndpoint ? s.length > 0 : isUsableSecretValue(s)));
       for (const item of parts) {
         if (seenValues.has(item)) continue;
         seenValues.add(item);
@@ -473,6 +723,31 @@ class InternalSecretsHandler {
     for (let i = 1; i <= 12; i++) {
       const k = `${prefix}${i}`;
       pushCandidate(this.getSecret(k), k);
+    }
+
+    // Automatically append "all key" (ALL_KEY) and universal fallback keys into the active provider wheel pool
+    // so if GEMINI_API_KEY isn't linked, expires, or returns 401/403/429, ALL_KEY seamlessly takes over!
+    if (!opts?.isPublicEndpoint) {
+      const universalFallbacks = this.collectUniversalFallbackEntries();
+      for (const fb of universalFallbacks) {
+        if (primaryEnvVar === 'GEMINI_API_KEY') {
+          if (!fb.value.startsWith('sk-') && !fb.value.startsWith('gsk_')) {
+            pushCandidate(fb.value, fb.source);
+          }
+        } else if (primaryEnvVar === 'OPENROUTER_API_KEY') {
+          if (fb.value.startsWith('sk-or-')) {
+            pushCandidate(fb.value, fb.source);
+          }
+        } else if (primaryEnvVar === 'GROQ_API_KEY') {
+          if (fb.value.startsWith('gsk_')) {
+            pushCandidate(fb.value, fb.source);
+          }
+        } else if (primaryEnvVar === 'OPENAI_API_KEY' || primaryEnvVar === 'DEEPSEEK_API_KEY') {
+          if (fb.value.startsWith('sk-') && !fb.value.startsWith('sk-or-')) {
+            pushCandidate(fb.value, fb.source);
+          }
+        }
+      }
     }
 
     return results;
@@ -500,6 +775,7 @@ class InternalSecretsHandler {
 
     this.plaintextSecrets.set(envVar, cleanVal);
     process.env[envVar] = cleanVal;
+    this.bridgeUniversalEnvAliases();
 
     return this.getTelemetryForEnvVar(envVar);
   }
@@ -647,6 +923,14 @@ class InternalSecretsHandler {
           seen.add(envVar);
           list.push(this.getTelemetryForEnvVar(envVar));
         }
+      }
+    }
+
+    for (const envKey of this.initialEnvKeys) {
+      const resolved = this.resolveEnvVarName(envKey);
+      if (!seen.has(envKey) && !seen.has(resolved) && /KEY|SECRET|TOKEN|UNIVERSAL/i.test(envKey)) {
+        seen.add(envKey);
+        list.push(this.getTelemetryForEnvVar(envKey));
       }
     }
 

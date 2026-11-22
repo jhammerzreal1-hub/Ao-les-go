@@ -837,7 +837,14 @@ class LocalLlmManager {
     return typeof navigator !== 'undefined' && 'gpu' in navigator && !!(navigator as any).gpu;
   }
 
-  public async probeLlamaCppServer(endpoint = 'http://127.0.0.1:8080'): Promise<boolean> {
+  private llamaProbeCache: { endpoint: string; ok: boolean; ts: number } | null = null;
+  private ollamaProbeCache: { endpoint: string; ok: boolean; ts: number } | null = null;
+
+  public async probeLlamaCppServer(endpoint = 'http://127.0.0.1:8080', force = false): Promise<boolean> {
+    const now = Date.now();
+    if (!force && this.llamaProbeCache && this.llamaProbeCache.endpoint === endpoint && now - this.llamaProbeCache.ts < 30_000) {
+      return this.llamaProbeCache.ok;
+    }
     const isValidDaemonResponse = (res: Response) => {
       if (!res.ok) return false;
       if (res.headers.get('x-aurelius-instance')) return false;
@@ -845,26 +852,36 @@ class LocalLlmManager {
       if (ct.includes('text/html')) return false;
       return true;
     };
+    let ok = false;
     try {
-      const res = await fetch(`${endpoint}/health`, { method: 'GET', signal: AbortSignal.timeout(1200) });
-      return isValidDaemonResponse(res);
+      const res = await fetch(`${endpoint}/health`, { method: 'GET', signal: AbortSignal.timeout(650) });
+      ok = isValidDaemonResponse(res);
     } catch {
       try {
-        const res2 = await fetch(`${endpoint}/v1/models`, { method: 'GET', signal: AbortSignal.timeout(1200) });
-        return isValidDaemonResponse(res2);
+        const res2 = await fetch(`${endpoint}/v1/models`, { method: 'GET', signal: AbortSignal.timeout(650) });
+        ok = isValidDaemonResponse(res2);
       } catch {
-        return false;
+        ok = false;
       }
     }
+    this.llamaProbeCache = { endpoint, ok, ts: Date.now() };
+    return ok;
   }
 
-  public async probeOllama(endpoint = 'http://127.0.0.1:11434'): Promise<boolean> {
-    try {
-      const res = await fetch(`${endpoint}/api/tags`, { method: 'GET', signal: AbortSignal.timeout(1500) });
-      return res.ok;
-    } catch {
-      return false;
+  public async probeOllama(endpoint = 'http://127.0.0.1:11434', force = false): Promise<boolean> {
+    const now = Date.now();
+    if (!force && this.ollamaProbeCache && this.ollamaProbeCache.endpoint === endpoint && now - this.ollamaProbeCache.ts < 30_000) {
+      return this.ollamaProbeCache.ok;
     }
+    let ok = false;
+    try {
+      const res = await fetch(`${endpoint}/api/tags`, { method: 'GET', signal: AbortSignal.timeout(650) });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    this.ollamaProbeCache = { endpoint, ok, ts: Date.now() };
+    return ok;
   }
 
   public async loadWebLlmModel(
@@ -1205,16 +1222,19 @@ class LocalLlmManager {
     this.isFallbackEngine = true;
 
     try {
-      console.info('[BOOT] Sovereign Substrate: Probing local infrastructure...');
-      const [hasOllama, hasTermux] = await Promise.all([
-        this.probeOllama('http://127.0.0.1:11434').catch(() => false),
-        this.probeLlamaCppServer('http://127.0.0.1:8080').catch(() => false)
-      ]);
-      if (hasOllama) {
-        console.info('[Sovereign Substrate] Host Ollama daemon detected at 127.0.0.1:11434');
-      }
-      if (hasTermux) {
-        console.info('[Sovereign Substrate] Termux llama-server detected at 127.0.0.1:8080');
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      const isLocalOrigin = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      if (isLocalOrigin) {
+        const [hasOllama, hasTermux] = await Promise.all([
+          this.probeOllama('http://127.0.0.1:11434').catch(() => false),
+          this.probeLlamaCppServer('http://127.0.0.1:8080').catch(() => false)
+        ]);
+        if (hasOllama) {
+          console.info('[Sovereign Substrate] Host Ollama daemon detected at 127.0.0.1:11434');
+        }
+        if (hasTermux) {
+          console.info('[Sovereign Substrate] Termux llama-server detected at 127.0.0.1:8080');
+        }
       }
 
       janusGate.pushLog('[OFFLINE ENGINE] Sovereign Llama/Ollama Substrate Primed on Boot (0 Tokens · UID 0)');

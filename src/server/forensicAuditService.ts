@@ -509,6 +509,34 @@ export const MASTER_MODULE_MANUAL_SPECS: Array<
     }
   },
   {
+    id: 'batch-processor',
+    title: 'Autonomous Batch Processor & Background ETL Queue',
+    category: 'Core AI & Autonomy',
+    componentPath: 'src/components/BatchProcessorModule.tsx',
+    backendPath: 'src/server/batchProcessorService.ts',
+    architectureSummary:
+      'Persistent SQLite background worker pool for multi-file transformations (regex, normalization, conversion, SHA-256 manifests, AI transforms) and data processing (CSV/JSON ETL, JS sandbox, AI extraction) with atomic rollback.',
+    subfunctions: [
+      {
+        name: 'Background Multi-Worker Queue & SQLite Persistence',
+        endpointOrHook: 'GET /api/batch/status & POST /api/batch/jobs',
+        description: 'Schedules and executes queued file and dataset tasks asynchronously across configurable parallel workers.',
+        optimalCriteria: 'SQLite batch_jobs and batch_tasks tables active with live progress and rollback snapshots.'
+      }
+    ],
+    repairPlaybook: {
+      automatedActionId: 'repair-batch-queue',
+      automatedActionLabel: 'Verify Batch Processor Queue & SQLite Tables',
+      manualSteps: ['Inspect /api/batch/status to confirm runner health and worker concurrency.'],
+      verificationCommand: 'curl -s http://127.0.0.1:3000/api/batch/status | head -c 300'
+    },
+    expansionBlueprint: {
+      targetFiles: ['src/server/batchProcessorService.ts', 'src/components/BatchProcessorModule.tsx'],
+      extensionInterfaces: 'BatchOperationType, BatchOperationConfig',
+      howToExpandSteps: ['Add new operation handler in runSingleTaskOperation and expose configuration fields in BatchProcessorModule.']
+    }
+  },
+  {
     id: 'ai-genesis-distillery',
     title: 'AI Genesis & Molecular Weight Distillery (.safetensors Forging)',
     category: 'Core AI & Autonomy',

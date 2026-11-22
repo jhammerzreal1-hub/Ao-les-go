@@ -1,27 +1,22 @@
 {
-  "name": "Aurelius Sovereign Swarm",
-  "short_name": "Aurelius",
-  "description": "Production-grade autonomous AI sovereign stack for Android Termux and PC · Master Architect Joshua Hamilton (JHammerZ)",
+  "id": "/",
+  "name": "Lysander Sovereign OS",
+  "short_name": "SovereignOS",
+  "description": "Cross-platform Sovereign Operating System & Autonomous Stack for Android, iOS, Windows, macOS, and Linux — UID 0 · Ring -3.",
   "start_url": "/",
-  "id": "com.aurelius.sovereign.swarm",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#09090b",
-  "theme_color": "#f59e0b",
+  "theme_color": "#09090b",
   "orientation": "any",
   "categories": ["productivity", "utilities", "developer"],
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    },
-    {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-192.png",
@@ -50,28 +45,28 @@
   ],
   "shortcuts": [
     {
-      "name": "Neural Chat & Super Agent",
+      "name": "Sovereign Chat",
       "short_name": "Chat",
-      "description": "Autonomous AI chat and conversational tool forge",
+      "description": "Autonomous AI orchestrator & workspace tools",
       "url": "/#chat"
     },
     {
-      "name": "Android Termux Edge",
-      "short_name": "Termux",
-      "description": "Android hardware bindings and Termux edge node",
-      "url": "/#termux"
+      "name": "Root Terminal",
+      "short_name": "Terminal",
+      "description": "Native host OS command shell (UID 0)",
+      "url": "/#terminal"
     },
     {
-      "name": "Function Deck & Toolbelt",
-      "short_name": "Functions",
-      "description": "Direct file and terminal function execution",
-      "url": "/#functions"
+      "name": "Sovereign Files",
+      "short_name": "Files",
+      "description": "Host filesystem explorer & editor",
+      "url": "/#file-manager"
     },
     {
-      "name": "PC War Room",
-      "short_name": "War Room",
-      "description": "Multi-agent swarm operations and monitoring",
-      "url": "/#war-room"
+      "name": "Google Chrome",
+      "short_name": "Chrome",
+      "description": "Full-internet web browser & AI Copilot",
+      "url": "/#browser"
     }
   ]
 }

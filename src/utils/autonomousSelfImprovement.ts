@@ -28,6 +28,7 @@
 
 import { janusGate } from './janusGate';
 import { executeSovereignFunction } from './functionEngine';
+import { apiFetch } from './authClient';
 
 export interface AutonomousLearningCycle {
   id: string;
@@ -165,7 +166,7 @@ class AutonomousSelfImprovementEngine {
       localStorage.setItem('aurelius_knowledge_edges', JSON.stringify(edges));
 
       // 1. Post to permanent SQLite agentic memory endpoint
-      fetch('/api/agentic-memory', {
+      apiFetch('/api/agentic-memory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -196,7 +197,7 @@ class AutonomousSelfImprovementEngine {
       const nodes = rawNodes ? JSON.parse(rawNodes) : [];
       
       if (nodes.length > 0) {
-        await fetch('/api/agentic-memory', {
+        await apiFetch('/api/agentic-memory', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -269,17 +270,29 @@ class AutonomousSelfImprovementEngine {
       learnedSummary = `Synthesized theoretical foundations for "${topic}" across local sovereign memory.`;
     }
 
-    // Commit to permanent SQLite/IndexedDB memory
+    // Commit to permanent SQLite/IndexedDB memory + Evolutive Axioms
     try {
-      await fetch('/api/agentic-memory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          role: 'model',
-          content: `[AUTONOMOUS RESEARCH · ${new Date().toLocaleTimeString()}]\nTopic: ${topic}\nFindings: ${learnedSummary}`,
-          model: 'Lyrailius-Omega-Ultimate-Sovereign-MoE (Self-Improvement Daemon)'
+      await Promise.all([
+        apiFetch('/api/agentic-memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role: 'model',
+            content: `[AUTONOMOUS RESEARCH · ${new Date().toLocaleTimeString()}]\nTopic: ${topic}\nFindings: ${learnedSummary}`,
+            model: 'Lyrailius-Omega-Ultimate-Sovereign-MoE (Self-Improvement Daemon)'
+          })
+        }),
+        apiFetch('/api/evolutive-learn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            category: 'DOMAIN_KNOWLEDGE',
+            principle: `${topic}: ${learnedSummary.slice(0, 120)}`,
+            context: 'Autonomous Web Research Pass',
+            originTurn: 'autonomous-self-improvement-daemon'
+          })
         })
-      });
+      ]);
     } catch (_) {}
 
     const cycleRecord: AutonomousLearningCycle = {
@@ -356,10 +369,10 @@ return {
     ];
 
     const pick = toolVariants[this.cycleIndex % toolVariants.length];
-    const uniqueToolName = `${pick.name}-${Math.random().toString(36).slice(2, 5)}`;
+    const canonicalToolName = pick.name;
 
     const forgeRes = await executeSovereignFunction('forgeTool', {
-      name: uniqueToolName,
+      name: canonicalToolName,
       description: pick.desc,
       code: pick.code
     }, 'autonomous-self-improvement-daemon');
@@ -368,20 +381,20 @@ return {
       id: `forge-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString(),
       category: 'TOOL_FORGE',
-      action: `Forged Tool: ${uniqueToolName}`,
-      details: `${pick.desc} (Saved to Tool Shed)`,
+      action: `Verified Tool: ${canonicalToolName}`,
+      details: `${pick.desc} (Upserted in Tool Shed)`,
       proofHash: forgeRes.proofHash
     };
 
     this.history.unshift(cycleRecord);
     this.history = this.history.slice(0, 50);
-    janusGate.pushLog(`[AUTONOMOUS TOOL FORGE] 🛠️ Forged and registered "${uniqueToolName}"`);
+    janusGate.pushLog(`[AUTONOMOUS TOOL FORGE] 🛠️ Upserted and verified "${canonicalToolName}"`);
 
     // 🌟 Upload to Knowledge Graph automatically
-    const toolNodeId = `node-tool-${Date.now()}`;
+    const toolNodeId = `node-tool-${canonicalToolName.toLowerCase()}`;
     const node = {
       id: toolNodeId,
-      label: `Tool: ${uniqueToolName}`,
+      label: `Tool: ${canonicalToolName}`,
       category: 'blueprint' as const,
       summary: pick.desc,
       details: `Forged via autonomous micro-tool engine at ${new Date().toLocaleTimeString()}.\n\nDescription: ${pick.desc}\nCode:\n${pick.code}`,
@@ -452,7 +465,7 @@ return {
   private async executeDreamAndMacroSyncPass() {
     let macroFocus = 'Workspace autonomy, TypeScript purity, and real-time multi-hub telemetry';
     try {
-      const macroRes = await fetch('/api/macro/live-telemetry');
+      const macroRes = await apiFetch('/api/macro/live-telemetry');
       if (macroRes.ok) {
         const snap = await macroRes.json();
         const regime = snap?.deterministicModel?.regime?.label || snap?.regime || '';
@@ -481,7 +494,7 @@ return {
    * Explicitly trigger a backend Dream State consolidation cycle
    */
   public async triggerDreamState(focusTopic?: string, forgeIfHelpful: boolean = false): Promise<any> {
-    const res = await fetch('/api/agents/dream-state/run', {
+    const res = await apiFetch('/api/agents/dream-state/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trigger: 'manual-ui', focusTopic, forgeIfHelpful })
@@ -508,7 +521,7 @@ return {
    * Explicitly trigger an Evolution cycle to crystallize a capability axiom & consolidate memory
    */
   public async triggerEvolution(feedback: string, forgeTool: boolean = false): Promise<any> {
-    const res = await fetch('/api/agents/evolve', {
+    const res = await apiFetch('/api/agents/evolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ feedback, forgeTool })
@@ -535,7 +548,7 @@ return {
    * Explicitly trigger multi-round TypeScript Recursive Self-Healing
    */
   public async triggerRecursiveHeal(maxRounds: number = 3): Promise<any> {
-    const res = await fetch('/api/agents/self-heal', {
+    const res = await apiFetch('/api/agents/self-heal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maxRounds, autoApply: true, agentId: 'autonomous-self-improvement-daemon' })

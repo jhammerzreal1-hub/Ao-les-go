@@ -38,6 +38,8 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import type { ModuleType } from '../types';
+import type { AuthUserPublic } from '../types/auth';
+import { apiFetch } from '../utils/authClient';
 
 interface FileEntry {
   name: string;
@@ -125,6 +127,7 @@ interface BridgeHostInfo {
 }
 
 interface SovereignFilesModuleProps {
+  authUser?: AuthUserPublic | null;
   onSelectModule?: (mod: ModuleType) => void;
   onInjectToChat?: (content: string, immediate?: boolean) => void;
 }
@@ -151,6 +154,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
+  authUser,
   onSelectModule,
   onInjectToChat
 }) => {
@@ -177,7 +181,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
 
   // Global Recursive Host Search
   const [globalSearchQuery, setGlobalSearchQuery] = useState<string>('');
-  const [globalSearchRoot, setGlobalSearchRoot] = useState<string>('/');
+  const [globalSearchRoot, setGlobalSearchRoot] = useState<string>(authUser?.workspaceRoot || '/');
   const [globalSearchResults, setGlobalSearchResults] = useState<FileEntry[]>([]);
   const [globalSearchMeta, setGlobalSearchMeta] = useState<string>('');
   const [searchingGlobal, setSearchingGlobal] = useState<boolean>(false);
@@ -249,11 +253,14 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
     return h;
   };
 
+  const fetchForMode = (mode: StorageSourceMode, url: string, init?: RequestInit) =>
+    mode === 'host-bridge' ? fetch(url, init) : apiFetch(url, init);
+
   const loadHostMetadata = async () => {
     try {
       const [sysRes, dlRes] = await Promise.all([
-        fetch('/api/os/host/system-access'),
-        fetch('/api/os/fs/downloads')
+        apiFetch('/api/os/host/system-access'),
+        apiFetch('/api/os/fs/downloads')
       ]);
       if (sysRes.ok) {
         const sysData = await sysRes.json();
@@ -315,7 +322,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
     try {
       const base = getApiBase(mode);
       const qs = target ? `?path=${encodeURIComponent(target)}` : '';
-      const res = await fetch(`${base}/fs/list${qs}`, {
+      const res = await fetchForMode(mode, `${base}/fs/list${qs}`, {
         headers: getBridgeHeaders(mode)
       });
       const data = await res.json();
@@ -358,7 +365,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
     setErrorMsg('');
     try {
       const base = getApiBase(mode);
-      const res = await fetch(`${base}/fs/read?path=${encodeURIComponent(entry.path)}`, {
+      const res = await fetchForMode(mode, `${base}/fs/read?path=${encodeURIComponent(entry.path)}`, {
         headers: getBridgeHeaders(mode)
       });
       const data = await res.json();
@@ -375,10 +382,12 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
   };
 
   useEffect(() => {
-    loadDirectory();
+    setSelectedFile(null);
+    setGlobalSearchRoot(authUser?.workspaceRoot || '/');
+    loadDirectory(authUser?.workspaceRoot || undefined, 'runtime-host');
     loadHostMetadata();
     probePhysicalHostBridge(undefined, true);
-  }, []);
+  }, [authUser?.id, authUser?.workspaceRoot]);
 
   const fileHandlersRef = useRef<{
     loadDirectory: (target?: string) => Promise<void>;
@@ -395,7 +404,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
       setSourceMode('runtime-host');
       setCenterView('browser');
       try {
-        const readRes = await fetch(`/api/os/fs/read?path=${encodeURIComponent(targetPath)}`);
+        const readRes = await apiFetch(`/api/os/fs/read?path=${encodeURIComponent(targetPath)}`);
         const readData = await readRes.json();
         if (readData.success) {
           setSelectedFile({ ...readData, originSource: 'runtime-host' });
@@ -665,7 +674,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
       const osDlPlace = places.find((p) => p.id === 'os-downloads');
       const targetDir = osDlPlace?.path || 'downloads';
       const targetPath = `${targetDir.replace(/[\\/]+$/, '')}/${fileObj.name}`;
-      const res = await fetch('/api/os/fs/write-base64', {
+      const res = await apiFetch('/api/os/fs/write-base64', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: targetPath, base64 })
@@ -695,7 +704,8 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
     try {
       const mode = sourceMode === 'host-bridge' && bridgeConnected ? 'host-bridge' : 'runtime-host';
       const base = getApiBase(mode);
-      const res = await fetch(
+      const res = await fetchForMode(
+        mode,
         `${base}/fs/search?root=${encodeURIComponent(globalSearchRoot || '/')}&q=${encodeURIComponent(q)}&maxResults=120`,
         { headers: getBridgeHeaders(mode) }
       );
@@ -731,7 +741,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
 
       const mode = selectedFile.originSource === 'host-bridge' ? 'host-bridge' : 'runtime-host';
       const base = getApiBase(mode);
-      const res = await fetch(`${base}/fs/write`, {
+      const res = await fetchForMode(mode, `${base}/fs/write`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getBridgeHeaders(mode) },
         body: JSON.stringify({ path: selectedFile.path, content: editorText })
@@ -765,7 +775,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
     try {
       const endpoint = createModalType === 'folder' ? `${base}/fs/mkdir` : `${base}/fs/write`;
       const body = createModalType === 'folder' ? { path: fullPath } : { path: fullPath, content: '' };
-      const res = await fetch(endpoint, {
+      const res = await fetchForMode(mode, endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getBridgeHeaders(mode) },
         body: JSON.stringify(body)
@@ -794,7 +804,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
     const base = getApiBase(mode);
 
     try {
-      const res = await fetch(`${base}/fs/rename`, {
+      const res = await fetchForMode(mode, `${base}/fs/rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getBridgeHeaders(mode) },
         body: JSON.stringify({ oldPath: renameTarget.path, newPath })
@@ -816,7 +826,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
     if (sourceMode !== 'runtime-host') return;
     const dstPath = `${entry.path}.copy`;
     try {
-      const res = await fetch('/api/os/fs/copy', {
+      const res = await apiFetch('/api/os/fs/copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ srcPath: entry.path, dstPath })
@@ -838,7 +848,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
     const mode = sourceMode === 'host-bridge' ? 'host-bridge' : 'runtime-host';
     const base = getApiBase(mode);
     try {
-      const res = await fetch(`${base}/fs/delete`, {
+      const res = await fetchForMode(mode, `${base}/fs/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getBridgeHeaders(mode) },
         body: JSON.stringify({ path: confirmDeleteEntry.path })
@@ -871,7 +881,7 @@ export const SovereignFilesModule: React.FC<SovereignFilesModuleProps> = ({
         const buf = await file.arrayBuffer();
         const base64 = arrayBufferToBase64(buf);
         const targetPath = `${currentPath.replace(/[\\/]+$/, '')}${sep}${file.name}`;
-        const res = await fetch(`${base}/fs/write-base64`, {
+        const res = await fetchForMode(mode, `${base}/fs/write-base64`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getBridgeHeaders(mode) },
           body: JSON.stringify({ path: targetPath, base64 })

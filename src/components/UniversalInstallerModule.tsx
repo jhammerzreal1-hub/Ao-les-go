@@ -49,6 +49,7 @@ import {
 import { UniversalControllerDeck } from './UniversalControllerDeck';
 import { UniversalCompatMatrixPanel } from './UniversalCompatMatrixPanel';
 import { pinSteamGameToDesktop } from '../utils/osCustomizationStore';
+import { apiFetch } from '../utils/authClient';
 
 interface CatalogApp {
   id: string;
@@ -329,7 +330,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
 
   const fetchPackageOverview = useCallback(async () => {
     try {
-      const res = await fetch('/api/os/packages/overview');
+      const res = await apiFetch('/api/os/packages/overview');
       const data = await res.json();
       if (data.ok) {
         setCatalog(data.catalog || []);
@@ -347,7 +348,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
   const fetchLiveSteamStore = useCallback(async () => {
     setSteamLoading(true);
     try {
-      const res = await fetch('/api/os/steam/featured');
+      const res = await apiFetch('/api/os/steam/featured');
       const data = await res.json();
       if (data.ok) {
         setSteamFeatured(data.featured_win || []);
@@ -363,7 +364,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
   const fetchSteamGameDetails = useCallback(async (appId: number) => {
     setSteamDetailsLoading(true);
     try {
-      const res = await fetch(`/api/os/steam/appdetails?appid=${appId}`);
+      const res = await apiFetch(`/api/os/steam/appdetails?appid=${appId}`);
       const data = await res.json();
       if (data.ok && data.details) {
         setSelectedSteamApp(data.details);
@@ -379,7 +380,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
 
   const fetchWinePrefixStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/os/windows/wineprefix');
+      const res = await apiFetch('/api/os/windows/wineprefix');
       const data = await res.json();
       if (data.ok && data.winePrefix) {
         setWinePrefix(data.winePrefix);
@@ -404,7 +405,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
         : `Provisioning ${app.name} (${app.version}) native OS launcher & manifest...`
     });
     try {
-      const res = await fetch('/api/os/packages/install-catalog', {
+      const res = await apiFetch('/api/os/packages/install-catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appId: app.id, downloadNativePlatform })
@@ -437,7 +438,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
   const handleUninstallApp = async (appId: string, name: string) => {
     setBusyAppId(appId);
     try {
-      const res = await fetch('/api/os/packages/uninstall', {
+      const res = await apiFetch('/api/os/packages/uninstall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appId })
@@ -476,7 +477,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
         }
       } catch {}
 
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/os/steam/local-library${targetPath ? `?path=${encodeURIComponent(targetPath)}` : ''}`
       );
       const data = await res.json();
@@ -522,7 +523,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
         }
       } catch {}
 
-      const res = await fetch('/api/os/steam/launch', {
+      const res = await apiFetch('/api/os/steam/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -559,7 +560,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
       const id = Number(detail.appId || 0);
       if (id > 0) {
         setActiveTab('steam-live');
-        fetch(`/api/os/steam/appdetails?appid=${id}`)
+        apiFetch(`/api/os/steam/appdetails?appid=${id}`)
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
             if (d?.ok && d.details) setSelectedSteamApp(d.details);
@@ -597,7 +598,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
     if (!steamSearchTerm.trim()) return;
     setSteamLoading(true);
     try {
-      const res = await fetch(`/api/os/steam/search?q=${encodeURIComponent(steamSearchTerm)}`);
+      const res = await apiFetch(`/api/os/steam/search?q=${encodeURIComponent(steamSearchTerm)}`);
       const data = await res.json();
       if (data.ok) {
         setSteamSearchResults(data.items || []);
@@ -621,7 +622,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
         a.href = `steam://run/${appId}`;
         a.click();
       }
-      const res = await fetch('/api/os/steam/execute', {
+      const res = await apiFetch('/api/os/steam/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, appId })
@@ -651,7 +652,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
     if (!targetGuild) return;
     setDiscordWidgetLoading(true);
     try {
-      const res = await fetch(`/api/os/discord/widget?guildId=${encodeURIComponent(targetGuild)}`);
+      const res = await apiFetch(`/api/os/discord/widget?guildId=${encodeURIComponent(targetGuild)}`);
       const data = await res.json();
       setDiscordWidgetData(data);
       if (data.ok) {
@@ -672,7 +673,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
     if (!discordWebhookUrl.trim()) return;
     setDiscordWebhookBusy(true);
     try {
-      const res = await fetch('/api/os/discord/webhook', {
+      const res = await apiFetch('/api/os/discord/webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -703,7 +704,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
     e.preventDefault();
     setDiscordApiBusy(true);
     try {
-      const res = await fetch('/api/os/discord/api', {
+      const res = await apiFetch('/api/os/discord/api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -732,7 +733,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
     if (!target) return;
     setPeBusy(true);
     try {
-      const res = await fetch('/api/os/windows/inspect-pe', {
+      const res = await apiFetch('/api/os/windows/inspect-pe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath: target })
@@ -760,7 +761,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
     setPeBusy(true);
     setPeExecutionLog(`Loading Windows PE binary [${target}] into WINEPREFIX / Win32 Subsystem...`);
     try {
-      const res = await fetch('/api/os/windows/execute-pe', {
+      const res = await apiFetch('/api/os/windows/execute-pe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath: target })
@@ -782,7 +783,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
 
   const handleUpdateWinePrefix = async (patch: Partial<WinePrefixState>) => {
     try {
-      const res = await fetch('/api/os/windows/wineprefix', {
+      const res = await apiFetch('/api/os/windows/wineprefix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch)
@@ -809,7 +810,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
       text: `Executing [${cliManager} ${cliAction} ${cliPackages}] on host kernel...`
     });
     try {
-      const res = await fetch('/api/os/packages/cli-execute', {
+      const res = await apiFetch('/api/os/packages/cli-execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -850,7 +851,7 @@ export const UniversalInstallerModule: React.FC<UniversalInstallerModuleProps> =
     setDirectDownloading(true);
     setStatusMessage({ type: 'info', text: `Streaming binary from ${targetUrl} into local OS filesystem...` });
     try {
-      const res = await fetch('/api/os/packages/download-url', {
+      const res = await apiFetch('/api/os/packages/download-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

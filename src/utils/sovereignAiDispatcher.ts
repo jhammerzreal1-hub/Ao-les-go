@@ -28,6 +28,7 @@
 import { localLlmManager, agentModelBinder, AVAILABLE_LOCAL_MODELS } from './localLlmEngine';
 import { janusGate } from './janusGate';
 import { dev_null } from './devNullLogger';
+import { buildAuthHeaders } from './authClient';
 import { orchestratorRuntime } from './OrchestratorRuntime';
 
 export interface DispatchChatOptions {
@@ -76,6 +77,12 @@ export interface DispatchChatResult {
     totalRotations: number;
   };
   elapsedMs?: number;
+  extractedPreferredName?: string | null;
+  userProfile?: {
+    preferredName?: string;
+    preferredNameConfirmed?: boolean;
+    workspaceRoot?: string;
+  } | null;
 }
 
 export class SovereignAiDispatcher {
@@ -85,7 +92,8 @@ export class SovereignAiDispatcher {
   async orchestrate(directive: string, targetModule?: string): Promise<any> {
     const res = await fetch('/api/orchestrator/dispatch', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         action: 'orchestrate',
         module: targetModule || orchestratorRuntime.getResidentState().activeModule,
@@ -158,7 +166,8 @@ export class SovereignAiDispatcher {
         try {
           const res = await fetch('/api/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
             signal: attemptController.signal,
             body: payloadBody
           });
@@ -184,7 +193,9 @@ export class SovereignAiDispatcher {
               janusFace: 'FACE_2_SPECULATIVE_CONTINUUM',
               providerTrace: data.providerTrace,
               proxyWheel: data.proxyWheel,
-              elapsedMs: data.elapsedMs
+              elapsedMs: data.elapsedMs,
+              extractedPreferredName: data.extractedPreferredName ?? null,
+              userProfile: data.userProfile ?? null
             };
           }
 
@@ -248,7 +259,7 @@ export class SovereignAiDispatcher {
           ? `Upstream Safety Rail Triggered (${resolvedAgentName})`
           : `Model Dispatch Failed (${resolvedAgentName})`;
         const remediation = lastAuthRejected
-          ? 'Activate/update your API key in Settings > Secrets or add an unrestricted provider key (OpenRouter, DeepSeek, Groq, or Custom Proxy) in API Keys & Gateway.'
+          ? 'Link a valid API key to ALL_KEY ("all key") or GEMINI_API_KEY in Settings > Secrets, or add a provider key in API Keys & Secrets Vault.'
           : lastRailBlocked
           ? 'Configure an unrestricted open-weight model endpoint (OpenRouter, DeepSeek, Custom Proxy, or local Ollama/llama-server) in API Keys & Gateway so unfiltered weights handle this prompt.'
           : 'Verify an active API key in API Keys & Gateway, load WebGPU weights, or start a local Ollama/llama-server daemon.';
@@ -319,7 +330,8 @@ export class SovereignAiDispatcher {
     try {
       const res = await fetch('/api/browser/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ query, site })
       });
       if (res.ok) {
@@ -369,7 +381,8 @@ export class SovereignAiDispatcher {
     try {
       const res = await fetch('/api/browser/agent-learn', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ topic, agentId: agentId || 'Aurelius-Teraflop-Omega' })
       });
       if (res.ok) {
@@ -416,7 +429,8 @@ export class SovereignAiDispatcher {
     try {
       const res = await fetch('/api/browser/agent-browse-url', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ url, agentId: agentId || 'Aurelius-Teraflop-Omega', extractIntent })
       });
       if (res.ok) {

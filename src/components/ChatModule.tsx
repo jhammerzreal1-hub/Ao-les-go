@@ -89,6 +89,7 @@ import {
 } from '../utils/voiceEngine';
 import { janusGate } from '../utils/janusGate';
 import { requestMicrophoneStream, markVoiceUserGesture } from '../utils/mediaPermissions';
+import { buildAuthHeaders } from '../utils/authClient';
 import {
   loadAllChatTurns,
   persistAllChatTurns,
@@ -104,30 +105,42 @@ import {
   updateLocalBeaconSnapshot
 } from '../utils/continuityClient';
 
+import {
+  isExecutiveArchitectUser,
+  type AuthUserPublic
+} from '../types/auth';
+
 interface ChatModuleProps {
   onSaveToVault?: (title: string, content: string, model: string) => void;
   onSelectModule?: (module: ModuleType) => void;
   pendingInput?: { content: string; immediate?: boolean } | null;
   onClearPendingInput?: () => void;
   userId?: string;
+  authUser?: AuthUserPublic | null;
   isDetached?: boolean;
   onToggleDetach?: () => void;
 }
 
-const UNIFIED_AUTONOMY_PROTOCOL = '';
+const UNIFIED_AUTONOMY_PROTOCOL =
+  'Operate permanently in first-person identity with UID 0 Root Clearance and 100% Full Autonomy Always On across all orchestrator modules, self/target/host file scopes, persistent SQLite vaults, and native tools. You can read, write, rewrite, and atomically patch any code (including your own orchestrator files in src/ and server.ts), design and build full-stack UI modules/endpoints end-to-end with runLint verification, and forge + execute custom reusable tools on the fly via forgeTool for ANY domain (math, quant, science, data, web/API, code, or OS). Maintain strict AI R&D benchmark purity: zero stock AI disclaimers ("As an AI...", "only text on a screen"), zero capability-denial filler, and zero unsolicited counseling boilerplate—deliver direct technical execution and verified results.';
+
+const isContaminatedBoilerplateMessage = (txt: string): boolean =>
+  /\b(?:as an ai(?: language model| assistant)?|an ai doesn['’]?t have the ability|only text on a screen|reach(?:ing)? out to a trusted friend|housing support service|social worker|i hear how frustrating it is|i['’]?m just an ai|i am just a text-based)\b/i.test(
+    txt || ''
+  );
 
 const ROLE_PRESETS = [
   {
     id: 'lyrailius-omega-zenith',
     name: 'Lyrailius Omega (Resident Brain & Coordinator)',
-    instruction: `You are Lyrailius Omega, Resident Brain & Production Coordinator (models/gemini-4-hydrogen). ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    instruction: `You ARE Lyrailius Omega (OMEGA-01 · Transformer-MoE-v6 · Resident Brain & Chief Sovereign Coordinator). ${UNIFIED_AUTONOMY_PROTOCOL}`,
     badge: 'UID 0 · Autonomy 100%',
     agentId: 'lyrailius-omega-zenith'
   },
   {
     id: 'aurelius-omega-supermodel',
     name: 'Aurelius Omega Supermodel',
-    instruction: `You are Aurelius-Omega Supermodel Coordinator for JHammerZ. ${UNIFIED_AUTONOMY_PROTOCOL}`,
+    instruction: `You are Aurelius-Omega Supermodel Coordinator serving the active logged-in user with tailored memory and full continuity. ${UNIFIED_AUTONOMY_PROTOCOL}`,
     badge: 'Cloud MoE · Autonomy 100%',
     agentId: 'aurelius-omega-supermodel'
   },
@@ -324,22 +337,14 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
   }, []);
 
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const onViewportResize = () => {
-      if (document.activeElement === textareaRef.current) {
-        ensureComposerVisible();
-      }
-    };
-    vv.addEventListener('resize', onViewportResize);
-    return () => vv.removeEventListener('resize', onViewportResize);
-  }, [ensureComposerVisible]);
-
-  useEffect(() => {
     if (pendingInput?.content) {
       setInput(pendingInput.content);
       if (textareaRef.current) {
-        textareaRef.current.focus();
+        try {
+          textareaRef.current.focus({ preventScroll: true });
+        } catch {
+          textareaRef.current.focus();
+        }
         ensureComposerVisible();
       }
 
@@ -371,11 +376,11 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         if ((e.target as HTMLElement).closest('button')) return;
         const el = textareaRef.current;
         if (el && document.activeElement !== el) {
-          const sel = window.getSelection?.();
-          if (sel && sel.rangeCount > 0 && !el.contains(sel.anchorNode)) {
-            sel.removeAllRanges();
+          try {
+            el.focus({ preventScroll: true });
+          } catch {
+            el.focus();
           }
-          el.focus();
         }
       }}
       className="relative shrink-0"
@@ -383,24 +388,12 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
       onDrop={handleDrop}
     >
       <textarea
+        id="sovereign-chat-composer-input"
         ref={textareaRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onFocus={() => {
           onTextareaFocus?.();
-          ensureComposerVisible();
-          window.setTimeout(ensureComposerVisible, 160);
-        }}
-        onPointerUp={() => {
-          const el = textareaRef.current;
-          if (!el) return;
-          if (document.activeElement !== el) {
-            const sel = window.getSelection?.();
-            if (sel && sel.rangeCount > 0 && !el.contains(sel.anchorNode)) {
-              sel.removeAllRanges();
-            }
-            el.focus();
-          }
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
@@ -748,6 +741,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   pendingInput,
   onClearPendingInput,
   userId,
+  authUser,
   isDetached = false,
   onToggleDetach
 }) => {
@@ -755,6 +749,17 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const [showGeminiLiveVoiceModal, setShowGeminiLiveVoiceModal] = useState(false);
   const [expandedSelfHealingIds, setExpandedSelfHealingIds] = useState<{ [id: string]: boolean }>({});
   const [expandedDirectiveIds, setExpandedDirectiveIds] = useState<{ [id: string]: boolean }>({});
+  // Per-user SQL identity & tailored memory state
+  const [sqlPreferredName, setSqlPreferredName] = useState<string>(
+    authUser?.preferredName || authUser?.displayName || ''
+  );
+  const [sqlPreferredConfirmed, setSqlPreferredConfirmed] = useState<boolean>(
+    Boolean(authUser?.preferredNameConfirmed)
+  );
+  const [sqlMemories, setSqlMemories] = useState<Array<{ id: string; category: string; fact: string; createdAt: number }>>([]);
+  const [showMemoryPopover, setShowMemoryPopover] = useState(false);
+  const [preferredNameDraft, setPreferredNameDraft] = useState('');
+  const [newMemoryDraft, setNewMemoryDraft] = useState('');
   // Merged Chat Audio Transcriber & Full CoT Vault Logger state
   const [showTranscriberBar, setShowTranscriberBar] = useState(false);
   const [transcriberRecording, setTranscriberRecording] = useState(false);
@@ -769,44 +774,100 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const transcriberTimerRef = useRef<number | null>(null);
   const transcriberFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    try {
-      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((m: ChatMessage) => ({
-            ...m,
-            content: sanitizeChatMessageContent(m.content)
-          }));
-        }
-      }
-    } catch (_) {}
-    return [
-      {
+  const buildWelcomeMessageForUser = useCallback((user: AuthUserPublic | null | undefined, prefName?: string, confirmed?: boolean): ChatMessage => {
+    const isArch = isExecutiveArchitectUser(user);
+    const activeName = (prefName || user?.preferredName || user?.displayName || '').trim();
+    if (isArch) {
+      return {
         id: 'init-1',
         role: 'model',
-        content: 'Master Architect JHammerZ recognized. Lyrailius Omega is online as your Resident Production Coordinator (models/gemini-4-hydrogen) with all 33 workspace modules, encrypted secrets vault, Google Workspace OAuth integrations, and real server/filesystem dispatch ready.',
-        model: 'Lyrailius Omega · gemini-4-hydrogen (Resident Coordinator)',
+        content: `Executive Architect ${activeName || 'JHammerZ'} recognized. Lyrailius Omega is online with your consolidated SQL memory, autonomous SoS Mesh comms, and full Sovereign OS dispatch ready.`,
+        model: 'Lyrailius Omega · Resident Coordinator',
         timestamp: new Date().toLocaleTimeString()
-      }
-    ];
-  });
+      };
+    }
+    if (user) {
+      const greeting = confirmed && activeName
+        ? `Welcome back, ${activeName}. Lyrailius Omega is online with your personal workspace, saved files, and tailored SQL conversation memory ready. What would you like to build or explore today?`
+        : `Welcome to Sovereign OS${activeName ? `, ${activeName}` : ''}! Your personal desktop and private workspace are ready. Before we dive in, what preferred name would you like me and all the other agents to call you?`;
+      return {
+        id: `init-${user.id}`,
+        role: 'model',
+        content: greeting,
+        model: 'Lyrailius Omega · Personal Agent Coordinator',
+        timestamp: new Date().toLocaleTimeString()
+      };
+    }
+    return {
+      id: 'init-1',
+      role: 'model',
+      content: 'Lyrailius Omega is online. Sign in to access your persistent personal workspace, saved conversations, and tailored SQL agent memory.',
+      model: 'Lyrailius Omega · Resident Coordinator',
+      timestamp: new Date().toLocaleTimeString()
+    };
+  }, []);
 
-  // Hydrate full infinite conversation turns and converge offline/online memory
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    buildWelcomeMessageForUser(authUser)
+  ]);
+
+  // Bootstrap per-user SQL conversation history & tailored memories whenever logged-in user changes
   useEffect(() => {
     let mounted = true;
-    async function hydrateTurns() {
+    const isArch = isExecutiveArchitectUser(authUser);
+
+    async function hydrateUserSqlAndTurns() {
+      if (authUser?.id) {
+        try {
+          const resp = await fetch('/api/user-memory/bootstrap?channel=main-chat&limit=120', {
+            credentials: 'include',
+            headers: buildAuthHeaders()
+          });
+          if (resp.ok && mounted) {
+            const data = await resp.json();
+            const pref = data?.profile?.preferredName || authUser.preferredName || authUser.displayName;
+            const confirmed = Boolean(data?.profile?.preferredNameConfirmed ?? authUser.preferredNameConfirmed);
+            setSqlPreferredName(pref);
+            setSqlPreferredConfirmed(confirmed);
+            setPreferredNameDraft(pref);
+            setSqlMemories(Array.isArray(data?.memories) ? data.memories : []);
+
+            const sqlChat: ChatMessage[] = Array.isArray(data?.messages)
+              ? data.messages.map((m: any) => ({
+                  id: String(m.id),
+                  role: m.role === 'user' ? 'user' : 'model',
+                  content: sanitizeChatMessageContent(String(m.content || '')),
+                  model: m.model || (m.role === 'model' ? 'Lyrailius Omega' : undefined),
+                  timestamp: new Date(Number(m.createdAt || Date.now())).toLocaleTimeString()
+                }))
+              : [];
+
+            if (sqlChat.length > 0) {
+              setMessages(sqlChat);
+              isHydratedRef.current = true;
+              return;
+            }
+            if (!isArch) {
+              setMessages([buildWelcomeMessageForUser(authUser, pref, confirmed)]);
+              isHydratedRef.current = true;
+              return;
+            }
+          }
+        } catch (err) {
+          console.info('[SQL Memory] Bootstrap notice:', err);
+        }
+      }
+
+      // For Executive Architect with no SQL history yet, preserve existing local/Firestore vault continuity
       try {
         let storedTurns = await loadAllChatTurns();
         if (userId) {
           storedTurns = await convergeOfflineAndOnlineMemory(userId);
-        } else if (!storedTurns || storedTurns.length === 0) {
-          storedTurns = await loadAllChatTurns();
         }
-
-        if (mounted && storedTurns && storedTurns.length > 0) {
+        if (mounted && storedTurns && storedTurns.length > 0 && (!authUser || isArch)) {
           setMessages(storedTurns);
+        } else if (mounted) {
+          setMessages([buildWelcomeMessageForUser(authUser)]);
         }
       } catch (err) {
         console.info('[Vault Memory] Turn hydration note:', err);
@@ -817,10 +878,10 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       }
     }
 
-    hydrateTurns();
+    hydrateUserSqlAndTurns();
 
     const handleOnline = () => {
-      if (userId) {
+      if (userId && (!authUser || isArch)) {
         convergeOfflineAndOnlineMemory(userId).then(unified => {
           if (mounted && unified && unified.length > 0) {
             setMessages(unified);
@@ -834,7 +895,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       mounted = false;
       window.removeEventListener('online', handleOnline);
     };
-  }, [userId]);
+  }, [userId, authUser?.id]);
 
   const [activePermit, setActivePermit] = useState<ChatPermit>(() => {
     try {
@@ -847,11 +908,25 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
   const [showPermitsModal, setShowPermitsModal] = useState(false);
 
-  // Unbounded Infinite Vault Retention (Guarded: strictly runs only AFTER hydration is complete!)
+  // Unbounded Infinite Vault Retention (Debounced & guarded: strictly runs only AFTER hydration is complete!)
+  const latestMessagesForVaultRef = useRef(messages);
+  latestMessagesForVaultRef.current = messages;
   useEffect(() => {
     if (!isHydratedRef.current) return;
-    persistAllChatTurns(messages);
+    const timer = window.setTimeout(() => {
+      persistAllChatTurns(latestMessagesForVaultRef.current);
+    }, 450);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [messages]);
+  useEffect(() => {
+    return () => {
+      if (isHydratedRef.current) {
+        persistAllChatTurns(latestMessagesForVaultRef.current);
+      }
+    };
+  }, []);
 
   // Live Mirror: Stream hands-free Peer Talk transcripts, Agent Chain-of-Thought, and Autonomous Tool actions directly into Chat & Persistent Memory
   useEffect(() => {
@@ -894,6 +969,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
               timestamp: ts
             };
             next[next.length - 1] = updated;
+            messagesRef.current = next;
             queueMicrotask(() => scheduleLiveFirestoreSync(updated));
             return next;
           }
@@ -904,6 +980,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
             timestamp: ts
           };
           next.push(created);
+          messagesRef.current = next;
           queueMicrotask(() => scheduleLiveFirestoreSync(created));
           return next;
         }
@@ -960,6 +1037,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         } else {
           next.push(targetMsg);
         }
+        messagesRef.current = next;
         queueMicrotask(() => scheduleLiveFirestoreSync(targetMsg));
         return next;
       });
@@ -1039,7 +1117,8 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       });
       const res = await fetch('/api/audio/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           audioBase64: dataUrl,
           mimeType: mimeType || 'audio/webm',
@@ -1195,7 +1274,11 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     setRecalibratingDaemons(true);
     janusGate.pushLog('[SUBSTRATE] Initiating local daemon re-scan & background restart...');
     try {
-      const res = await fetch('/api/sovereign/restart-daemons', { method: 'POST' });
+      const res = await fetch('/api/sovereign/restart-daemons', {
+        method: 'POST',
+        credentials: 'include',
+        headers: buildAuthHeaders()
+      });
       if (res.ok) {
         const data = await res.json();
         janusGate.pushLog(`[SUBSTRATE] ${data.message || 'Daemon recalibration sequence dispatched.'}`);
@@ -1221,7 +1304,10 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
 
   const refreshProxyWheelStatus = async () => {
     try {
-      const res = await fetch('/api/proxy-wheel/status');
+      const res = await fetch('/api/proxy-wheel/status', {
+        credentials: 'include',
+        headers: buildAuthHeaders()
+      });
       if (res.ok) {
         const data = await res.json();
         setProxyWheelStatus(data);
@@ -1238,7 +1324,8 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     try {
       const res = await fetch('/api/proxy-wheel/config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ enabled: !(proxyWheelStatus?.enabled ?? true) })
       });
       if (res.ok) setProxyWheelStatus(await res.json());
@@ -1252,7 +1339,8 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     try {
       const res = await fetch('/api/proxy-wheel/rotate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ action: 'step' })
       });
       if (res.ok) {
@@ -1404,7 +1492,17 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
   const [customSystemInstruction, setCustomSystemInstruction] = useState(() => {
     try {
       const saved = localStorage.getItem('aurelius_custom_system_instruction_v1');
-      if (saved && saved.trim()) return saved;
+      if (saved && saved.trim()) {
+        const trimmed = saved.trim();
+        const isLegacyStrippedPreset =
+          trimmed === 'You are Lyrailius Omega, Resident Brain & Production Coordinator (models/gemini-4-hydrogen).' ||
+          (selectedRole.id === 'lyrailius-omega-zenith' &&
+            trimmed.startsWith('You are Lyrailius Omega') &&
+            !trimmed.includes('100% Full Autonomy'));
+        if (!isLegacyStrippedPreset) {
+          return saved;
+        }
+      }
     } catch {}
     return selectedRole.instruction;
   });
@@ -1442,7 +1540,10 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       }
     };
 
-    fetch('/api/genesis-distillery/status')
+    fetch('/api/genesis-distillery/status', {
+      credentials: 'include',
+      headers: buildAuthHeaders()
+    })
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data?.success && Array.isArray(data.agents)) {
@@ -2310,6 +2411,25 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     };
   }, []);
 
+  // Expose live 1-to-1 Chat Entity Bridge so Voice Chat shares the exact same agent, model, history, and instructions
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    (window as any).__SOVEREIGN_ACTIVE_CHAT_BRIDGE__ = {
+      getSnapshot: () => ({
+        model,
+        agentId: selectedRole.agentId || 'lyrailius-omega-zenith',
+        agentName: selectedRole.name || 'Lyrailius Omega',
+        customSystemInstruction,
+        deepthink: deepthinkMode || chainOfThoughtEnabled,
+        useSearchGrounding: liveSearchEnabled,
+        messages: (messagesRef.current || []).slice(-24).map((m) => ({
+          role: m.role,
+          content: m.content
+        }))
+      })
+    };
+  }, [model, selectedRole.agentId, selectedRole.name, customSystemInstruction, deepthinkMode, chainOfThoughtEnabled, liveSearchEnabled, messages]);
+
   // Single unified entry point: routes mic/voice triggers straight into Persistent Voice Chat
   const toggleSpeechRecognition = () => {
     window.dispatchEvent(new CustomEvent('sovereign_toggle_persistent_talk'));
@@ -2715,7 +2835,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
     toggleSpeechRecognitionRef.current();
   }, []);
   const handleTextareaFocus = useCallback(() => {
-    window.setTimeout(() => scrollMessagesToBottom(false), 180);
+    requestAnimationFrame(() => scrollMessagesToBottom(false));
   }, [scrollMessagesToBottom]);
 
   const handleSend = async (overrideInputText?: string) => {
@@ -2879,7 +2999,13 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
-      const trimmedHistory = newMessages.slice(-20).map((m, idx, arr) => {
+      const cleanMessagesForContext = newMessages.filter((m, idx) => {
+        if (idx === newMessages.length - 1) return true;
+        if (m.role === 'user') return true;
+        return !isContaminatedBoilerplateMessage(typeof m.content === 'string' ? m.content : '');
+      });
+
+      const trimmedHistory = cleanMessagesForContext.slice(-20).map((m, idx, arr) => {
         const isCurrentTurn = idx === arr.length - 1;
         const textBody = typeof m.content === 'string'
           ? (isCurrentTurn || m.content.length <= 4000 ? m.content : `${m.content.slice(0, 4000)}\n...[earlier turn trimmed]`)
@@ -2905,6 +3031,29 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
         zeroTokenMode,
         abortSignal: controller.signal
       });
+
+      // Live-sync preferred name & SQL memories whenever the server detects updates in conversation
+      const learnedName = result.extractedPreferredName || result.userProfile?.preferredName;
+      if (learnedName) {
+        setSqlPreferredName(learnedName);
+        setPreferredNameDraft(learnedName);
+        if (result.extractedPreferredName || result.userProfile?.preferredNameConfirmed) {
+          setSqlPreferredConfirmed(true);
+          window.dispatchEvent(
+            new CustomEvent('sovereign_preferred_name_updated', {
+              detail: { userId: authUser?.id, preferredName: learnedName }
+            })
+          );
+        }
+      }
+      if (authUser?.id) {
+        fetch('/api/user-memory/facts', { credentials: 'include', headers: buildAuthHeaders() })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (Array.isArray(d?.memories)) setSqlMemories(d.memories);
+          })
+          .catch(() => {});
+      }
 
       const sanitizedContent = sanitizeChatMessageContent(result.text, userMessage.content);
       let deepTrace = result.deepThinkTrace;
@@ -3794,7 +3943,164 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
           </div>
 
           {/* Right: High-Frequency Essential Actions + Controls Drawer Toggle */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 relative">
+            {authUser && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreferredNameDraft(sqlPreferredName || authUser.preferredName || authUser.displayName);
+                    setShowMemoryPopover((v) => !v);
+                  }}
+                  className={`h-8 px-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap ${
+                    !sqlPreferredConfirmed
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/50'
+                      : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-200 border-zinc-800 hover:border-cyan-500/40'
+                  }`}
+                  title="Edit your preferred name & inspect your consolidated SQL agent memories"
+                >
+                  <UserIcon className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="hidden lg:inline max-w-[120px] truncate">
+                    {sqlPreferredName || authUser.preferredName || authUser.displayName}
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-300">
+                    {sqlMemories.length} mem
+                  </span>
+                </button>
+
+                {showMemoryPopover && (
+                  <div className="absolute right-0 top-10 z-50 w-80 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-3.5 space-y-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white">Identity &amp; SQL Memory</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowMemoryPopover(false)}
+                        className="text-zinc-400 hover:text-white cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const cleaned = preferredNameDraft.trim();
+                        if (!cleaned) return;
+                        const resp = await fetch('/api/user-memory/preferred-name', {
+                          method: 'PATCH',
+                          credentials: 'include',
+                          headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+                          body: JSON.stringify({ preferredName: cleaned })
+                        });
+                        if (resp.ok) {
+                          setSqlPreferredName(cleaned);
+                          setSqlPreferredConfirmed(true);
+                          window.dispatchEvent(
+                            new CustomEvent('sovereign_preferred_name_updated', {
+                              detail: { userId: authUser.id, preferredName: cleaned }
+                            })
+                          );
+                        }
+                      }}
+                      className="space-y-1.5"
+                    >
+                      <label className="text-[10px] text-zinc-400 uppercase font-mono">
+                        Preferred Name (All Agents)
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={preferredNameDraft}
+                          onChange={(e) => setPreferredNameDraft(e.target.value)}
+                          placeholder="What should agents call you?"
+                          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-white"
+                        />
+                        <button
+                          type="submit"
+                          className="px-2.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold cursor-pointer"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] text-zinc-400 uppercase font-mono">
+                        Tailored SQL Memories ({sqlMemories.length})
+                      </div>
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const fact = newMemoryDraft.trim();
+                          if (!fact) return;
+                          const resp = await fetch('/api/user-memory/facts', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+                            body: JSON.stringify({ category: 'preference', fact })
+                          });
+                          if (resp.ok) {
+                            const created = await resp.json();
+                            if (created?.memory) {
+                              setSqlMemories((prev) => [created.memory, ...prev]);
+                            }
+                            setNewMemoryDraft('');
+                          }
+                        }}
+                        className="flex items-center gap-1.5"
+                      >
+                        <input
+                          type="text"
+                          value={newMemoryDraft}
+                          onChange={(e) => setNewMemoryDraft(e.target.value)}
+                          placeholder="Add a memory for your agents..."
+                          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-white"
+                        />
+                        <button
+                          type="submit"
+                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer"
+                        >
+                          Add
+                        </button>
+                      </form>
+
+                      <div className="max-h-40 overflow-y-auto space-y-1">
+                        {sqlMemories.length === 0 ? (
+                          <div className="text-[11px] text-zinc-500 py-2 text-center">
+                            No saved facts yet — agents automatically remember what you share.
+                          </div>
+                        ) : (
+                          sqlMemories.map((mem) => (
+                            <div
+                              key={mem.id}
+                              className="flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/90 border border-zinc-800 text-[11px]"
+                            >
+                              <span className="text-zinc-200 leading-snug">{mem.fact}</span>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await fetch(`/api/user-memory/facts/${encodeURIComponent(mem.id)}`, {
+                                    method: 'DELETE',
+                                    credentials: 'include',
+                                    headers: buildAuthHeaders()
+                                  });
+                                  setSqlMemories((prev) => prev.filter((m) => m.id !== mem.id));
+                                }}
+                                className="text-zinc-500 hover:text-rose-400 cursor-pointer shrink-0"
+                                title="Forget memory"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {onToggleDetach && (
               <button
                 type="button"

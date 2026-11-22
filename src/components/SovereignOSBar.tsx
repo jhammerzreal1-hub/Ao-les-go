@@ -808,6 +808,7 @@ export const SovereignOSBar: React.FC<SovereignOSBarProps> = ({
                   { label: 'Root Shell + Sovereign Files', left: 'terminal' as ModuleType, right: 'file-manager' as ModuleType },
                   { label: 'Macro Telemetry + Chrome', left: 'macro-telemetry' as ModuleType, right: 'browser' as ModuleType },
                   { label: 'AI Distillery + Chat', left: 'ai-genesis-distillery' as ModuleType, right: 'chat' as ModuleType },
+                  { label: 'Batch Queue + Chat', left: 'batch-processor' as ModuleType, right: 'chat' as ModuleType },
                   { label: 'Activity Monitor + OS Settings', left: 'task-manager' as ModuleType, right: 'os-settings' as ModuleType }
                 ].map((preset) => (
                   <button

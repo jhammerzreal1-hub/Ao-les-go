@@ -10,6 +10,7 @@
 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { apiFetch, getAuthBearerToken } from './authClient';
 
 export interface ClientSettingsPatch {
   shell?: Record<string, any>;
@@ -108,7 +109,7 @@ export async function flushPendingContinuityPatch(): Promise<void> {
     return;
   }
   try {
-    await fetch('/api/continuity/settings', {
+    await apiFetch('/api/continuity/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -155,11 +156,13 @@ export function flushContinuityBeacon(): void {
 
   try {
     const serialized = JSON.stringify(beaconPayload);
+    const tok = getAuthBearerToken();
+    const beaconUrl = tok ? `/api/continuity/beacon?token=${encodeURIComponent(tok)}` : '/api/continuity/beacon';
     if (typeof navigator.sendBeacon === 'function') {
       const blob = new Blob([serialized], { type: 'text/plain;charset=UTF-8' });
-      navigator.sendBeacon('/api/continuity/beacon', blob);
+      navigator.sendBeacon(beaconUrl, blob);
     } else {
-      fetch('/api/continuity/beacon', {
+      apiFetch(beaconUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: serialized,
@@ -171,7 +174,7 @@ export function flushContinuityBeacon(): void {
 
 export async function fetchServerContinuityState(): Promise<ContinuityStateResponse | null> {
   try {
-    const res = await fetch('/api/continuity/state', { cache: 'no-store' });
+    const res = await apiFetch('/api/continuity/state', { cache: 'no-store' });
     if (!res.ok) return null;
     const data = (await res.json()) as ContinuityStateResponse;
     if (data?.success && data.settings) {
@@ -195,7 +198,7 @@ export async function upsertTaskCheckpointToServer(
 ): Promise<ContinuityTaskRecord | null> {
   try {
     lastKnownSnapshot.activeTask = task as ContinuityTaskRecord;
-    const res = await fetch('/api/continuity/tasks', {
+    const res = await apiFetch('/api/continuity/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(task),
@@ -211,7 +214,7 @@ export async function upsertTaskCheckpointToServer(
 
 export async function fetchVoiceContinuityFromServer() {
   try {
-    const res = await fetch('/api/continuity/voice', { cache: 'no-store' });
+    const res = await apiFetch('/api/continuity/voice', { cache: 'no-store' });
     if (!res.ok) return null;
     const data = await res.json();
     return data?.voice || null;
@@ -232,7 +235,7 @@ export async function saveVoiceContinuityToServer(patch: {
     ...patch
   };
   try {
-    await fetch('/api/continuity/voice', {
+    await apiFetch('/api/continuity/voice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),

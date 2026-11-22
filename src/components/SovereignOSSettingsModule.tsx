@@ -33,6 +33,7 @@ import {
   Clipboard
 } from 'lucide-react';
 import { PWAInstallButton, detectMobileDeviceProfile, type MobileDeviceProfile } from './PWAInstallButton';
+import { HardwarePermissionsPanel } from './HardwarePermissionsPanel';
 import type { ModuleType } from '../types';
 import {
   SOVEREIGN_THEME_PRESETS,
@@ -47,6 +48,7 @@ import {
   type SovereignThemeId,
   type SovereignAccentColor
 } from '../utils/osCustomizationStore';
+import { apiFetch } from '../utils/authClient';
 
 export type OSShellViewMode = 'desktop' | 'workspace';
 
@@ -96,7 +98,7 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
 
   const fetchSupremacyBackendData = useCallback(async () => {
     try {
-      const res = await fetch('/api/os/supremacy-audit');
+      const res = await apiFetch('/api/os/supremacy-audit');
       const data = await res.json();
       if (data?.success) {
         if (Array.isArray(data.daemons)) setDaemons(data.daemons);
@@ -106,7 +108,7 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
   }, []);
 
   useEffect(() => {
-    fetch('/api/os/runtime-info')
+    apiFetch('/api/os/runtime-info')
       .then((r) => r.json())
       .then((d) => setRuntime(d))
       .catch(() => {});
@@ -152,7 +154,7 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
   const verifyUid0Lock = async () => {
     setVerifying(true);
     try {
-      const res = await fetch('/api/hypervisor/uid0', {
+      const res = await apiFetch('/api/hypervisor/uid0', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel: 'RING_-3_DIRECT', action: 'LOCK_UID_0' })
@@ -174,7 +176,7 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
   const handleRunHardwareBenchmark = async () => {
     setRunningBenchmark(true);
     try {
-      const res = await fetch('/api/os/benchmark', { method: 'POST' });
+      const res = await apiFetch('/api/os/benchmark', { method: 'POST' });
       const data = await res.json();
       if (data?.success && data.benchmark) {
         setBenchmarkResult(data.benchmark);
@@ -190,7 +192,7 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
   const handleToggleDaemon = async (daemonId: string, enabled: boolean) => {
     setDaemonBusyId(daemonId);
     try {
-      const res = await fetch('/api/os/daemons/toggle', {
+      const res = await apiFetch('/api/os/daemons/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ daemonId, enabled })
@@ -208,7 +210,7 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
   const handleTriggerDaemonCycle = async (daemonId: string) => {
     setDaemonBusyId(daemonId);
     try {
-      const res = await fetch('/api/os/daemons/trigger', {
+      const res = await apiFetch('/api/os/daemons/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ daemonId })
@@ -227,7 +229,7 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
     e.preventDefault();
     setCreatingSnapshot(true);
     try {
-      const res = await fetch('/api/os/snapshots', {
+      const res = await apiFetch('/api/os/snapshots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -248,7 +250,7 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
 
   const handleRestoreSnapshot = async (snap: any) => {
     try {
-      const res = await fetch('/api/os/snapshots/restore', {
+      const res = await apiFetch('/api/os/snapshots/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ snapshotId: snap.id })
@@ -356,6 +358,9 @@ export const SovereignOSSettingsModule: React.FC<SovereignOSSettingsModuleProps>
       {/* =================================================================== */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Manual Device Hardware & Browser Privileges Sliders (Zero Boot Popups) */}
+          <HardwarePermissionsPanel variant="embedded" />
+
           {/* Live Client Device & Mobile OEM Hardware Detection */}
           <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">

@@ -287,6 +287,7 @@ const VERIFIED_NON_RECIPROCAL_GRANTS: Omit<NonReciprocalGrantOpportunity, 'disco
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = (
     internalSecretsHandler.getSecret('GEMINI_API_KEY') ||
+    internalSecretsHandler.getSecret('ALL_KEY') ||
     process.env.GEMINI_API_KEY ||
     ''
   ).trim();

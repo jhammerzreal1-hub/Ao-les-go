@@ -28,11 +28,13 @@ import {
 } from 'lucide-react';
 import { ModuleType } from '../types';
 import { AutonomousGrantEnginePanel } from './AutonomousGrantEnginePanel';
+import { CoinbaseCdpTradingPanel } from './CoinbaseCdpTradingPanel';
 import {
   loadOSCustomizationProfile,
   saveOSCustomizationProfile,
   type SovereignOSCustomizationProfile
 } from '../utils/osCustomizationStore';
+import { apiFetch } from '../utils/authClient';
 
 interface PortfolioHolding {
   symbol: string;
@@ -195,7 +197,7 @@ async function safeWalletFetchJson(
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 14000);
-      const res = await fetch(url, { ...init, signal: controller.signal });
+      const res = await apiFetch(url, { ...init, signal: controller.signal });
       clearTimeout(timeoutId);
 
       const contentType = res.headers.get('content-type') || '';
@@ -255,7 +257,7 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
   const [airdropBusy, setAirdropBusy] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'grants' | 'bootstrap' | 'bank-transfer' | 'trade-transfer' | 'agentic-policy' | 'keystore' | 'new-wallet'
+    'overview' | 'coinbase-cdp' | 'grants' | 'bootstrap' | 'bank-transfer' | 'trade-transfer' | 'agentic-policy' | 'keystore' | 'new-wallet'
   >('overview');
 
   const [bootstrapConnectors, setBootstrapConnectors] = useState<BootstrapConnector[]>([]);
@@ -931,6 +933,7 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
           {(
             [
               { id: 'overview', label: 'Real On-Chain Portfolio' },
+              { id: 'coinbase-cdp', label: 'Coinbase CDP Trading' },
               { id: 'grants', label: 'Grant Applications (0% Equity)' },
               { id: 'bootstrap', label: 'Autonomous Daemon & Links' },
               { id: 'bank-transfer', label: 'Bank & Digital Transfers' },
@@ -946,6 +949,8 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
               className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
                 activeTab === t.id
                   ? 'bg-zinc-100 text-zinc-950'
+                  : t.id === 'coinbase-cdp'
+                  ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 border border-blue-500/40'
                   : t.id === 'grants'
                   ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
                   : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300'
@@ -2309,6 +2314,8 @@ export const SovereignCryptoWalletModule: React.FC<SovereignCryptoWalletModulePr
                 </div>
               </div>
             )}
+            {/* TAB: COINBASE DEVELOPER PLATFORM (CDP) TRADING & WALLETS */}
+            {activeTab === 'coinbase-cdp' && <CoinbaseCdpTradingPanel onSelectModule={onSelectModule} />}
             {/* TAB: AUTONOMOUS NON-RECIPROCAL GRANT HUNTER & APPLICATION ENGINE */}
             {activeTab === 'grants' && <AutonomousGrantEnginePanel />}
           </div>

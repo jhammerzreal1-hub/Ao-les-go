@@ -25,6 +25,7 @@
  */
 
 import { janusGate } from './janusGate';
+import { apiFetch } from './authClient';
 
 export interface EvolutiveAxiomRecord {
   id: string;
@@ -82,7 +83,7 @@ class LiveEvolutiveLearningEngine {
 
   public async hydrateFromServer(): Promise<EvolutiveAxiomRecord[]> {
     try {
-      const res = await fetch('/api/evolutive-learn?limit=150');
+      const res = await apiFetch('/api/evolutive-learn?limit=150');
       if (!res.ok) return this.getAxioms();
       const data = await res.json();
       if (Array.isArray(data?.axioms)) {
@@ -237,7 +238,7 @@ class LiveEvolutiveLearningEngine {
 
     // Persist to SQLite backend
     try {
-      await fetch('/api/evolutive-learn', {
+      await apiFetch('/api/evolutive-learn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -30,6 +30,7 @@ import {
   EyeOff,
   X
 } from 'lucide-react';
+import { apiFetch } from '../utils/authClient';
 
 interface SecretRecord {
   id: string;
@@ -94,7 +95,7 @@ export const ApiSecretsModule: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/secrets');
+      const res = await apiFetch('/api/secrets');
       if (!res.ok) {
         throw new Error(`Secrets vault endpoint returned HTTP ${res.status}`);
       }
@@ -138,7 +139,7 @@ export const ApiSecretsModule: React.FC = () => {
     setSavingEnvVar(envVar);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/secrets', {
+      const res = await apiFetch('/api/secrets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -172,7 +173,7 @@ export const ApiSecretsModule: React.FC = () => {
     setSavingEnvVar(envVar);
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/secrets/${encodeURIComponent(envVar)}`, {
+      const res = await apiFetch(`/api/secrets/${encodeURIComponent(envVar)}`, {
         method: 'DELETE'
       });
       const data = await res.json().catch(() => ({}));
@@ -193,7 +194,7 @@ export const ApiSecretsModule: React.FC = () => {
     const t0 = performance.now();
     try {
       const isPost = item.proxyEndpoint.includes('/chat') || item.proxyEndpoint.includes('/generate');
-      const res = await fetch(item.proxyEndpoint, {
+      const res = await apiFetch(item.proxyEndpoint, {
         method: isPost ? 'POST' : 'GET',
         headers: { 'Content-Type': 'application/json' },
         body: isPost ? JSON.stringify({ prompt: 'ping', zeroTokenMode: false }) : undefined
@@ -247,7 +248,7 @@ export const ApiSecretsModule: React.FC = () => {
         options.body = testPayload.trim();
       }
 
-      const res = await fetch(selectedEndpoint, options);
+      const res = await apiFetch(selectedEndpoint, options);
       const data = await res.json().catch(() => ({ status: res.status, text: 'Non-JSON response' }));
       setTestResponse({
         httpStatus: res.status,

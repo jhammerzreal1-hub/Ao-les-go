@@ -63,6 +63,7 @@ import {
   OperationType,
   handleFirestoreError
 } from '../../firebase';
+import { apiFetch } from '../../utils/authClient';
 import {
   createMaterialLibrary,
   FINISH_PRESETS,
@@ -503,7 +504,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
 
   // Hydrate initial detected games & forged tools from server
   useEffect(() => {
-    fetch('/api/games/detected')
+    apiFetch('/api/games/detected')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d) return;
@@ -725,7 +726,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
 
     const pullState = async () => {
       try {
-        const res = await fetch(`/api/spatial/state?since=${lastCommandSeqRef.current}`);
+        const res = await apiFetch(`/api/spatial/state?since=${lastCommandSeqRef.current}`);
         if (!res.ok || !active) return;
         const data = await res.json();
         if (!active) return;
@@ -771,7 +772,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
       if (!getTelemetrySnapshotFnRef.current) return;
       try {
         const snapshot = getTelemetrySnapshotFnRef.current();
-        await fetch('/api/spatial/state', {
+        await apiFetch('/api/spatial/state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ snapshot })
@@ -2671,7 +2672,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
   const handleSelectEnginePreset = async (kind: Exclude<EngineKind, 'custom_world'>) => {
     setForgeBusy(true);
     try {
-      const res = await fetch('/api/spatial/blueprint', {
+      const res = await apiFetch('/api/spatial/blueprint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ engineKind: kind, autoStart: true, spawnDefaultAgents: true })
@@ -2709,7 +2710,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
     if (!prompt || forgeBusy) return;
     setForgeBusy(true);
     try {
-      const res = await fetch('/api/spatial/blueprint', {
+      const res = await apiFetch('/api/spatial/blueprint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, autoStart: true, spawnDefaultAgents: true })
@@ -2754,7 +2755,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
 
   const handleAgentAct = async (payload: Record<string, any>) => {
     try {
-      const res = await fetch('/api/spatial/agent-act', {
+      const res = await apiFetch('/api/spatial/agent-act', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2773,7 +2774,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
       const cur = mmorpgRef.current;
       const pipe = blueprintRef.current.renderPipeline || BIOME_PRESET_DEFAULTS.alpine_archipelago;
       try {
-        const res = await fetch('/api/spatial/evolve-skill', {
+        const res = await apiFetch('/api/spatial/evolve-skill', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2848,7 +2849,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
   const handleTrainAllAgents = async () => {
     setForgeBusy(true);
     try {
-      const res = await fetch('/api/spatial/train-agents', {
+      const res = await apiFetch('/api/spatial/train-agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launchMmorpg: true })
@@ -2914,7 +2915,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
         sourcePath: `dom://canvas[${idx}] (${c.width}x${c.height})`
       }));
 
-      const res = await fetch('/api/games/scan', {
+      const res = await apiFetch('/api/games/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ runtimeGames })
@@ -2947,7 +2948,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
   }) => {
     setForgeBusy(true);
     try {
-      const res = await fetch('/api/games/mod', {
+      const res = await apiFetch('/api/games/mod', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2980,7 +2981,7 @@ export const SpatialArenaModule: React.FC<SpatialArenaModuleProps> = ({
     setForgeBusy(true);
     try {
       const pipe = activeBlueprint.renderPipeline || BIOME_PRESET_DEFAULTS.alpine_archipelago;
-      const res = await fetch('/api/spatial/forge-tool', {
+      const res = await apiFetch('/api/spatial/forge-tool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -22,6 +22,7 @@ import {
   Download
 } from 'lucide-react';
 import { requestMicrophoneStream } from '../utils/mediaPermissions';
+import { apiFetch } from '../utils/authClient';
 
 interface TranscribeModuleProps {
   onSaveToVault?: (title: string, prompt: string, model: string, transcript: string) => void;
@@ -150,7 +151,7 @@ export const TranscribeModule: React.FC<TranscribeModuleProps> = ({ onSaveToVaul
 
     try {
       const base64Audio = await blobToDataUrl(blob);
-      const response = await fetch('/api/audio/transcribe', {
+      const response = await apiFetch('/api/audio/transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
